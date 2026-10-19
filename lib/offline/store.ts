@@ -1,0 +1,129 @@
+"use client";
+
+import { useLiveQuery } from "dexie-react-hooks";
+import { useMemo } from "react";
+import {
+  buildDemoSnapshot,
+  buildState,
+  DEMO_COMPETITION_ID,
+  type CompetitionSnapshot,
+  type CompetitionState,
+  type EventPayload,
+  type EventType,
+} from "@/lib/competition";
+import { ACTIVE_COMPETITION_KEY, deviceId, offlineDb, setMeta, type LiveRecord, type StoredEvent } from "./db";
+
+export interface LocalCompetition {
+  state: CompetitionState;
+  live: LiveRecord | undefined;
+  /** Events recorded on this device that the server doesn't have yet. */
+  unsynced: number;
+}
+
+/**
+ * The competition as stored on this device, kept live: Dexie re-runs the query whenever the data
+ * changes, also when another window (the TV) or tab made the change.
+ * `undefined` while loading, `null` when this device has no snapshot for it yet.
+ */
+export function useLocalCompetition(competitionId: string | null): LocalCompetition | null | undefined {
+  const data = useLiveQuery(async () => {
+    if (!competitionId) return null;
+    const db = offlineDb();
+    const [stored, events, live] = await Promise.all([
+      db.snapshots.get(competitionId),
+      db.events.where("competitionId").equals(competitionId).sortBy("seq"),
+      db.live.get(competitionId),
+    ]);
+    if (!stored) return null;
+    return { snapshot: stored.snapshot, events, live };
+  }, [competitionId]);
+
+  return useMemo(() => {
+    if (data === undefined) return undefined;
+    if (data === null) return null;
+    return {
+      state: buildState(data.snapshot, data.events),
+      live: data.live,
+      unsynced: data.events.filter((e) => e.synced === 0).length,
+    };
+  }, [data]);
+}
+
+/** Stores a freshly downloaded snapshot. Local events stay: they're replayed on top of it. */
+export async function saveSnapshot(snapshot: CompetitionSnapshot): Promise<void> {
+  const db = offlineDb();
+  await db.transaction("rw", db.snapshots, db.meta, async () => {
+    await db.snapshots.put({ competitionId: snapshot.competition.id, snapshot });
+    await setMeta(ACTIVE_COMPETITION_KEY, snapshot.competition.id);
+  });
+}
+
+/** Creates the demo competition on this device (again), wiping earlier demo scores. */
+export async function resetDemo(): Promise<void> {
+  const db = offlineDb();
+  await db.transaction("rw", [db.snapshots, db.events, db.live, db.meta], async () => {
+    await db.events.where("competitionId").equals(DEMO_COMPETITION_ID).delete();
+    await db.live.delete(DEMO_COMPETITION_ID);
+    await saveSnapshot(buildDemoSnapshot());
+  });
+}
+
+/** Records an operator action. This is the only way the competition changes. */
+export async function emit<T extends EventType>(competitionId: string, type: T, payload: EventPayload<T>): Promise<void> {
+  const event = {
+    id: crypto.randomUUID(),
+    competitionId,
+    deviceId: await deviceId(),
+    at: new Date().toISOString(),
+    type,
+    payload,
+    synced: 0,
+  } as StoredEvent;
+  await offlineDb().events.add(event);
+}
+
+/** Several actions at once (e.g. both passes of a phase), atomically. */
+export async function emitMany(competitionId: string, actions: { type: EventType; payload: EventPayload<EventType> }[]) {
+  const db = offlineDb();
+  const device = await deviceId();
+  const base = Date.now();
+  await db.events.bulkAdd(
+    actions.map(
+      (a, i) =>
+        ({
+          id: crypto.randomUUID(),
+          competitionId,
+          deviceId: device,
+          at: new Date(base + i).toISOString(),
+          type: a.type,
+          payload: a.payload,
+          synced: 0,
+        }) as StoredEvent,
+    ),
+  );
+}
+
+type LivePatch = Partial<Omit<LiveRecord, "competitionId">>;
+
+/**
+ * Updates the live record. Pass a function to derive the change from the stored record inside the
+ * transaction: fast taps then never overwrite each other.
+ */
+export async function updateLive(competitionId: string, patch: LivePatch | ((current: LiveRecord) => LivePatch)) {
+  const db = offlineDb();
+  await db.transaction("rw", db.live, async () => {
+    const current = (await db.live.get(competitionId)) ?? {
+      competitionId,
+      focus: null,
+      drafts: {},
+      shootoff: null,
+      updatedAt: "",
+    };
+    const change = typeof patch === "function" ? patch(current) : patch;
+    await db.live.put({ ...current, ...change, updatedAt: new Date().toISOString() });
+  });
+}
+
+export async function eventsForExport(competitionId: string) {
+  return offlineDb().events.where("competitionId").equals(competitionId).sortBy("seq");
+}

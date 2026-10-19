@@ -1,0 +1,75 @@
+import Dexie, { type Table } from "dexie";
+import type { CompetitionEvent, CompetitionSnapshot } from "@/lib/competition";
+
+/**
+ * Local storage on the operator laptop (IndexedDB). It is the source of truth during a competition;
+ * the TV window reads the same database, so it keeps working without internet.
+ */
+
+export type StoredEvent = CompetitionEvent & {
+  seq?: number;
+  /** 0 = only on this device, 1 = the server has it. (IndexedDB can't index booleans.) */
+  synced: 0 | 1;
+};
+
+/** What the operator is doing right now: not saved as events, but shown live on the TV. */
+export interface LiveRecord {
+  competitionId: string;
+  /** The heat the operator has selected, if they jumped away from the next one in line. */
+  focus: { heatKey: string; phaseIndex: number } | null;
+  /** Targets tapped but not saved yet, per pass key. */
+  drafts: Record<string, string[]>;
+  shootoff: ShootoffDraft | null;
+  updatedAt: string;
+}
+
+export interface ShootoffDraft {
+  rankCode: string;
+  participants: string[];
+  calls: { targetId: string; points: number }[];
+  results: Record<string, (boolean | null)[]>;
+}
+
+class OfflineDb extends Dexie {
+  meta!: Table<{ key: string; value: string }, string>;
+  snapshots!: Table<{ competitionId: string; snapshot: CompetitionSnapshot }, string>;
+  events!: Table<StoredEvent, number>;
+  live!: Table<LiveRecord, string>;
+
+  constructor() {
+    super("bkc-wedstrijden");
+    this.version(1).stores({
+      meta: "key",
+      snapshots: "competitionId",
+      events: "++seq, &id, competitionId, [competitionId+synced]",
+      live: "competitionId",
+    });
+  }
+}
+
+let instance: OfflineDb | undefined;
+
+/** Browser only. */
+export function offlineDb(): OfflineDb {
+  instance ??= new OfflineDb();
+  return instance;
+}
+
+export async function getMeta(key: string): Promise<string | undefined> {
+  return (await offlineDb().meta.get(key))?.value;
+}
+
+export async function setMeta(key: string, value: string): Promise<void> {
+  await offlineDb().meta.put({ key, value });
+}
+
+/** A stable id for this browser, written into every event. */
+export async function deviceId(): Promise<string> {
+  const existing = await getMeta("deviceId");
+  if (existing) return existing;
+  const id = `dev-${crypto.randomUUID()}`;
+  await setMeta("deviceId", id);
+  return id;
+}
+
+export const ACTIVE_COMPETITION_KEY = "activeCompetitionId";

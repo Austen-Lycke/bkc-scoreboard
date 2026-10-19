@@ -62,3 +62,27 @@ export function initialRank(
     ? juniorRank(ranks)
     : entryAdultRank(ranks);
 }
+
+/**
+ * The rank to propose at check-in. Ranks are fixed per season, so an existing rank for this season
+ * wins. Otherwise the most recent rank carries over (a junior who is 18 by now moves to the entry
+ * adult rank, as the promotion wizard would), and a shooter we've never seen gets `initialRank`.
+ */
+export function suggestSeasonRank(opts: {
+  birthdate: string;
+  seasonYear: number;
+  thisSeasonRank?: string | null;
+  lastRank?: string | null;
+  ranks?: readonly RankDef[];
+}): string {
+  const { birthdate, seasonYear, thisSeasonRank, lastRank, ranks = DEFAULT_RANKS } = opts;
+  if (thisSeasonRank) return thisSeasonRank;
+  if (lastRank) {
+    const isJunior = ranks.find((r) => r.code === lastRank)?.isJunior;
+    if (isJunior && ageOn(birthdate, seasonReferenceDate(seasonYear)) >= JUNIOR_AGE_LIMIT) {
+      return entryAdultRank(ranks).code;
+    }
+    return lastRank;
+  }
+  return initialRank(birthdate, seasonYear, ranks).code;
+}

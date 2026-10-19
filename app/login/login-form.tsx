@@ -23,7 +23,7 @@ export function LoginForm() {
       setError("E-mailadres of wachtwoord klopt niet.");
       return;
     }
-    router.push("/admin");
+    router.push("/operator");
     router.refresh();
   }
 

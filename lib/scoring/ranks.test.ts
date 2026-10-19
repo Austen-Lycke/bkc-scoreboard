@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { publicDisplayName } from "./names";
-import { ageOn, DEFAULT_RANKS, initialRank, nextRank } from "./ranks";
+import { ageOn, DEFAULT_RANKS, initialRank, nextRank, suggestSeasonRank } from "./ranks";
 
 describe("ranks", () => {
   it("computes age in whole years", () => {
@@ -20,6 +20,17 @@ describe("ranks", () => {
     expect(nextRank(DEFAULT_RANKS, "klasse1")?.code).toBe("ereklasse");
     expect(nextRank(DEFAULT_RANKS, "ereklasse")).toBeNull();
     expect(nextRank(DEFAULT_RANKS, "junior")).toBeNull();
+  });
+});
+
+describe("suggestSeasonRank", () => {
+  it("keeps this season's rank, carries last season's over, and ages juniors out", () => {
+    expect(suggestSeasonRank({ birthdate: "1980-01-01", seasonYear: 2027, thisSeasonRank: "klasse1", lastRank: "klasse2" })).toBe("klasse1");
+    expect(suggestSeasonRank({ birthdate: "1980-01-01", seasonYear: 2027, lastRank: "ereklasse" })).toBe("ereklasse");
+    expect(suggestSeasonRank({ birthdate: "2008-06-30", seasonYear: 2027, lastRank: "junior" })).toBe("klasse3");
+    expect(suggestSeasonRank({ birthdate: "2012-06-30", seasonYear: 2027, lastRank: "junior" })).toBe("junior");
+    expect(suggestSeasonRank({ birthdate: "2012-06-30", seasonYear: 2027 })).toBe("junior");
+    expect(suggestSeasonRank({ birthdate: "1990-06-30", seasonYear: 2027 })).toBe("klasse3");
   });
 });
 
