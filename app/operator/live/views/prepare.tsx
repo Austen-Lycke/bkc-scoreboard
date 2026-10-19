@@ -3,12 +3,12 @@
 import { useOffline } from "next/offline";
 import { useEffect, useState } from "react";
 import { rankName } from "@/lib/competition";
+import { downloadSnapshot } from "@/lib/offline/api";
 import { deviceId } from "@/lib/offline/db";
 import { resetDemo, saveSnapshot } from "@/lib/offline/store";
 import { serviceWorkerState, warmOfflineCache, type OfflineReadiness } from "@/lib/offline/sw";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useComp } from "../context";
-import { downloadSnapshot } from "../operator-app";
 import { Badge, Button, Card, euro } from "../ui";
 
 const timeFormat = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short" });

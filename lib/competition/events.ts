@@ -91,7 +91,7 @@ export const competitionEventSchema = z.discriminatedUnion(
       payload: eventPayloads[type],
     }),
   ) as unknown as [z.ZodObject, ...z.ZodObject[]],
-);
+) as unknown as z.ZodType<CompetitionEvent>;
 
 /** Stable log order: device time, then id (events from one device never share both). */
 export function sortEvents<E extends { at: string; id: string }>(events: readonly E[]): E[] {
