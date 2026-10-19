@@ -83,7 +83,16 @@ async function Competitions() {
           </ul>
         )}
         <p className="mt-6 text-sm text-muted">
-          Aangemeld als {session.user.name} · <SignOutButton />
+          Aangemeld als {session.user.name}
+          {session.user.role === "admin" && (
+            <>
+              {" · "}
+              <Link href="/admin" className="underline underline-offset-4 hover:text-foreground">
+                Beheer
+              </Link>
+            </>
+          )}{" "}
+          · <SignOutButton />
         </p>
       </section>
       <aside>

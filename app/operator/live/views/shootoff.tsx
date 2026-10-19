@@ -6,7 +6,7 @@ import type { ShootoffDraft } from "@/lib/offline/db";
 import { emit, emitMany, updateLive } from "@/lib/offline/store";
 import { iterationScore } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty } from "../ui";
+import { Badge, Button, Card, Empty } from "@/components/ui";
 
 /**
  * Afkamping: the judge calls the targets one by one; every tied shooter shoots at the called

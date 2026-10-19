@@ -3,7 +3,7 @@
 import { autoOrder, effectiveOrder, entryName, ranksInShootingOrder } from "@/lib/competition";
 import { emit } from "@/lib/offline/store";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty } from "../ui";
+import { Badge, Button, Card, Empty } from "@/components/ui";
 
 const SOURCE_LABEL: Record<string, string> = {
   reverse_ranking: "vastgezet",

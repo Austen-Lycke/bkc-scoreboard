@@ -3,7 +3,7 @@
 import { entryName, expectedPasses, ranksInShootingOrder, resultsCsv, standingsFor } from "@/lib/competition";
 import { emit, eventsForExport } from "@/lib/offline/store";
 import { useComp } from "../context";
-import { Badge, Button, Card } from "../ui";
+import { Badge, Button, Card } from "@/components/ui";
 
 function download(filename: string, content: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));

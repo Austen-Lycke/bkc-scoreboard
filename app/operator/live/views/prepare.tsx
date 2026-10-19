@@ -9,7 +9,7 @@ import { resetDemo, saveSnapshot } from "@/lib/offline/store";
 import { serviceWorkerState, warmOfflineCache, type OfflineReadiness } from "@/lib/offline/sw";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useComp } from "../context";
-import { Badge, Button, Card, euro } from "../ui";
+import { Badge, Button, Card, euro } from "@/components/ui";
 
 const timeFormat = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short" });
 

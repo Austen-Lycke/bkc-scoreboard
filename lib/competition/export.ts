@@ -1,3 +1,4 @@
+import { toCsv } from "@/lib/csv";
 import { competitionSchedule, entryName, passOf, ranksInShootingOrder, standingsFor } from "./derive";
 import type { CompetitionState } from "./state";
 
@@ -23,8 +24,7 @@ export function resultsCsv(state: CompetitionState): string {
       ]);
     }
   }
-  const escape = (v: string) => (/[;"\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v);
-  return "﻿" + rows.map((r) => r.map(escape).join(";")).join("\r\n") + "\r\n";
+  return toCsv(rows);
 }
 
 /** Total heats per rank and round, for progress displays. */

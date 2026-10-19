@@ -16,7 +16,7 @@ import { syncNow, useSyncLoop, useSyncStatus, type SyncStatus } from "@/lib/offl
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useQueryParam } from "@/lib/offline/url";
 import { CompetitionContext, useComp } from "./context";
-import { Badge, Button } from "./ui";
+import { Badge, Button } from "@/components/ui";
 import { CheckInView } from "./views/check-in";
 import { CloseView } from "./views/close";
 import { OrderView } from "./views/order";

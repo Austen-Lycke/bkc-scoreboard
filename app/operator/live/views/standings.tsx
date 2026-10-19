@@ -6,7 +6,7 @@ import { entryName, passOf, ranksInShootingOrder, setupForRank, standingsFor } f
 import { emit } from "@/lib/offline/store";
 import { scorePass, type TieState } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty } from "../ui";
+import { Badge, Button, Card, Empty } from "@/components/ui";
 
 const TIE_BADGE: Record<TieState, { label: string; tone: "neutral" | "gold" | "red" | "green" } | null> = {
   none: null,

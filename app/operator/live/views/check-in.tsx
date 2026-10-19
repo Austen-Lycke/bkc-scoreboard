@@ -5,7 +5,7 @@ import { entriesOfRank, rankName, ranksInShootingOrder } from "@/lib/competition
 import { emit } from "@/lib/offline/store";
 import { fullName, initialRank } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty, euro } from "../ui";
+import { Badge, Button, Card, Empty, euro } from "@/components/ui";
 
 const input = "w-full rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-gold";
 

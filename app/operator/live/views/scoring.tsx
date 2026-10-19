@@ -17,7 +17,7 @@ import { offlineDb } from "@/lib/offline/db";
 import { emitMany, updateLive } from "@/lib/offline/store";
 import { passKey, scorePass, type Heat } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty } from "../ui";
+import { Badge, Button, Card, Empty } from "@/components/ui";
 
 /**
  * Scoring the heat that's shooting: one panel per knockdown, the shooter assigned to it in this

@@ -1,14 +1,15 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { z } from "zod";
 import { buildState, publicName, publicView, type PublicView } from "@/lib/competition";
 import { getDb, schema } from "@/lib/db";
-import { nextRank, PROMOTE_COUNT, seasonStandings, type RankDef, type SeasonRule } from "@/lib/scoring";
+import { nextRank, PROMOTE_COUNT } from "@/lib/scoring";
+import { computeSeason, RULE_LABEL } from "./season";
 import { buildSnapshot } from "./snapshot";
 import { tags } from "./tags";
 
-const { competitions, entries, passes, ranks, seasons, shooterSeasonRanks, shooters } = schema;
+const { competitions, entries, ranks, shooterSeasonRanks, shooters } = schema;
 
 /** Public data for the portal. Cached per tag; every sync from the operator laptop invalidates the tags. */
 
@@ -74,13 +75,6 @@ export async function getSeasonYears(): Promise<number[]> {
   return rows.map((r) => r.year);
 }
 
-const RULE_LABEL = (rule: SeasonRule) =>
-  rule.type === "sum"
-    ? "Som van alle wedstrijden"
-    : rule.type === "best_n"
-      ? `Som van de ${rule.n} beste wedstrijden`
-      : `Gemiddelde per wedstrijd (minstens ${rule.minParticipations})`;
-
 export interface SeasonRanking {
   year: number;
   ruleLabel: string;
@@ -97,33 +91,12 @@ export async function getSeasonRanking(year: number): Promise<SeasonRanking> {
   "use cache";
   cacheLife("hours");
   cacheTag(tags.season(year), tags.competitions);
-  const db = getDb();
-  const [season, rankRows, results, seasonRanks] = await Promise.all([
-    db.query.seasons.findFirst({ where: eq(seasons.year, year) }),
-    db.select().from(ranks).orderBy(asc(ranks.order)),
-    db
-      .select({ competitionId: passes.competitionId, shooterId: entries.shooterId, total: sql<number>`sum(${passes.score})::int` })
-      .from(passes)
-      .innerJoin(entries, eq(passes.entryId, entries.id))
-      .innerJoin(competitions, eq(passes.competitionId, competitions.id))
-      .where(and(eq(competitions.seasonYear, year), eq(competitions.countsForSeason, true), inArray(competitions.status, [...FINISHED_STATUSES])))
-      .groupBy(passes.competitionId, entries.shooterId),
-    db.select().from(shooterSeasonRanks).where(eq(shooterSeasonRanks.seasonYear, year)),
-  ]);
-  const rule = season?.rankingRule ?? { type: "sum" };
-  const rankDefs: RankDef[] = rankRows.map((r) => ({ code: r.code, name: r.name, order: r.order, isJunior: r.isJunior }));
-  const rankOf = new Map(seasonRanks.map((r) => [r.shooterId, r.rankCode]));
-  const standings = seasonStandings(results, rankOf, rule);
-
-  const ids = [...new Set(results.map((r) => r.shooterId))];
-  const people = ids.length ? await db.select().from(shooters).where(inArray(shooters.id, ids)) : [];
-  const personById = new Map(people.map((p) => [p.id, p]));
+  const { rule, ranks: rankDefs, standings, people, competitionCount } = await computeSeason(year);
   const onDate = today();
-
   return {
     year,
     ruleLabel: RULE_LABEL(rule),
-    competitionCount: new Set(results.map((r) => r.competitionId)).size,
+    competitionCount,
     ranks: rankDefs
       .map((rank) => {
         const promotes = !rank.isJunior && nextRank(rankDefs, rank.code) !== null;
@@ -132,7 +105,7 @@ export async function getSeasonRanking(year: number): Promise<SeasonRanking> {
           name: rank.name,
           promotes,
           rows: (standings.get(rank.code) ?? []).map((row) => {
-            const p = personById.get(row.shooterId);
+            const p = people.get(row.shooterId);
             return {
               ...row,
               name: p ? publicName(p, { isJuniorRank: !!rank.isJunior, onDate }) : "Onbekend",

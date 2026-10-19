@@ -19,3 +19,6 @@ export const STATUS_LABEL: Record<string, string> = {
   finished: "Uitslag",
   published: "Uitslag",
 };
+
+/** 1980-12-31 → 31/12/1980 */
+export const formatBelgianDate = (date: string) => date.split("-").reverse().join("/");
