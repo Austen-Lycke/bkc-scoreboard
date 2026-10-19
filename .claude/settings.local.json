@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(pnpm -v)",
+      "Bash(vercel --version)",
+      "Bash(npm view *)",
+      "Bash(npx --yes create-next-app@16.4.2 . --ts --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --yes)"
+    ]
+  }
+}
