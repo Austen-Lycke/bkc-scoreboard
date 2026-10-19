@@ -1,26 +1,43 @@
 @import "tailwindcss";
 
+/* BKC palette: club navy with a gold accent (from the club crest). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f7f9;
+  --foreground: #0f1b2d;
+  --surface: #ffffff;
+  --muted: #5b6678;
+  --border: #dfe3ea;
+  --navy: #0f1b2d;
+  --gold: #c9a227;
+  --hit: #16a34a;
+  --miss: #9aa3b2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a1220;
+    --foreground: #eef1f6;
+    --surface: #121c2e;
+    --muted: #93a0b5;
+    --border: #22304a;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-navy: var(--navy);
+  --color-gold: var(--gold);
+  --color-hit: var(--hit);
+  --color-miss: var(--miss);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }

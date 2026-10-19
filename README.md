@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BKC Wedstrijden
 
-## Getting Started
+Competition scoreboard for the Brugse Katapultclub: one operator scores on a laptop at the venue
+(works offline), a TV shows the live shooters and who's next, and the public follows along online.
 
-First, run the development server:
+Stack: Next.js 16 (App Router) · Neon Postgres + Drizzle · Better Auth · Vercel.
+
+## Setup
+
+The Vercel project (`bkc-comp-scoreboard`, team Studio Ringtail) and its Neon database are already
+provisioned. All env vars, including `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL`, live in Vercel:
 
 ```bash
+npm install
+vercel link --project bkc-comp-scoreboard   # once per machine
+vercel env pull .env.local                  # DATABASE_URL, DATABASE_URL_UNPOOLED, auth vars
+npm run db:migrate                          # applies lib/db/migrations (via the unpooled connection)
+npm run db:seed                             # ranks, knockdown setups, current season (idempotent)
+USER_PASSWORD='…' npm run create-user -- you@example.com "Your Name" admin
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Layout
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `lib/scoring/` — pure rules engine (knockdown scoring, pair schedule, standings, afkamping,
+  season ranking, promotions). Used by the offline operator app and the server alike. `npm test`.
+- `lib/db/` — Drizzle schema and migrations (`npm run db:generate` after schema changes).
+- `lib/auth.ts` — Better Auth (email/password, roles `admin` / `operator`, no public sign-up).
+- `scripts/` — seed and user management.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Competition rules (summary)
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Spanish knockdown: top row 3 · 6 · 10 · 3, bottom row 2 · 4 · 2 (30 per pass). Two knockdowns, shooters
+in pairs that swap; two rounds → 4 passes per shooter (max 120). Five ranks (Junior, 3de, 2de, 1ste,
+Ereklasse), each ranked separately; ties are settled by afkamping. Season ranking = sum (configurable);
+the top 10 of each adult rank move up at year end.
