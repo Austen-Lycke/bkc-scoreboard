@@ -7,18 +7,39 @@ Stack: Next.js 16 (App Router) · Neon Postgres + Drizzle · Better Auth · Verc
 
 ## Setup
 
-The Vercel project (`bkc-comp-scoreboard`, team Studio Ringtail) and its Neon database are already
-provisioned. All env vars, including `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL`, live in Vercel:
+Hosting: Vercel project `bkc-comp-scoreboard` (team Studio Ringtail), live at
+https://bkc-comp-scoreboard.vercel.app. Pushing to `main` on GitHub deploys to production; other
+branches get a preview deployment.
 
 ```bash
 npm install
 vercel link --project bkc-comp-scoreboard   # once per machine
-vercel env pull .env.local                  # DATABASE_URL, DATABASE_URL_UNPOOLED, auth vars
-npm run db:migrate                          # applies lib/db/migrations (via the unpooled connection)
-npm run db:seed                             # ranks, knockdown setups, current season (idempotent)
-USER_PASSWORD='…' npm run create-user -- you@example.com "Your Name" admin
-npm run dev
+vercel env pull .env.local                  # live DATABASE_URL + auth vars
 ```
+
+### Two databases
+
+Both live in the same Neon project (Frankfurt):
+
+| Database | Used by | Env file |
+| --- | --- | --- |
+| `neondb` (live) | the website on Vercel, `next build` / `next start` | `.env.local` (from `vercel env pull`) |
+| `bkc_dev` | `npm run dev` and the npm db/user scripts | `.env.development.local` (local only) |
+
+`.env.development.local` holds the `bkc_dev` connection strings (same host and user, database
+`bkc_dev`). Next.js gives it precedence over `.env.local` in development, so local testing never
+touches live data. The scripts print which database they use.
+
+```bash
+npm run db:migrate          # development database
+npm run db:seed
+read -s "USER_PASSWORD?Password: " && export USER_PASSWORD && npm run create-user -- you@example.com "Your Name" admin; unset USER_PASSWORD
+npm run dev
+
+npm run db:migrate:prod     # live database: run after adding a migration, before/with the deploy
+```
+
+Admins can also manage accounts in `/admin/gebruikers`.
 
 ## Layout
 
@@ -26,6 +47,9 @@ npm run dev
   season ranking, promotions). Used by the offline operator app and the server alike. `npm test`.
 - `lib/db/` — Drizzle schema and migrations (`npm run db:generate` after schema changes).
 - `lib/auth.ts` — Better Auth (email/password, roles `admin` / `operator`, no public sign-up).
+- `lib/offline/`, `app/operator/live`, `app/tv` — the offline operator app and the venue TV (IndexedDB,
+  service worker in `public/sw.js`, sync to the server).
+- `app/(public)` — the public website; `app/admin` — the admin area.
 - `scripts/` — seed and user management.
 
 ## Competition rules (summary)

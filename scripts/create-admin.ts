@@ -6,8 +6,9 @@
  * The password comes from the USER_PASSWORD env var, read with a hidden prompt as above, so it
  * isn't typed on the command line itself.
  */
-import { config } from "dotenv";
-config({ path: ".env.local" });
+import { loadEnv } from "@/lib/load-env";
+const target = loadEnv();
+console.log(`Database: ${target === "production" ? "LIVE" : "development (bkc_dev)"}`);
 
 import { MIN_PASSWORD, upsertUser } from "@/lib/server/users";
 

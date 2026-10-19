@@ -1,6 +1,7 @@
 /** Idempotent base data: ranks, knockdown setups and the current season. Run: npm run db:seed */
-import { config } from "dotenv";
-config({ path: ".env.local" });
+import { loadEnv } from "@/lib/load-env";
+const target = loadEnv();
+console.log(`Database: ${target === "production" ? "LIVE" : "development (bkc_dev)"}`);
 
 import { sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";

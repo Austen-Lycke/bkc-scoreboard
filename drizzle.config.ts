@@ -1,7 +1,8 @@
-import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
+import { loadEnv } from "./lib/load-env";
 
-config({ path: ".env.local" });
+const target = loadEnv();
+console.log(`Database: ${target === "production" ? "LIVE (neondb)" : "development (bkc_dev)"}`);
 
 export default defineConfig({
   schema: "./lib/db/schema.ts",
