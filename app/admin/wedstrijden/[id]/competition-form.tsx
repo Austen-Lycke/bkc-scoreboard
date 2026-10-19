@@ -4,9 +4,10 @@ import { useActionState, useState, useTransition } from "react";
 import { Button, Card } from "@/components/ui";
 import type { RankDef } from "@/lib/scoring";
 import { deleteCompetition, releaseLease, updateCompetition, type FormState } from "../actions";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
 
 const field = "rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-gold disabled:opacity-60";
-const when = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short" });
+const when = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short", timeZone: CLUB_TIME_ZONE });
 
 export function CompetitionForm({
   competition: c,
@@ -104,13 +105,25 @@ export function CompetitionForm({
         </Card>
         <Card className="p-5">
           <h2 className="font-semibold">Verwijderen</h2>
-          <p className="mt-2 text-sm text-muted">Kan alleen zolang er niets is ingeschreven of gescoord.</p>
+          <p className="mt-2 text-sm text-muted">
+            {started
+              ? "Er zijn al inschrijvingen of scores. Verwijderen wist alles van deze wedstrijd, ook op de website en in het klassement."
+              : "Er is nog niets ingeschreven of gescoord."}
+          </p>
           <Button
             size="sm"
             tone="danger"
             className="mt-3"
-            disabled={busy || started}
-            onClick={() => confirm(`"${c.name}" definitief verwijderen?`) && start(async () => setSide(await deleteCompetition(c.id)))}
+            disabled={busy}
+            onClick={() => {
+              if (started) {
+                const typed = prompt(`Typ de naam van de wedstrijd om te bevestigen:\n${c.name}`);
+                if (typed === null) return;
+                start(async () => setSide(await deleteCompetition(c.id, typed)));
+              } else if (confirm(`"${c.name}" definitief verwijderen?`)) {
+                start(async () => setSide(await deleteCompetition(c.id)));
+              }
+            }}
           >
             Wedstrijd verwijderen
           </Button>

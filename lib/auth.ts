@@ -3,8 +3,22 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { getDb, schema } from "@/lib/db";
 
+/**
+ * The app's own URL, for cookies and origin checks. Locally from BETTER_AUTH_URL; on Vercel the
+ * production domain (or the deployment URL for previews), so no per-environment setting is needed.
+ */
+function baseURL(): string | undefined {
+  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL;
+  if (process.env.VERCEL_ENV === "production" && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return undefined;
+}
+
 function createAuth() {
   return betterAuth({
+    baseURL: baseURL(),
     database: drizzleAdapter(getDb(), {
       provider: "pg",
       schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification },

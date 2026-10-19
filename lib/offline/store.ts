@@ -124,6 +124,17 @@ export async function updateLive(competitionId: string, patch: LivePatch | ((cur
   });
 }
 
+/** Removes a competition and everything recorded for it from this device only (not from the server). */
+export async function removeFromDevice(competitionId: string): Promise<void> {
+  const db = offlineDb();
+  await db.transaction("rw", [db.snapshots, db.events, db.live, db.meta], async () => {
+    await db.events.where("competitionId").equals(competitionId).delete();
+    await db.snapshots.delete(competitionId);
+    await db.live.delete(competitionId);
+    if ((await db.meta.get(ACTIVE_COMPETITION_KEY))?.value === competitionId) await db.meta.delete(ACTIVE_COMPETITION_KEY);
+  });
+}
+
 export async function eventsForExport(competitionId: string) {
   return offlineDb().events.where("competitionId").equals(competitionId).sortBy("seq");
 }

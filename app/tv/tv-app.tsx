@@ -20,6 +20,7 @@ import { ACTIVE_COMPETITION_KEY, getMeta, type LiveRecord } from "@/lib/offline/
 import { useLocalCompetition } from "@/lib/offline/store";
 import { useQueryParam } from "@/lib/offline/url";
 import { iterationScore, passKey, scorePass, type Heat } from "@/lib/scoring";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
 
 const W = 1920;
 const H = 1080;
@@ -158,7 +159,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
 function TopBar({ state, heat }: { state: CompetitionState; heat: Heat | null }) {
   const [time, setTime] = useState("");
   useEffect(() => {
-    const fmt = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit" });
+    const fmt = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
     const tick = () => setTime(fmt.format(new Date()));
     tick();
     const t = setInterval(tick, 10_000);

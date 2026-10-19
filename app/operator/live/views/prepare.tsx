@@ -1,22 +1,25 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useOffline } from "next/offline";
 import { useEffect, useState } from "react";
 import { rankName } from "@/lib/competition";
 import { downloadSnapshot } from "@/lib/offline/api";
 import { deviceId } from "@/lib/offline/db";
-import { resetDemo, saveSnapshot } from "@/lib/offline/store";
+import { removeFromDevice, resetDemo, saveSnapshot } from "@/lib/offline/store";
 import { serviceWorkerState, warmOfflineCache, type OfflineReadiness } from "@/lib/offline/sw";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useComp } from "../context";
 import { Badge, Button, Card, euro } from "@/components/ui";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
 
-const timeFormat = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short" });
+const timeFormat = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short", timeZone: CLUB_TIME_ZONE });
 
 /** Checklist before the competition: data on this device, offline-ready, storage kept, TV open. */
 export function PrepareView() {
   const { id, state, unsynced } = useComp();
   const offline = useOffline();
+  const router = useRouter();
   const comp = state.snapshot.competition;
   // Only rendered on the client (after local data loaded), so reading navigator here is safe.
   const [sw, setSw] = useState<OfflineReadiness>(serviceWorkerState);
@@ -86,6 +89,23 @@ export function PrepareView() {
             </Button>
           )}
           {message && <p className="text-sm text-muted">{message}</p>}
+        </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <Button
+            size="sm"
+            tone="danger"
+            onClick={async () => {
+              const warning =
+                unsynced > 0 && !state.snapshot.isDemo
+                  ? `Let op: ${unsynced} acties staan nog niet op de server en gaan verloren. Toch van dit toestel verwijderen?`
+                  : "Deze wedstrijd van dit toestel verwijderen? Op de server en de website verandert niets.";
+              if (!confirm(warning)) return;
+              await removeFromDevice(id);
+              router.push("/operator");
+            }}
+          >
+            Van dit toestel verwijderen
+          </Button>
         </div>
       </Card>
 

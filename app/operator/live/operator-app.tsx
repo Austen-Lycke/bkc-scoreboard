@@ -24,6 +24,7 @@ import { PrepareView } from "./views/prepare";
 import { ScoringView } from "./views/scoring";
 import { ShootoffView } from "./views/shootoff";
 import { StandingsView } from "./views/standings";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
 
 type Tab = "prepare" | "checkin" | "order" | "scoring" | "standings" | "shootoff" | "close";
 
@@ -201,7 +202,7 @@ function StatusControl() {
   );
 }
 
-const timeOnly = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit" });
+const timeOnly = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
 
 /** Connection and sharing state, based on the last sync attempt (more reliable than navigator.onLine). */
 function SyncBadge({ sync, unsynced, demo }: { sync: SyncStatus; unsynced: number; demo: boolean }) {

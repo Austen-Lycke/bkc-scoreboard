@@ -1,0 +1,6 @@
+# Never upload local secrets or tooling; Vercel provides its own env vars.
+.env*
+!.env.example
+.agents
+.claude
+skills-lock.json

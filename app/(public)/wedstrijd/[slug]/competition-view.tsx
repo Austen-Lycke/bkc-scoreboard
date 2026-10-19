@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Knockdown } from "@/components/knockdown";
-import { formatLongDate, LIVE } from "@/components/public/format";
+import { CLUB_TIME_ZONE, formatLongDate, LIVE } from "@/components/public/format";
 import { StandingsTable } from "@/components/public/standings-table";
 import { StatusPill } from "@/components/public/status-pill";
 import type { PublicView } from "@/lib/competition";
 
 const POLL_MS = 5000;
-const clock = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const clock = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: CLUB_TIME_ZONE });
 
 /** The public competition page. While the competition runs, it refreshes itself every few seconds. */
 export function CompetitionView({ initial, live }: { initial: PublicView; live: boolean }) {

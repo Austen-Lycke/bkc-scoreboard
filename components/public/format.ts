@@ -1,5 +1,8 @@
-const longDate = new Intl.DateTimeFormat("nl-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Brussels" });
-const shortDate = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Brussels" });
+/** The club is in Bruges: all times are shown in Belgian time, also when rendered on a UTC server. */
+export const CLUB_TIME_ZONE = "Europe/Brussels";
+
+const longDate = new Intl.DateTimeFormat("nl-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: CLUB_TIME_ZONE });
+const shortDate = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short", year: "numeric", timeZone: CLUB_TIME_ZONE });
 
 /** Dates are stored as YYYY-MM-DD; noon avoids timezone edge cases. */
 export const formatLongDate = (date: string) => longDate.format(new Date(`${date}T12:00:00Z`));

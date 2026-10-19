@@ -85,10 +85,19 @@ export async function releaseLease(id: string): Promise<FormState> {
   return { message: "Vrijgegeven: het volgende toestel dat synchroniseert, neemt de wedstrijd over." };
 }
 
-export async function deleteCompetition(id: string): Promise<FormState> {
+/**
+ * Deletes a competition. Once anything was synced (check-ins, scores) the admin must type the
+ * competition's name: everything of it disappears, also from the website and the season ranking.
+ */
+export async function deleteCompetition(id: string, typedName?: string): Promise<FormState> {
   await requireRole("admin");
-  if (await hasEvents(id)) return { error: "Er zijn al inschrijvingen of scores doorgestuurd. Deze wedstrijd kan niet meer verwijderd worden." };
-  await getDb().delete(competitions).where(eq(competitions.id, id));
-  updateTag(tags.competitions);
+  const db = getDb();
+  const comp = await db.query.competitions.findFirst({ where: eq(competitions.id, id) });
+  if (!comp) return { error: "Wedstrijd niet gevonden" };
+  if ((await hasEvents(id)) && typedName?.trim() !== comp.name) {
+    return { error: "Er zijn al inschrijvingen of scores. Typ de naam van de wedstrijd exact over om te bevestigen." };
+  }
+  await db.delete(competitions).where(eq(competitions.id, id)); // cascades to entries, passes, events…
+  for (const tag of [tags.competitions, tags.competition(id), tags.season(comp.seasonYear), tags.shooters]) updateTag(tag);
   redirect("/admin/wedstrijden");
 }

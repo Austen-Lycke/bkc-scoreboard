@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
 import { downloadSnapshot } from "./api";
 import { deviceId, offlineDb, type StoredEvent } from "./db";
 import { saveSnapshot } from "./store";
@@ -67,7 +68,11 @@ export async function syncNow(competitionId: string, { takeover = false } = {}):
       }
       if (res.status === 409) {
         const body = await res.json().catch(() => ({}));
-        setStatus(competitionId, { state: "lease", message: body.since ? `sinds ${new Date(body.since).toLocaleTimeString("nl-BE")}` : undefined });
+        setStatus(competitionId, { state: "lease", message: body.since ? `sinds ${new Date(body.since).toLocaleTimeString("nl-BE", { timeZone: CLUB_TIME_ZONE })}` : undefined });
+        return;
+      }
+      if (res.status === 404) {
+        setStatus(competitionId, { state: "error", message: "Deze wedstrijd bestaat niet meer op de server" });
         return;
       }
       if (res.status === 401 || res.status === 403) {

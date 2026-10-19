@@ -6,6 +6,7 @@ import { getDb, schema } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { NewCompetitionForm } from "./new-competition-form";
 import { SignOutButton } from "./sign-out-button";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
 
 export const metadata: Metadata = { title: "Wedstrijdleiding", robots: { index: false } };
 
@@ -21,7 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
   published: "Gepubliceerd",
 };
 
-const dateFormat = new Intl.DateTimeFormat("nl-BE", { weekday: "short", day: "numeric", month: "long", year: "numeric" });
+const dateFormat = new Intl.DateTimeFormat("nl-BE", { weekday: "short", day: "numeric", month: "long", year: "numeric", timeZone: CLUB_TIME_ZONE });
 
 export default function OperatorHome() {
   return (
