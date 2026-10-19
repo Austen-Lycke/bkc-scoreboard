@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 !.env.example
+
+# local tooling (personal Claude permissions, agent skills installed by the Vercel/Neon integration)
+.claude/settings.local.json
+.claude/skills/
+.agents/
+skills-lock.json
