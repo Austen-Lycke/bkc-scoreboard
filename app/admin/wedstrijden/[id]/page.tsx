@@ -5,11 +5,13 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { rankDefs } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 import { CompetitionForm } from "./competition-form";
 
 export const metadata: Metadata = { title: "Wedstrijd bewerken" };
 
 export default async function EditCompetitionPage({ params }: PageProps<"/admin/wedstrijden/[id]">) {
+  await requireRole("admin");
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const db = getDb();

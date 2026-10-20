@@ -2,8 +2,10 @@ import { count, eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import { getDb, schema } from "@/lib/db";
 import { currentSeasonYear, RULE_LABEL } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 
 export default async function AdminHome() {
+  await requireRole("admin");
   const db = getDb();
   const year = await currentSeasonYear();
   const [season, [shooters], comps, [users]] = await Promise.all([

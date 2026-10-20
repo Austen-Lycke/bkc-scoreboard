@@ -1,11 +1,13 @@
 import { asc } from "drizzle-orm";
 import type { Metadata } from "next";
 import { getDb, schema } from "@/lib/db";
+import { requireRole } from "@/lib/session";
 import { SetupForm } from "./setup-form";
 
 export const metadata: Metadata = { title: "Opstellingen" };
 
 export default async function SetupsPage() {
+  await requireRole("admin");
   const setups = await getDb().select().from(schema.setups).orderBy(asc(schema.setups.name));
   return (
     <div className="flex flex-col gap-6">

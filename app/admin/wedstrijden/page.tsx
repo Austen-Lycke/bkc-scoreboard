@@ -4,10 +4,12 @@ import Link from "next/link";
 import { formatShortDate } from "@/components/public/format";
 import { StatusPill } from "@/components/public/status-pill";
 import { getDb, schema } from "@/lib/db";
+import { requireRole } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Wedstrijden" };
 
 export default async function CompetitionsAdminPage() {
+  await requireRole("admin");
   const { competitions } = schema;
   const rows = await getDb()
     .select({

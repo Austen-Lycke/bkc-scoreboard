@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { currentSeasonYear, rankDefs } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 import { ShooterForm } from "../shooter-form";
 
 export const metadata: Metadata = { title: "Nieuwe schutter" };
 
 export default async function NewShooterPage() {
+  await requireRole("admin");
   const [year, ranks] = await Promise.all([currentSeasonYear(), rankDefs()]);
   return (
     <div className="flex flex-col gap-6">

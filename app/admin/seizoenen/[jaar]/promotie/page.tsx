@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { promotionProposal } from "@/lib/server/promotion";
+import { requireRole } from "@/lib/session";
 import { PromotionWizard } from "./promotion-wizard";
 
 export const metadata: Metadata = { title: "Promotie" };
 
 export default async function PromotionPage({ params }: PageProps<"/admin/seizoenen/[jaar]/promotie">) {
+  await requireRole("admin");
   const { jaar } = await params;
   const year = Number(jaar);
   if (!Number.isInteger(year) || year < 2000 || year > 2100) notFound();

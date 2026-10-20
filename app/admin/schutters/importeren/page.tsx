@@ -3,11 +3,13 @@ import Link from "next/link";
 import { shooterKey } from "@/lib/admin/import";
 import { getDb, schema } from "@/lib/db";
 import { currentSeasonYear, rankDefs } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 import { ImportForm } from "./import-form";
 
 export const metadata: Metadata = { title: "Ledenlijst importeren" };
 
 export default async function ImportPage() {
+  await requireRole("admin");
   const [year, ranks, shooters] = await Promise.all([currentSeasonYear(), rankDefs(), getDb().select().from(schema.shooters)]);
   return (
     <div className="flex flex-col gap-6">

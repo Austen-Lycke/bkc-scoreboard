@@ -4,12 +4,14 @@ import { z } from "zod";
 import { formatLongDate } from "@/components/public/format";
 import { buildState, entryName, passOf, ranksInShootingOrder, standingsFor } from "@/lib/competition";
 import { buildSnapshot } from "@/lib/server/snapshot";
+import { requireRole } from "@/lib/session";
 import { PrintButton } from "./print-button";
 
 export const metadata: Metadata = { title: "Uitslag afdrukken" };
 
 /** All ranks on paper, with full names, for the club's notice board. */
 export default async function PrintResultsPage({ params }: PageProps<"/admin/wedstrijden/[id]/afdrukken">) {
+  await requireRole("admin");
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const snapshot = await buildSnapshot(id);

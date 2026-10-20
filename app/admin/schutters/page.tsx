@@ -5,6 +5,7 @@ import { formatBelgianDate } from "@/components/public/format";
 import { Badge } from "@/components/ui";
 import { getDb, schema } from "@/lib/db";
 import { currentSeasonYear, rankDefs } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Schutters" };
 
@@ -12,6 +13,7 @@ const { shooters, shooterSeasonRanks } = schema;
 const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-gold";
 
 export default async function ShootersPage({ searchParams }: PageProps<"/admin/schutters">) {
+  await requireRole("admin");
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const rank = typeof params.klasse === "string" ? params.klasse : "";

@@ -4,11 +4,13 @@ import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { getDb, schema } from "@/lib/db";
 import { RULE_LABEL } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 import { RuleForm } from "./rule-form";
 
 export const metadata: Metadata = { title: "Seizoenen" };
 
 export default async function SeasonsPage() {
+  await requireRole("admin");
   const { competitions, seasons } = schema;
   const rows = await getDb()
     .select({

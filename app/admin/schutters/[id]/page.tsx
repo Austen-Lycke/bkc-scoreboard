@@ -6,11 +6,13 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { shooterIdsWithEntries } from "@/lib/server/admin";
 import { currentSeasonYear, rankDefs } from "@/lib/server/season";
+import { requireRole } from "@/lib/session";
 import { ShooterForm } from "../shooter-form";
 
 export const metadata: Metadata = { title: "Schutter bewerken" };
 
 export default async function EditShooterPage({ params }: PageProps<"/admin/schutters/[id]">) {
+  await requireRole("admin");
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const db = getDb();
