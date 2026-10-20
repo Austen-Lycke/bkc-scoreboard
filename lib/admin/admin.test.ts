@@ -19,6 +19,13 @@ describe("csv", () => {
     const rows = [["Naam", "Opmerking"], ["Jan", 'zei "hallo"; dag']];
     expect(parseCsv(toCsv(rows))).toEqual(rows);
   });
+  it("exports names that look like formulas as text, and imports them as typed", () => {
+    const rows = [['=HYPERLINK("http://x")', "+32 50 12 34 56", "@SUM(A1)", "-", "-12", "3,5", "Jan"]];
+    const csv = toCsv(rows);
+    expect(csv).toContain(`"'=HYPERLINK(""http://x"")"`);
+    expect(csv).toContain(";'+32 50 12 34 56;'@SUM(A1);-;-12;3,5;Jan");
+    expect(parseCsv(csv)).toEqual(rows);
+  });
 });
 
 describe("member import", () => {

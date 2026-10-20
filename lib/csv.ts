@@ -1,7 +1,16 @@
-/** CSV for Belgian Excel: semicolon separated, UTF-8 with BOM. */
+/** Excel runs a cell that starts with one of these as a formula. Numbers and a lone "-" are fine. */
+const FORMULA = /^[=+\-@\t\r]/;
+const NUMBER = /^[+-]?\d+([.,]\d+)?$/;
+
+/**
+ * CSV for Belgian Excel: semicolon separated, UTF-8 with BOM. Names are typed in at the venue, so
+ * a cell that would run as a formula ("=HYPERLINK(…)") gets a leading apostrophe; parseCsv drops
+ * it again on import.
+ */
 export function toCsv(rows: readonly (readonly (string | number | null | undefined)[])[]): string {
   const escape = (v: string | number | null | undefined) => {
-    const s = v === null || v === undefined ? "" : String(v);
+    let s = v === null || v === undefined ? "" : String(v);
+    if (s.length > 1 && FORMULA.test(s) && !NUMBER.test(s)) s = `'${s}`;
     return /[;"\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
   };
   return "\uFEFF" + rows.map((r) => r.map(escape).join(";")).join("\r\n") + "\r\n";
@@ -42,5 +51,5 @@ export function parseCsv(text: string): string[][] {
   }
   row.push(field);
   if (row.some((f) => f.trim() !== "")) rows.push(row);
-  return rows.map((r) => r.map((f) => f.trim()));
+  return rows.map((r) => r.map((f) => f.trim().replace(/^'(?=[=+\-@])/, "")));
 }
