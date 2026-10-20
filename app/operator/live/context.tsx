@@ -18,3 +18,10 @@ export function useComp(): CompetitionContextValue {
   if (!value) throw new Error("useComp outside CompetitionContext");
   return value;
 }
+
+export type Tab = "prepare" | "checkin" | "order" | "scoring" | "standings" | "shootoff" | "close";
+
+/** Lets a view switch tabs, e.g. a live score in the standings opens Scoren on that knockdown. */
+export const NavContext = createContext<{ goTo: (tab: Tab, knockdown?: number) => void }>({ goTo: () => {} });
+
+export const useNav = () => useContext(NavContext);

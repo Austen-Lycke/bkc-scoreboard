@@ -1,15 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { entriesOfRank, rankName, ranksInShootingOrder } from "@/lib/competition";
+import { entriesOfRank, rankName, rankShortName, ranksInShootingOrder } from "@/lib/competition";
 import { emit } from "@/lib/offline/store";
-import { fullName, initialRank } from "@/lib/scoring";
+import { entryAdultRank, fullName } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty, euro } from "@/components/ui";
+import { Panel, Pill, Tag } from "@/components/ui";
 
-const input = "w-full rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-gold";
+const input = "w-full min-w-0 rounded-xl border-[1.5px] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink";
 
-/** Walk-in registration at the table: find or add the shooter, confirm their rank, mark the fee paid. */
+/**
+ * Walk-in registration at the table: find or add the shooter and confirm their rank. Whoever shoots
+ * has paid, so the fee isn't tracked here, and the operator picks the rank (no birthdate asked).
+ */
 export function CheckInView() {
   const { state } = useComp();
   const [query, setQuery] = useState("");
@@ -26,12 +29,18 @@ export function CheckInView() {
       .slice(0, 50);
   }, [state.shooters, checkedIn, query]);
 
+  const done = () => {
+    setSelected(null);
+    setCreating(false);
+    setQuery("");
+  };
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_1fr]">
-      <Card className="p-5">
-        <h2 className="text-lg font-semibold">Schutter inschrijven</h2>
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,23.75rem)_minmax(0,1fr)] items-start gap-5 overflow-auto px-8 pb-8 pt-2">
+      <Panel className="flex flex-col gap-[0.875rem] p-[1.375rem]">
+        <h2 className="text-[1.0625rem] font-semibold">Schutter inschrijven</h2>
         {creating ? (
-          <NewShooterForm initialName={query} onDone={() => (setCreating(false), setQuery(""))} />
+          <NewShooterForm initialName={query} onDone={done} onCancel={() => setCreating(false)} />
         ) : (
           <>
             <input
@@ -39,50 +48,72 @@ export function CheckInView() {
               value={query}
               onChange={(e) => (setQuery(e.target.value), setSelected(null))}
               placeholder="Zoek op naam…"
-              className={`mt-4 ${input}`}
+              className={`${input} rounded-[0.875rem] px-[0.875rem] py-3`}
               aria-label="Zoek schutter"
             />
-            <ul className="mt-3 max-h-[60vh] divide-y divide-border overflow-y-auto">
+            <div className="-mx-1 flex max-h-[55vh] flex-col gap-0.5 overflow-y-auto px-1">
               {candidates.map((s) =>
                 selected === s.id ? (
-                  <li key={s.id} className="py-3">
-                    <ConfirmEntry shooterId={s.id} onDone={() => (setSelected(null), setQuery(""))} />
-                  </li>
+                  <ConfirmEntry key={s.id} shooterId={s.id} onDone={done} onCancel={() => setSelected(null)} />
                 ) : (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(s.id)}
-                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5"
-                    >
-                      <span>
-                        <span className="font-medium">{fullName(s)}</span>
-                        <span className="ml-2 text-sm text-muted">°{s.birthdate.slice(0, 4)}</span>
-                      </span>
-                      <Badge>{rankName(state, s.rankCode)}</Badge>
-                    </button>
-                  </li>
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSelected(s.id)}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-xl p-2.5 text-left hover:bg-hover"
+                  >
+                    <span className="text-[0.9375rem] font-semibold">{fullName(s)}</span>
+                    <Tag className="ml-auto">{rankShortName(rankName(state, s.rankCode))}</Tag>
+                  </button>
                 ),
               )}
-              {candidates.length === 0 && <li className="py-3 text-sm text-muted">Niemand gevonden.</li>}
-            </ul>
-            <Button className="mt-3 w-full" onClick={() => setCreating(true)}>
+              {candidates.length === 0 && <span className="p-2.5 text-sm text-faint">Niemand gevonden.</span>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="cursor-pointer rounded-[0.875rem] border-[1.5px] border-dashed border-plate p-3 text-center text-sm font-semibold hover:border-ink"
+            >
               + Nieuwe schutter
-            </Button>
+            </button>
           </>
         )}
-      </Card>
+      </Panel>
       <EntryList />
     </div>
   );
 }
 
-function ConfirmEntry({ shooterId, onDone }: { shooterId: string; onDone: () => void }) {
+function RankChips({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  const { state } = useComp();
+  return (
+    <div role="radiogroup" aria-label="Klasse" className="flex flex-wrap gap-1">
+      {ranksInShootingOrder(state).map((r) => {
+        const on = r.code === value;
+        return (
+          <button
+            key={r.code}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            title={r.name}
+            onClick={() => onChange(r.code)}
+            className={`cursor-pointer rounded-full border-[1.5px] px-[0.6875rem] py-1.5 text-[0.8125rem] font-semibold ${
+              on ? "border-ink bg-ink text-white" : "border-border bg-surface hover:border-ink"
+            }`}
+          >
+            {rankShortName(r.name)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ConfirmEntry({ shooterId, onDone, onCancel }: { shooterId: string; onDone: () => void; onCancel: () => void }) {
   const { id, state } = useComp();
   const shooter = state.shooters.get(shooterId)!;
   const [rankCode, setRankCode] = useState(shooter.rankCode);
-  const [feePaid, setFeePaid] = useState(true);
-  const fee = state.snapshot.competition.feeCents;
 
   async function confirm() {
     await emit(id, "entry.checked_in", {
@@ -90,196 +121,127 @@ function ConfirmEntry({ shooterId, onDone }: { shooterId: string; onDone: () => 
       shooter: { id: shooter.id, firstName: shooter.firstName, lastName: shooter.lastName, birthdate: shooter.birthdate },
       isNewShooter: false,
       rankCode,
-      feePaid,
-      feeCents: fee,
+      feePaid: true,
+      feeCents: state.snapshot.competition.feeCents,
     });
     onDone();
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg bg-black/[0.03] p-3 dark:bg-white/5">
-      <p className="font-medium">{fullName(shooter)}</p>
-      <RankSelect value={rankCode} onChange={setRankCode} />
-      {fee > 0 && (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={feePaid} onChange={(e) => setFeePaid(e.target.checked)} className="size-4 accent-[var(--gold)]" />
-          Inschrijvingsgeld betaald ({euro(fee)})
-        </label>
-      )}
-      <div className="flex gap-2">
-        <Button tone="primary" onClick={confirm} autoFocus>
+    <div className="my-1 flex flex-col gap-3 rounded-2xl bg-hover p-[0.875rem]">
+      <span className="text-base font-semibold">{fullName(shooter)}</span>
+      <RankChips value={rankCode} onChange={setRankCode} />
+      <div className="flex gap-1.5">
+        <Pill tone="yellow" size="lg" onClick={confirm} autoFocus>
           Inschrijven
-        </Button>
-        <Button tone="ghost" onClick={onDone}>
+        </Pill>
+        <Pill tone="ghost" size="lg" onClick={onCancel}>
           Annuleren
-        </Button>
+        </Pill>
       </div>
     </div>
   );
 }
 
-function NewShooterForm({ initialName, onDone }: { initialName: string; onDone: () => void }) {
+function NewShooterForm({ initialName, onDone, onCancel }: { initialName: string; onDone: () => void; onCancel: () => void }) {
   const { id, state } = useComp();
   const [first, ...rest] = initialName.trim().split(/\s+/);
   const [firstName, setFirstName] = useState(first ?? "");
   const [lastName, setLastName] = useState(rest.join(" "));
-  const [birthdate, setBirthdate] = useState("");
-  const [rankOverride, setRankOverride] = useState<string | null>(null);
-  const [feePaid, setFeePaid] = useState(true);
-  const fee = state.snapshot.competition.feeCents;
-  const { seasonYear } = state.snapshot.competition;
-  const suggested = /^\d{4}-\d{2}-\d{2}$/.test(birthdate) ? initialRank(birthdate, seasonYear, state.snapshot.ranks).code : null;
-  const rankCode = rankOverride ?? suggested;
-  const valid = firstName.trim() && lastName.trim() && rankCode;
+  const [rankCode, setRankCode] = useState(() => entryAdultRank(state.snapshot.ranks).code);
+
+  const full = `${firstName.trim()} ${lastName.trim()}`.toLowerCase();
+  const enteredNames = new Set([...state.entries.values()].map((e) => fullName(state.shooters.get(e.shooterId)!).toLowerCase()));
+  const duplicate =
+    firstName.trim() && lastName.trim()
+      ? enteredNames.has(full)
+        ? "Deze schutter is al ingeschreven."
+        : [...state.shooters.values()].some((s) => fullName(s).toLowerCase() === full)
+          ? "Deze schutter bestaat al. Zoek op naam om in te schrijven."
+          : null
+      : null;
+  const valid = !!firstName.trim() && !!lastName.trim() && !duplicate;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
     await emit(id, "entry.checked_in", {
       entryId: crypto.randomUUID(),
-      shooter: { id: crypto.randomUUID(), firstName: firstName.trim(), lastName: lastName.trim(), birthdate },
+      shooter: { id: crypto.randomUUID(), firstName: firstName.trim(), lastName: lastName.trim(), birthdate: null },
       isNewShooter: true,
-      rankCode: rankCode!,
-      feePaid,
-      feeCents: fee,
+      rankCode,
+      feePaid: true,
+      feeCents: state.snapshot.competition.feeCents,
     });
     onDone();
   }
 
   return (
-    <form onSubmit={save} className="mt-4 flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1 text-sm font-medium">
+    <form onSubmit={save} className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-2.5">
+        <label className="flex min-w-0 flex-col gap-[0.3125rem] text-[0.8125rem] font-semibold">
           Voornaam
           <input autoFocus required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} />
         </label>
-        <label className="flex flex-col gap-1 text-sm font-medium">
+        <label className="flex min-w-0 flex-col gap-[0.3125rem] text-[0.8125rem] font-semibold">
           Achternaam
           <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} />
         </label>
       </div>
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        Geboortedatum
-        <input required type="date" value={birthdate} onChange={(e) => setBirthdate(e.target.value)} className={input} />
-      </label>
-      {rankCode && (
-        <div className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Klasse</span>
-          <RankSelect value={rankCode} onChange={setRankOverride} />
-          {suggested && !rankOverride && (
-            <span className="text-muted">
-              {state.snapshot.ranks.find((r) => r.code === suggested)?.isJunior ? "Jonger dan 18: Junior." : "Nieuwe volwassen schutters starten in de laagste klasse."}
-            </span>
-          )}
-        </div>
-      )}
-      {fee > 0 && (
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={feePaid} onChange={(e) => setFeePaid(e.target.checked)} className="size-4 accent-[var(--gold)]" />
-          Inschrijvingsgeld betaald ({euro(fee)})
-        </label>
-      )}
-      <div className="flex gap-2">
-        <Button tone="primary" type="submit" disabled={!valid}>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[0.8125rem] font-semibold">Klasse</span>
+        <RankChips value={rankCode} onChange={setRankCode} />
+      </div>
+      {duplicate && <span className="text-[0.8125rem] font-semibold text-error">{duplicate}</span>}
+      <div className="flex gap-1.5">
+        <Pill tone="yellow" size="lg" type="submit" disabled={!valid}>
           Toevoegen en inschrijven
-        </Button>
-        <Button tone="ghost" onClick={onDone}>
+        </Pill>
+        <Pill tone="ghost" size="lg" onClick={onCancel}>
           Annuleren
-        </Button>
+        </Pill>
       </div>
     </form>
   );
 }
 
-function RankSelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
-  const { state } = useComp();
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={input} aria-label="Klasse">
-      {ranksInShootingOrder(state).map((r) => (
-        <option key={r.code} value={r.code}>
-          {r.name}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 function EntryList() {
   const { id, state } = useComp();
-  const entries = [...state.entries.values()];
-  const paid = entries.filter((e) => e.feePaid);
+  const active = [...state.entries.values()].filter((e) => !e.withdrawn).length;
   const hasPasses = (entryId: string) => [...state.passes.values()].some((p) => p.entryId === entryId);
 
-  if (entries.length === 0) return <Empty>Nog niemand ingeschreven.</Empty>;
-
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
-        <span>
-          <strong className="text-foreground">{entries.length}</strong> ingeschreven
-        </span>
-        {state.snapshot.competition.feeCents > 0 && (
-          <span>
-            <strong className="text-foreground">{euro(paid.reduce((s, e) => s + e.feeCents, 0))}</strong> ontvangen ·{" "}
-            {entries.length - paid.length} nog niet betaald
-          </span>
-        )}
-      </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+    <div className="flex min-w-0 flex-col gap-[0.875rem]">
+      <h2 className="px-1 pt-1 text-[1.375rem] font-semibold">{active} ingeschreven</h2>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,21.25rem),1fr))] items-start gap-[0.875rem]">
         {ranksInShootingOrder(state).map((rank) => {
           const list = entriesOfRank(state, rank.code, { includeWithdrawn: true });
           return (
-            <Card key={rank.code} className="p-4">
-              <h3 className="flex items-center justify-between font-semibold">
-                {rank.name} <Badge>{list.filter((e) => !e.withdrawn).length}</Badge>
-              </h3>
-              {list.length === 0 ? (
-                <p className="mt-2 text-sm text-muted">Niemand.</p>
-              ) : (
-                <ul className="mt-2 divide-y divide-border">
-                  {list.map((e) => {
-                    const shooter = state.shooters.get(e.shooterId)!;
-                    return (
-                      <li key={e.entryId} className="flex flex-wrap items-center gap-2 py-2">
-                        <span className={`mr-auto ${e.withdrawn ? "text-muted line-through" : ""}`}>{fullName(shooter)}</span>
-                        {state.snapshot.competition.feeCents > 0 && (
-                          <Button size="sm" tone="ghost" onClick={() => emit(id, "entry.updated", { entryId: e.entryId, feePaid: !e.feePaid })}>
-                            {e.feePaid ? <Badge tone="green">betaald</Badge> : <Badge tone="red">niet betaald</Badge>}
-                          </Button>
-                        )}
-                        <select
-                          value={e.rankCode}
-                          disabled={hasPasses(e.entryId)}
-                          onChange={(ev) => emit(id, "entry.updated", { entryId: e.entryId, rankCode: ev.target.value })}
-                          className="rounded-md border border-border bg-background px-1.5 py-1 text-xs disabled:opacity-60"
-                          aria-label={`Klasse van ${fullName(shooter)}`}
-                          title={hasPasses(e.entryId) ? "Heeft al scores" : undefined}
-                        >
-                          {ranksInShootingOrder(state).map((r) => (
-                            <option key={r.code} value={r.code}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </select>
-                        {hasPasses(e.entryId) ? (
-                          <Button size="sm" tone="ghost" onClick={() => emit(id, "entry.updated", { entryId: e.entryId, withdrawn: !e.withdrawn })}>
-                            {e.withdrawn ? "Terug actief" : "Afgehaakt"}
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            tone="ghost"
-                            onClick={() => confirm(`${fullName(shooter)} uitschrijven?`) && emit(id, "entry.removed", { entryId: e.entryId })}
-                          >
-                            Uitschrijven
-                          </Button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Card>
+            <Panel key={rank.code} size="md" className="flex flex-col gap-1 px-[1.125rem] py-4">
+              <div className="flex items-center justify-between pb-1.5">
+                <span className="text-[0.9375rem] font-semibold">{rank.name}</span>
+                <Tag>{list.filter((e) => !e.withdrawn).length}</Tag>
+              </div>
+              {list.length === 0 && <span className="border-t border-divider py-[0.4375rem] text-sm text-faint">Nog niemand.</span>}
+              {list.map((e) => {
+                const shooter = state.shooters.get(e.shooterId)!;
+                const shot = hasPasses(e.entryId);
+                return (
+                  <div key={e.entryId} className="flex items-center gap-2 border-t border-divider py-[0.4375rem]">
+                    <span className={`min-w-0 flex-1 truncate text-sm font-medium ${e.withdrawn ? "text-faint line-through" : ""}`}>{fullName(shooter)}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        shot ? emit(id, "entry.updated", { entryId: e.entryId, withdrawn: !e.withdrawn }) : emit(id, "entry.removed", { entryId: e.entryId })
+                      }
+                      className="cursor-pointer whitespace-nowrap rounded-full border-[1.5px] border-border px-2.5 py-[0.1875rem] text-xs font-semibold text-muted hover:border-ink hover:text-ink"
+                    >
+                      {!shot ? "Uitschrijven" : e.withdrawn ? "Terug actief" : "Afgehaakt"}
+                    </button>
+                  </div>
+                );
+              })}
+            </Panel>
           );
         })}
       </div>

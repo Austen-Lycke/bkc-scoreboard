@@ -2,6 +2,7 @@ import {
   buildSchedule,
   fullName,
   passKey,
+  publicDisplayName,
   rankStandings,
   reverseRankingOrder,
   scheduleProgress,
@@ -21,6 +22,9 @@ export function rankName(state: CompetitionState, rankCode: string): string {
   return state.snapshot.ranks.find((r) => r.code === rankCode)?.name ?? rankCode;
 }
 
+/** Compact rank label for chips: "3de klasse" → "3de", "Ereklasse" → "Ere". */
+export const rankShortName = (name: string) => name.replace(/\s*klasse$/i, "") || name;
+
 export function entriesOfRank(state: CompetitionState, rankCode: string, { includeWithdrawn = false } = {}): Entry[] {
   return [...state.entries.values()].filter((e) => e.rankCode === rankCode && (includeWithdrawn || !e.withdrawn));
 }
@@ -29,6 +33,13 @@ export function entryName(state: CompetitionState, entryId: string): string {
   const entry = state.entries.get(entryId);
   const shooter = entry && state.shooters.get(entry.shooterId);
   return shooter ? fullName(shooter) : "Onbekend";
+}
+
+/** "Pieter D.": for tight spots on the operator screen. */
+export function entryShortName(state: CompetitionState, entryId: string): string {
+  const entry = state.entries.get(entryId);
+  const shooter = entry && state.shooters.get(entry.shooterId);
+  return shooter ? publicDisplayName(shooter, true) : "Onbekend";
 }
 
 /** The automatic order: reverse season ranking, random for shooters without season points. */

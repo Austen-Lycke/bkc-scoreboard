@@ -7,11 +7,11 @@ export const SPANISH_KNOCKDOWN: Setup = {
   disciplineType: "spanish_knockdown",
   targets: [
     { id: "top-left-3", label: "Links 3", points: 3, row: 1, sizeMm: 125 },
-    { id: "top-6", label: "6", points: 6, row: 1, sizeMm: 75 },
-    { id: "top-10", label: "10", points: 10, row: 1, sizeMm: 45 },
+    { id: "top-6", label: "Midden 6", points: 6, row: 1, sizeMm: 75 },
+    { id: "top-10", label: "Midden 10", points: 10, row: 1, sizeMm: 45 },
     { id: "top-right-3", label: "Rechts 3", points: 3, row: 1, sizeMm: 125 },
     { id: "bottom-left-2", label: "Links 2", points: 2, row: 2, sizeMm: 125 },
-    { id: "bottom-4", label: "4", points: 4, row: 2, sizeMm: 95 },
+    { id: "bottom-4", label: "Midden 4", points: 4, row: 2, sizeMm: 95 },
     { id: "bottom-right-2", label: "Rechts 2", points: 2, row: 2, sizeMm: 125 },
   ],
 };

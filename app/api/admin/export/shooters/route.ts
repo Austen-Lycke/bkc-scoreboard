@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     ...rows.map(({ s, rankCode }) => [
       s.firstName,
       s.lastName,
-      formatBelgianDate(s.birthdate),
+      s.birthdate ? formatBelgianDate(s.birthdate) : "",
       ranks.find((r) => r.code === rankCode)?.name ?? "",
       s.active ? "ja" : "nee",
       s.notes ?? "",

@@ -1,12 +1,12 @@
 "use client";
 
-import { Knockdown } from "@/components/knockdown";
-import { entryName, entryTotal, pendingShootoffs, rankName, setupForRank } from "@/lib/competition";
+import { entryName, entryTotal, pendingShootoffs, rankName, setupForRank, standingsFor } from "@/lib/competition";
 import type { ShootoffDraft } from "@/lib/offline/db";
 import { emit, emitMany, updateLive } from "@/lib/offline/store";
 import { iterationScore } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Badge, Button, Card, Empty } from "@/components/ui";
+import { Plate, plateRows } from "@/components/plates";
+import { Panel, Pill, Tag } from "@/components/ui";
 
 /**
  * Afkamping: the judge calls the targets one by one; every tied shooter shoots at the called
@@ -16,25 +16,18 @@ export function ShootoffView() {
   const { state, live } = useComp();
   if (live?.shootoff) return <ActiveShootoff draft={live.shootoff} />;
 
-  const pending = pendingShootoffs(state);
+  const pending = pendingShootoffs(state).flatMap(({ rankCode, groups }) => groups.map((group) => ({ rankCode, group })));
   return (
-    <div className="flex flex-col gap-6">
-      {pending.length === 0 ? (
-        <Empty>Geen gelijke standen die afgekampt moeten worden. Afkamping kan pas als een klasse alle passages geschoten heeft.</Empty>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {pending.map(({ rankCode, groups }) => (
-            <Card key={rankCode} className="p-5">
-              <h3 className="font-semibold">{rankName(state, rankCode)}</h3>
-              <ul className="mt-3 flex flex-col gap-3">
-                {groups.map((group) => (
-                  <PendingGroup key={group.join()} rankCode={rankCode} group={group} />
-                ))}
-              </ul>
-            </Card>
-          ))}
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-8 pb-8 pt-2">
+      <h2 className="px-1 text-[1.375rem] font-semibold">Afkamping</h2>
+      {pending.length === 0 && (
+        <div className="rounded-[1.5rem] border-[1.5px] border-dashed border-plate bg-surface p-8 text-center text-[0.9375rem] text-muted">
+          Geen gelijke standen die afgekampt moeten worden. Afkamping kan pas als een klasse alle passages geschoten heeft.
         </div>
       )}
+      {pending.map(({ rankCode, group }) => (
+        <PendingGroup key={group.join()} rankCode={rankCode} group={group} />
+      ))}
       <History />
     </div>
   );
@@ -42,41 +35,54 @@ export function ShootoffView() {
 
 function PendingGroup({ rankCode, group }: { rankCode: string; group: string[] }) {
   const { id, state } = useComp();
-  const earlier = state.shootoffs.filter((s) => s.rankCode === rankCode && s.participants.length === group.length && s.participants.every((p) => group.includes(p)));
+  const earlier = state.shootoffs.filter((s) => s.rankCode === rankCode && group.every((p) => s.participants.includes(p)));
+  const position = standingsFor(state, rankCode).rows.find((r) => r.entryId === group[0])?.position;
 
   async function start() {
-    const draft: ShootoffDraft = { rankCode, participants: group, calls: [], results: Object.fromEntries(group.map((p) => [p, []])) };
+    const returnStatus = state.status === "shootoff" ? null : state.status;
+    const draft: ShootoffDraft = { rankCode, participants: group, calls: [], results: Object.fromEntries(group.map((p) => [p, []])), returnStatus };
     await updateLive(id, { shootoff: draft });
     if (state.status !== "shootoff") await emit(id, "status.set", { status: "shootoff" });
   }
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
-      <div>
-        <p className="font-medium">{group.map((e) => entryName(state, e)).join(", ")}</p>
-        <p className="text-sm text-muted">
-          {entryTotal(state, group[0])} punten{earlier.length > 0 ? ` · al ${earlier.length}× afgekampt, nog steeds gelijk` : ""}
-        </p>
+    <div className="flex flex-wrap items-center gap-5 rounded-[1.5rem] border-2 border-ink bg-surface px-6 py-[1.375rem]">
+      <Tag tone="yellow" className="px-[0.6875rem] py-1 text-[0.8125rem]">
+        {rankName(state, rankCode)}
+      </Tag>
+      <div className="min-w-[13.75rem] flex-1">
+        <div className="text-[1.625rem] font-semibold tracking-[-0.02em]">{group.map((e) => entryName(state, e)).join(" & ")}</div>
+        <div className="mt-0.5 text-sm text-muted">
+          {entryTotal(state, group[0])} punten · gedeelde plaats{position ? ` ${position}` : ""}
+          {earlier.length > 0 ? ` · al ${earlier.length}× afgekampt, nog steeds gelijk` : ""}
+        </div>
       </div>
-      <Button tone="primary" onClick={start}>
+      <button type="button" onClick={start} className="cursor-pointer rounded-2xl bg-yellow px-[1.375rem] py-4 text-[1.0625rem] font-bold hover:brightness-95">
         {earlier.length > 0 ? "Opnieuw afkampen" : "Afkamping starten"}
-      </Button>
-    </li>
+      </button>
+    </div>
   );
 }
 
 function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
   const { id, state } = useComp();
   const setup = setupForRank(state.snapshot, draft.rankCode);
+  const label = (targetId: string) => setup.targets.find((t) => t.id === targetId)?.label ?? targetId;
   const called = new Set(draft.calls.map((c) => c.targetId));
   const remaining = setup.targets.filter((t) => !called.has(t.id));
   const last = draft.calls.length - 1;
-  const complete = remaining.length === 0 && draft.participants.every((p) => draft.results[p].every((r) => r !== null));
+  const blocked = last >= 0 && draft.participants.some((p) => draft.results[p][last] === null);
   const asIteration = {
     participants: draft.participants,
     calls: draft.calls,
     results: Object.fromEntries(draft.participants.map((p) => [p, draft.results[p].map(Boolean)])),
   };
+  const filled = draft.calls.length > 0 && draft.participants.every((p) => draft.results[p].every((r) => r !== null));
+  // Decided early: nobody can still catch up with what's left on the rack.
+  const left = remaining.reduce((n, t) => n + t.points, 0);
+  const scores = draft.participants.map((p) => iterationScore(asIteration, p)).sort((a, b) => b - a);
+  const decidedEarly = filled && remaining.length > 0 && scores.every((v, i) => i === 0 || scores[i - 1] - v > left);
+  const complete = filled && (remaining.length === 0 || decidedEarly);
 
   const change = (fn: (d: ShootoffDraft) => ShootoffDraft) =>
     updateLive(id, (current) => (current.shootoff ? { shootoff: fn(current.shootoff) } : {}));
@@ -103,6 +109,7 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
     }));
 
   async function save() {
+    if (!complete) return;
     await emitMany(id, [
       {
         type: "shootoff.recorded",
@@ -113,99 +120,147 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
   }
 
   async function cancel() {
-    if (draft.calls.length && !confirm("Deze afkamping annuleren? Wat al ingevuld is gaat verloren.")) return;
     await updateLive(id, { shootoff: null });
+    if (draft.returnStatus && state.status === "shootoff") await emit(id, "status.set", { status: draft.returnStatus });
   }
 
+  const width = (i: number) => (i === last ? "9.375rem" : "4rem");
+
   return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_28rem]">
-      <Card className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Afkamping · {rankName(state, draft.rankCode)}</h2>
-          <Badge tone="gold">
-            {draft.calls.length}/{setup.targets.length} doelen geroepen
-          </Badge>
-        </div>
-
-        <p className="mt-4 text-sm font-medium">Welk doel roept de scheidsrechter?</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {remaining.map((t) => (
-            <Button key={t.id} onClick={() => call(t.id)} disabled={last >= 0 && draft.participants.some((p) => draft.results[p][last] === null)}>
-              {t.label} <Badge>{t.points}</Badge>
-            </Button>
-          ))}
-          {remaining.length === 0 && <span className="text-sm text-muted">Alle doelen zijn geroepen.</span>}
-        </div>
-
-        <div className="mt-5 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="py-2 text-left">Schutter</th>
-                {draft.calls.map((c) => (
-                  <th key={c.targetId} className="px-1 py-2 text-center">
-                    {setup.targets.find((t) => t.id === c.targetId)?.label}
-                  </th>
-                ))}
-                <th className="py-2 text-right">Punten</th>
-              </tr>
-            </thead>
-            <tbody>
-              {draft.participants.map((p) => (
-                <tr key={p} className="border-t border-border">
-                  <td className="py-2 pr-3 font-medium">{entryName(state, p)}</td>
-                  {draft.calls.map((c, i) =>
-                    i === last ? (
-                      <td key={c.targetId} className="px-1 py-1 text-center">
-                        <div className="inline-flex gap-1">
-                          <Button size="sm" tone={draft.results[p][i] === true ? "primary" : "secondary"} onClick={() => mark(p, i, true)}>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-8 pb-8 pt-2">
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="text-[1.375rem] font-semibold">Afkamping · {rankName(state, draft.rankCode)}</h2>
+        <span className="text-sm text-muted">
+          {draft.calls.length} van {setup.targets.length} doelen geroepen
+        </span>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_clamp(17.5rem,30vw,25rem)] items-start gap-4">
+        <Panel className="flex flex-col gap-[1.125rem] px-6 py-[1.375rem]">
+          <div className="text-[0.9375rem] font-semibold">Welk doel roept de scheidsrechter?</div>
+          <div className="flex flex-wrap items-end gap-[0.875rem]">
+            {remaining.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => call(t.id)}
+                disabled={blocked}
+                title={blocked ? "Vul eerst raak of mis in voor het vorige doel" : undefined}
+                className="group flex cursor-pointer flex-col items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <span className="grid size-[3.625rem] place-items-center rounded-full border-2 border-plate bg-surface text-xl font-bold group-enabled:group-hover:border-ink">
+                  {t.points}
+                </span>
+                <span className="text-xs text-muted">{t.label}</span>
+              </button>
+            ))}
+            {remaining.length === 0 && <span className="text-sm text-muted">Alle doelen zijn geroepen.</span>}
+          </div>
+          <div className="overflow-x-auto border-t border-divider pt-1.5">
+            <div className="flex items-center py-2 text-xs font-semibold text-faint">
+              <span className="min-w-[9.375rem] flex-1">Schutter</span>
+              {draft.calls.map((c, i) => (
+                <span key={c.targetId} className="flex-none text-center" style={{ width: width(i) }}>
+                  {label(c.targetId)}
+                </span>
+              ))}
+              <span className="w-[4.375rem] flex-none text-right">Punten</span>
+            </div>
+            {draft.participants.map((p) => (
+              <div key={p} className="flex items-center border-t border-divider py-2">
+                <span className="min-w-[9.375rem] flex-1 text-[1.0625rem] font-semibold">{entryName(state, p)}</span>
+                {draft.calls.map((c, i) => {
+                  const v = draft.results[p][i];
+                  return (
+                    <div key={c.targetId} className="flex flex-none justify-center" style={{ width: width(i) }}>
+                      {i === last ? (
+                        <div className="flex gap-1">
+                          <ResultButton on={v === true} hit onClick={() => mark(p, i, true)}>
                             Raak
-                          </Button>
-                          <Button size="sm" tone={draft.results[p][i] === false ? "primary" : "secondary"} onClick={() => mark(p, i, false)}>
+                          </ResultButton>
+                          <ResultButton on={v === false} onClick={() => mark(p, i, false)}>
                             Mis
-                          </Button>
+                          </ResultButton>
                         </div>
-                      </td>
-                    ) : (
-                      <td key={c.targetId} className="px-1 py-1 text-center">
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => mark(p, i, !draft.results[p][i])}
-                          className={`rounded px-2 py-1 font-semibold ${draft.results[p][i] ? "text-[var(--hit)]" : "text-muted"}`}
-                          aria-label="Aanpassen"
+                          onClick={() => mark(p, i, !v)}
+                          aria-label={`${label(c.targetId)}: ${v ? "raak" : "mis"}, aanpassen`}
+                          className={`grid size-11 cursor-pointer place-items-center rounded-full text-sm font-bold ${v ? "bg-ink text-yellow" : "bg-fill text-faint"}`}
                         >
-                          {draft.results[p][i] ? "✓" : "✗"}
+                          {v ? "✓" : "✗"}
                         </button>
-                      </td>
-                    ),
-                  )}
-                  <td className="py-2 text-right text-lg font-semibold tabular-nums">{iterationScore(asIteration, p)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-2">
-          <Button tone="primary" onClick={save} disabled={!complete}>
-            Afkamping opslaan
-          </Button>
-          <Button onClick={undoCall} disabled={draft.calls.length === 0}>
-            Laatste doel ongedaan maken
-          </Button>
-          <Button tone="ghost" onClick={cancel}>
-            Annuleren
-          </Button>
-        </div>
-      </Card>
-      <Card className="p-5">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted">Geroepen</p>
-        <p className="mt-1 text-2xl font-semibold">
-          {last >= 0 ? setup.targets.find((t) => t.id === draft.calls[last].targetId)?.label : "Nog geen doel"}
-        </p>
-        <Knockdown setup={setup} hits={[]} highlight={last >= 0 ? draft.calls[last].targetId : null} className="mt-4 w-full" />
-      </Card>
+                      )}
+                    </div>
+                  );
+                })}
+                <span className="w-[4.375rem] flex-none text-right text-[1.625rem] font-semibold tabular-nums">{iterationScore(asIteration, p)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={save}
+              disabled={!complete}
+              className="cursor-pointer rounded-2xl bg-yellow px-[1.375rem] py-[0.875rem] text-base font-bold hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {decidedEarly ? "Afkamping opslaan · beslist" : "Afkamping opslaan"}
+            </button>
+            <Pill className="py-[0.5625rem]" onClick={undoCall} disabled={draft.calls.length === 0}>
+              Laatste doel ongedaan maken
+            </Pill>
+            <Pill tone="ghost" onClick={cancel}>
+              Annuleren
+            </Pill>
+          </div>
+        </Panel>
+        <Panel className="flex flex-col gap-1.5 px-6 py-[1.375rem]">
+          <span className="text-[0.8125rem] text-muted">Geroepen</span>
+          <span className="text-[2.125rem] font-semibold tracking-[-0.02em]">{last >= 0 ? label(draft.calls[last].targetId) : "Nog geen doel"}</span>
+          <div className="flex flex-col gap-[0.875rem] pb-1.5 pt-[1.375rem]">
+            {plateRows(setup).map((row, r) => (
+              <div key={r} className="flex items-end justify-center gap-2.5">
+                {row.map((t) => {
+                  const isLast = last >= 0 && draft.calls[last].targetId === t.id;
+                  const was = called.has(t.id) && !isLast;
+                  const d = Math.round(t.sizeMm * 0.5);
+                  return (
+                    <Plate
+                      key={t.id}
+                      size={`${d / 16}rem`}
+                      fontSize={`${Math.max(12, Math.round(d * 0.34)) / 16}rem`}
+                      look={{
+                        background: isLast ? "var(--yellow)" : was ? "var(--fill)" : "var(--surface)",
+                        color: was ? "var(--faint)" : "var(--ink)",
+                        borderColor: isLast ? "var(--ink)" : was ? "var(--fill)" : "var(--plate)",
+                      }}
+                    >
+                      {t.points}
+                    </Plate>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
     </div>
+  );
+}
+
+function ResultButton({ on, hit, onClick, children }: { on: boolean; hit?: boolean; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`cursor-pointer rounded-full border-[1.5px] px-3 py-[0.4375rem] text-[0.8125rem] font-bold ${
+        on ? `border-ink bg-ink ${hit ? "text-yellow" : "text-white"}` : "border-border bg-surface hover:border-ink"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -213,23 +268,21 @@ function History() {
   const { id, state } = useComp();
   if (state.shootoffs.length === 0) return null;
   return (
-    <Card className="p-5">
-      <h3 className="font-semibold">Gespeelde afkampingen</h3>
-      <ul className="mt-3 divide-y divide-border text-sm">
-        {state.shootoffs.map((s) => (
-          <li key={s.id} className="flex flex-wrap items-center gap-3 py-2">
-            <Badge>{rankName(state, s.rankCode)}</Badge>
-            <span className="mr-auto">
-              {s.participants
-                .map((p) => `${entryName(state, p)} ${iterationScore(s, p)}`)
-                .join(" · ")}
-            </span>
-            <Button size="sm" tone="ghost" onClick={() => confirm("Deze afkamping verwijderen?") && emit(id, "shootoff.cleared", { iterationId: s.id })}>
-              Verwijderen
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <Panel size="md" className="flex flex-col gap-1 px-5 py-[1.125rem]">
+      <div className="pb-2 text-[0.9375rem] font-semibold">Gespeelde afkampingen</div>
+      {state.shootoffs.map((s) => (
+        <div key={s.id} className="flex items-center gap-3 border-t border-divider py-2.5 text-sm">
+          <Tag>{rankName(state, s.rankCode)}</Tag>
+          <span className="flex-1 font-medium">{s.participants.map((p) => `${entryName(state, p)} ${iterationScore(s, p)}`).join(" · ")}</span>
+          <button
+            type="button"
+            onClick={() => emit(id, "shootoff.cleared", { iterationId: s.id })}
+            className="cursor-pointer text-xs font-semibold text-muted hover:text-error"
+          >
+            Verwijderen
+          </button>
+        </div>
+      ))}
+    </Panel>
   );
 }

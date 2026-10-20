@@ -19,6 +19,8 @@ export interface PassRecord {
   hits: string[];
   score: number;
   at: string;
+  /** Recorded again after the first time: a correction ("aangepast" in the standings). */
+  edited: boolean;
 }
 
 export interface ShootoffRecord extends ShootoffIteration {
@@ -37,6 +39,8 @@ export interface CompetitionState {
   passes: Map<string, PassRecord>;
   shootoffs: ShootoffRecord[];
   status: CompetitionStatus;
+  /** The phase before the last change, so "Heropenen" can return to it after the end. */
+  previousStatus: CompetitionStatus | null;
   lastEventAt: string | null;
   /** Events that could not be applied, with the reason; shown to the operator, never silently lost. */
   rejected: { event: CompetitionEvent; reason: string }[];
@@ -59,6 +63,7 @@ export function buildState(snapshot: CompetitionSnapshot, localEvents: readonly 
     passes: new Map(),
     shootoffs: [],
     status: snapshot.competition.status,
+    previousStatus: null,
     lastEventAt: null,
     rejected: [],
   };
@@ -140,13 +145,15 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
       } catch (err) {
         return (err as Error).message;
       }
-      state.passes.set(passKey(p.entryId, p.round, p.knockdown), {
+      const key = passKey(p.entryId, p.round, p.knockdown);
+      state.passes.set(key, {
         entryId: p.entryId,
         round: p.round,
         knockdown: p.knockdown,
         hits: [...new Set(p.hits)],
         score,
         at: event.at,
+        edited: state.passes.has(key),
       });
       return;
     }
@@ -171,6 +178,7 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
       return;
     }
     case "status.set": {
+      if (event.payload.status !== state.status) state.previousStatus = state.status;
       state.status = event.payload.status;
       return;
     }

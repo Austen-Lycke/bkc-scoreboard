@@ -31,10 +31,10 @@ export default async function EditCompetitionPage({ params }: PageProps<"/admin/
         </Link>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">{comp.name}</h1>
         <div className="mt-1 flex gap-4 text-sm">
-          <Link href={`/wedstrijd/${comp.slug}`} className="text-gold hover:underline">
+          <Link href={`/wedstrijd/${comp.slug}`} className="underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
             Publieke pagina
           </Link>
-          <Link href={`/operator/live?c=${comp.id}`} className="text-gold hover:underline">
+          <Link href={`/operator/live?c=${comp.id}`} className="underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
             Wedstrijdleiding
           </Link>
         </div>

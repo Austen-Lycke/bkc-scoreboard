@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Knockdown } from "@/components/knockdown";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   competitionProgress,
   competitionSchedule,
   entryName,
+  entryShortName,
   entryTotal,
   heatKey,
   passOf,
@@ -14,30 +14,35 @@ import {
   standingsFor,
 } from "@/lib/competition";
 import { offlineDb } from "@/lib/offline/db";
-import { emitMany, updateLive } from "@/lib/offline/store";
-import { passKey, scorePass, type Heat } from "@/lib/scoring";
-import { useComp } from "../context";
-import { Badge, Button, Card, Empty } from "@/components/ui";
+import { emit, emitMany, updateLive } from "@/lib/offline/store";
+import { passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
+import { useComp, useNav } from "../context";
+import { OPERATOR_HIT, OPERATOR_OPEN, Plate, plateRows } from "@/components/plates";
+import { Empty, Kbd, Panel, Pill } from "@/components/ui";
 
 /**
  * Scoring the heat that's shooting: one panel per knockdown, the shooter assigned to it in this
  * phase, and their plates. Taps are drafts (shown live on the TV); "Opslaan" records the passes.
  */
-export function ScoringView() {
+export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setActiveKd: (kd: number) => void }) {
   const { id, state, live } = useComp();
+  const { goTo } = useNav();
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);
-  const [activeKd, setActiveKd] = useState(1);
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const finished = state.status === "finished";
 
   const focusIndex = live?.focus ? schedule.findIndex((h) => heatKey(h) === live.focus!.heatKey) : -1;
   const heatIndex = focusIndex >= 0 ? focusIndex : progress.heatIndex;
-  const phaseIndex = focusIndex >= 0 ? live!.focus!.phaseIndex : progress.phaseIndex;
+  const rawPhase = focusIndex >= 0 ? live!.focus!.phaseIndex : progress.phaseIndex;
   const heat = heatIndex === null ? null : schedule[heatIndex];
-  const phase = heat && phaseIndex !== null ? heat.phases[Math.min(phaseIndex, heat.phases.length - 1)] : null;
+  const phaseIndex = heat && rawPhase !== null ? Math.min(rawPhase, heat.phases.length - 1) : null;
+  const phase = heat && phaseIndex !== null ? heat.phases[phaseIndex] : null;
   const knockdowns = state.snapshot.competition.knockdowns;
   const drafts = useMemo(() => live?.drafts ?? {}, [live]);
+  const setup = heat ? setupForRank(state.snapshot, heat.rankCode) : null;
 
-  const assignment = (kd: number) => phase?.find((s) => s.knockdown === kd) ?? null;
   const hitsOf = useCallback(
     (entryId: string, kd: number) => {
       const key = passKey(entryId, heat!.round, kd);
@@ -49,7 +54,8 @@ export function ScoringView() {
   const toggle = useCallback(
     (kd: number, targetId: string) => {
       const a = phase?.find((s) => s.knockdown === kd);
-      if (!a || !heat) return;
+      if (!a || !heat || finished) return;
+      setActiveKd(kd);
       const key = passKey(a.entryId, heat.round, kd);
       const saved = passOf(state, a.entryId, heat.round, kd)?.hits ?? [];
       void updateLive(id, (current) => {
@@ -58,19 +64,19 @@ export function ScoringView() {
         return { drafts: { ...current.drafts, [key]: next } };
       });
     },
-    [heat, id, phase, state],
+    [finished, heat, id, phase, setActiveKd, state],
   );
 
   const setAll = (kd: number, all: boolean) => {
-    const a = assignment(kd);
-    if (!a || !heat) return;
-    const setup = setupForRank(state.snapshot, heat.rankCode);
+    const a = phase?.find((s) => s.knockdown === kd);
+    if (!a || !heat || !setup || finished) return;
+    setActiveKd(kd);
     const key = passKey(a.entryId, heat.round, kd);
     void updateLive(id, (current) => ({ drafts: { ...current.drafts, [key]: all ? setup.targets.map((t) => t.id) : [] } }));
   };
 
   const save = useCallback(async () => {
-    if (!heat || !phase || phaseIndex === null) return;
+    if (!heat || !phase || phaseIndex === null || finished) return;
     // Read the drafts from storage, not from render state: the last tap may be milliseconds old.
     const storedDrafts = (await offlineDb().live.get(id))?.drafts ?? {};
     const actions = phase
@@ -90,62 +96,103 @@ export function ScoringView() {
       focus: focusIndex >= 0 && nextPhase !== null ? { heatKey: heatKey(heat), phaseIndex: nextPhase } : null,
     }));
     setActiveKd(1);
-  }, [focusIndex, heat, id, phase, phaseIndex, state]);
+    setJustSaved(true);
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setJustSaved(false), 1600);
+  }, [finished, focusIndex, heat, id, phase, phaseIndex, setActiveKd, state]);
 
-  // Keyboard: 1–9 toggles plates on the active knockdown, Tab switches knockdown, Enter saves.
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
+
+  // Keyboard: 1–n toggles plates on the active knockdown, W switches knockdown, Enter saves.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = e.target instanceof Element ? e.target : null;
       if (el?.closest("input, select, textarea, [contenteditable], [role=dialog]") || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (!heat) return;
-      if (e.key === "Tab") {
+      if (!heat || !setup || finished) return;
+      if (e.key === "w" || e.key === "W") {
         e.preventDefault();
-        setActiveKd((k) => (k % knockdowns) + 1);
+        setActiveKd((activeKd % knockdowns) + 1);
       } else if (e.key === "Enter" && !el?.closest("button")) {
         e.preventDefault();
         void save();
       } else if (/^[1-9]$/.test(e.key)) {
-        const target = setupForRank(state.snapshot, heat.rankCode).targets[Number(e.key) - 1];
+        const target = setup.targets[Number(e.key) - 1];
         if (target) toggle(activeKd, target.id);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeKd, heat, knockdowns, save, state.snapshot, toggle]);
+  }, [activeKd, finished, heat, knockdowns, save, setActiveKd, setup, toggle]);
 
-  if (state.entries.size === 0) return <Empty>Schrijf eerst schutters in.</Empty>;
+  if (state.entries.size === 0) {
+    return (
+      <div className="min-h-0 flex-1 overflow-auto px-8 pb-8 pt-2">
+        <Empty>Schrijf eerst schutters in.</Empty>
+      </div>
+    );
+  }
+
+  // Live totals of the shooters on the line, for "totaal … · plaats …".
+  const liveTotal = (entryId: string, kd: number) => {
+    const saved = passOf(state, entryId, heat!.round, kd);
+    return entryTotal(state, entryId) - (saved?.score ?? 0) + scorePass(setup!, hitsOf(entryId, kd));
+  };
+  const placeOf = (entryId: string, total: number) => {
+    const rows = standingsFor(state, heat!.rankCode).rows.filter((r) => !r.withdrawn && r.entryId !== entryId);
+    const totals = rows.map((r) => {
+      const onLine = phase!.find((s) => s.entryId === r.entryId);
+      return onLine ? liveTotal(r.entryId, onLine.knockdown) : r.total;
+    });
+    return 1 + totals.filter((t) => t > total).length;
+  };
+
+  const next = heatIndex === null ? [] : schedule.slice(heatIndex + 1, heatIndex + 4);
+  const lastPhase = !!heat && phaseIndex !== null && phaseIndex + 1 >= heat.phases.length;
+  const saveLabel = finished ? "Op slot" : justSaved ? "Opgeslagen ✓" : lastPhase ? "Opslaan & volgende" : "Opslaan & wisselen";
 
   return (
-    <div className="grid gap-5 2xl:grid-cols-[1fr_22rem]">
-      <div className="flex flex-col gap-4">
-        {heat && phase && phaseIndex !== null ? (
+    <div className="flex min-h-0 flex-1 gap-5 px-8 pb-7 pt-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-[0.875rem]">
+        {heat && phase && phaseIndex !== null && setup ? (
           <>
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-xl font-semibold">
-                Ronde {heat.round} · {rankName(state, heat.rankCode)} · Beurt {heat.index + 1}
-              </h2>
-              {heat.phases.length > 1 && (
-                <Badge tone={phaseIndex > 0 ? "gold" : "neutral"}>
-                  {phaseIndex > 0 ? "Gewisseld" : "Eerste knockdown"} ({phaseIndex + 1}/{heat.phases.length})
-                </Badge>
-              )}
-              {focusIndex >= 0 && (
-                <Button size="sm" tone="ghost" onClick={() => updateLive(id, { focus: null })}>
-                  Terug naar de volgende in de rij
-                </Button>
-              )}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
+              <span className="text-[1.375rem] font-semibold">
+                {rankName(state, heat.rankCode)} · ronde {heat.round} · beurt {heat.index + 1}
+              </span>
+              <span className="flex items-baseline gap-3 text-sm text-muted">
+                {focusIndex >= 0 && (
+                  <button type="button" onClick={() => updateLive(id, { focus: null })} className="cursor-pointer font-semibold text-ink underline underline-offset-2">
+                    Terug naar de volgende in de rij
+                  </button>
+                )}
+                Fase {phaseIndex + 1} van {heat.phases.length}
+                {phaseIndex > 0 ? " · gewisseld" : ""}
+              </span>
             </div>
-            <div className={`grid gap-4 ${knockdowns > 1 ? "lg:grid-cols-2" : ""}`}>
+            {finished && <FinishedBanner />}
+            <div className="grid min-h-0 flex-1 gap-4" style={{ gridTemplateColumns: `repeat(${knockdowns}, minmax(0, 1fr))` }}>
               {Array.from({ length: knockdowns }, (_, i) => i + 1).map((kd) => {
-                const a = assignment(kd);
+                const a = phase.find((s) => s.knockdown === kd);
+                if (!a) {
+                  return (
+                    <div key={kd} className="grid place-items-center rounded-[1.5rem] border-[1.5px] border-dashed border-plate p-6 text-[0.9375rem] text-muted">
+                      Knockdown {kd}: niemand in deze fase
+                    </div>
+                  );
+                }
+                const hits = hitsOf(a.entryId, kd);
+                const total = liveTotal(a.entryId, kd);
                 return (
-                  <ShooterPanel
+                  <KnockdownPanel
                     key={kd}
                     kd={kd}
-                    heat={heat}
-                    entryId={a?.entryId ?? null}
-                    hits={a ? hitsOf(a.entryId, kd) : []}
+                    name={entryName(state, a.entryId)}
+                    setup={setup}
+                    hits={hits}
+                    total={total}
+                    place={placeOf(a.entryId, total)}
                     active={activeKd === kd}
+                    locked={finished}
                     onActivate={() => setActiveKd(kd)}
                     onToggle={(t) => toggle(kd, t)}
                     onAll={(all) => setAll(kd, all)}
@@ -153,142 +200,184 @@ export function ScoringView() {
                 );
               })}
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <Button tone="primary" size="lg" onClick={save}>
-                {phaseIndex + 1 < heat.phases.length ? "Opslaan en wisselen" : "Opslaan, volgende beurt"}
-              </Button>
-              <span className="text-sm text-muted">
-                Toetsen: <kbd className="font-mono">1</kbd>–<kbd className="font-mono">7</kbd> doel, <kbd className="font-mono">Tab</kbd>{" "}
-                andere knockdown, <kbd className="font-mono">Enter</kbd> opslaan
-              </span>
-            </div>
           </>
         ) : (
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold">Alle beurten zijn geschoten</h2>
-            <p className="mt-1 text-muted">Kijk de stand na en los eventuele gelijke standen op via Afkamping.</p>
-          </Card>
+          <>
+            {finished && <FinishedBanner />}
+            <Panel className="flex flex-col items-start gap-3 px-7 py-6">
+              <span className="text-[1.375rem] font-semibold">Alle beurten zijn geschoten</span>
+              <span className="text-[0.9375rem] text-muted">Kijk de stand na en los eventuele gelijke standen op via Afkamping.</span>
+              <div className="flex gap-2">
+                <Pill tone="ink" onClick={() => goTo("standings")}>
+                  Naar de stand
+                </Pill>
+                <Pill onClick={() => goTo("shootoff")}>Naar afkamping</Pill>
+              </div>
+            </Panel>
+          </>
         )}
       </div>
-      <ScheduleList schedule={schedule} currentIndex={heatIndex} />
+      <aside className="flex w-[clamp(14.375rem,22vw,18.75rem)] flex-none flex-col gap-4 pt-11">
+        {heat && phaseIndex !== null && heat.phases.length > 1 && <SwapSchedule heat={heat} phaseIndex={phaseIndex} />}
+        <Panel size="md" className="flex flex-col gap-3 px-5 py-[1.125rem]">
+          <div className="text-[0.9375rem] font-semibold">Daarna</div>
+          {next.length === 0 ? (
+            <span className="text-sm text-muted">Niemand meer.</span>
+          ) : (
+            next.map((h, j) => (
+              <div key={heatKey(h)} className="flex items-center gap-3">
+                <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[1.5px] border-border text-xs font-semibold">{j + 1}</span>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</div>
+                  <div className="text-xs text-muted">
+                    Ronde {h.round} · {rankName(state, h.rankCode)} · beurt {h.index + 1}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </Panel>
+        <button
+          type="button"
+          onClick={save}
+          disabled={finished || !phase}
+          className="mt-auto flex cursor-pointer items-center justify-between rounded-[1.125rem] bg-yellow px-[1.375rem] py-5 text-lg font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <span>{saveLabel}</span>
+          <Kbd>Enter</Kbd>
+        </button>
+        <div className="text-center text-xs text-faint">
+          1–{setup?.targets.length ?? 7} plaat · W andere kant · Enter opslaan
+        </div>
+      </aside>
     </div>
   );
 }
 
-function ShooterPanel(props: {
+function FinishedBanner() {
+  const { id, state } = useComp();
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-ink px-[1.125rem] py-3 text-[0.9375rem] font-semibold text-white">
+      <span className="flex-1">Wedstrijd beëindigd. Scoren staat op slot.</span>
+      <button
+        type="button"
+        onClick={() => emit(id, "status.set", { status: state.previousStatus && state.previousStatus !== "finished" ? state.previousStatus : "round2" })}
+        className="cursor-pointer rounded-full border-[1.5px] border-white px-[0.875rem] py-1.5 text-[0.8125rem]"
+      >
+        Heropenen
+      </button>
+    </div>
+  );
+}
+
+function KnockdownPanel(props: {
   kd: number;
-  heat: Heat;
-  entryId: string | null;
+  name: string;
+  setup: Setup;
   hits: string[];
+  total: number;
+  place: number;
   active: boolean;
+  locked: boolean;
   onActivate: () => void;
   onToggle: (targetId: string) => void;
   onAll: (all: boolean) => void;
 }) {
-  const { state, live } = useComp();
-  const { kd, heat, entryId, hits, active } = props;
-  if (!entryId) {
-    return (
-      <Card className="flex min-h-64 items-center justify-center p-5 text-muted">
-        Knockdown {kd}: niemand in deze beurt
-      </Card>
-    );
-  }
-  const setup = setupForRank(state.snapshot, heat.rankCode);
-  const score = scorePass(setup, hits);
-  const saved = passOf(state, entryId, heat.round, kd);
-  const isDraft = live?.drafts[passKey(entryId, heat.round, kd)] !== undefined;
-  const total = entryTotal(state, entryId) - (saved?.score ?? 0) + score;
-  const row = standingsFor(state, heat.rankCode).rows.find((r) => r.entryId === entryId);
-
+  const { kd, name, setup, hits, total, place, active, locked } = props;
+  const scale = 0.92;
   return (
-    <Card className={`p-5 transition ${active ? "ring-2 ring-[var(--gold)]" : ""}`}>
-      <div onClick={props.onActivate}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-widest text-muted">Knockdown {kd}</span>
-          {saved && !isDraft ? <Badge tone="green">opgeslagen</Badge> : saved && isDraft ? <Badge tone="gold">gewijzigd</Badge> : null}
-        </div>
-        <p className="mt-1 text-2xl font-semibold">{entryName(state, entryId)}</p>
-        <Knockdown setup={setup} hits={hits} onToggle={props.onToggle} showKeys={active} className="mt-3 h-[min(34vh,20rem)] w-full" />
+    <div
+      role="group"
+      aria-label={`Knockdown ${kd}: ${name}`}
+      onClick={props.onActivate}
+      className={`flex min-h-0 min-w-0 cursor-pointer flex-col overflow-hidden rounded-[1.5rem] border-2 bg-surface px-6 py-[1.375rem] transition-colors ${
+        active ? "border-ink" : "border-border"
+      } ${locked ? "opacity-45" : ""}`}
+    >
+      <div className="flex items-center justify-between">
+        <span className={`rounded-full px-[0.6875rem] py-1 text-[0.8125rem] font-semibold ${active ? "bg-yellow" : "bg-fill"}`}>KD {kd}</span>
+        <span className="text-[0.8125rem] text-faint">{active ? "actief" : "klik om te scoren"}</span>
       </div>
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+      <div className="mt-2.5 truncate text-[clamp(1.375rem,2.3vw,2rem)] font-semibold tracking-[-0.02em]">{name}</div>
+      <div className="@container flex min-h-0 flex-1 flex-col justify-center gap-5 py-3">
+        {plateRows(setup).map((row, r) => (
+          <div key={r} className="flex items-end justify-center gap-[3cqw]">
+            {row.map((t) => {
+              const hit = hits.includes(t.id);
+              const c = t.sizeMm * scale * 0.2;
+              return (
+                <Plate
+                  key={t.id}
+                  size={`max(2.75rem, min(${c.toFixed(2)}cqw, ${((t.sizeMm * scale * 1.15) / 16).toFixed(3)}rem))`}
+                  fontSize={`max(0.75rem, min(${(c * 0.32).toFixed(2)}cqw, ${((t.sizeMm * scale * 0.37) / 16).toFixed(3)}rem))`}
+                  look={hit ? OPERATOR_HIT : OPERATOR_OPEN}
+                  onClick={() => props.onToggle(t.id)}
+                  disabled={locked}
+                  label={`${t.label} (${t.points} ptn)${hit ? ", geraakt" : ""}`}
+                >
+                  {t.points}
+                </Plate>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-2.5 border-t border-divider pt-[0.875rem]">
         <div>
-          <p className="text-4xl font-semibold tabular-nums">{score}</p>
-          <p className="text-sm text-muted">
-            Totaal {total}
-            {row?.position ? ` · plaats ${row.position}` : ""}
-          </p>
+          <div className="text-[clamp(3rem,5vw,4.5rem)] font-semibold leading-[0.9] tracking-[-0.03em] tabular-nums">{scorePass(setup, hits)}</div>
+          <div className="mt-1.5 text-sm text-muted">
+            totaal {total} · plaats {place}
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={() => props.onAll(true)}>
+        <div className="flex gap-1.5">
+          <Pill size="sm" disabled={locked} onClick={(e) => (e.stopPropagation(), props.onAll(true))}>
             Alles raak
-          </Button>
-          <Button size="sm" onClick={() => props.onAll(false)}>
+          </Pill>
+          <Pill size="sm" disabled={locked} onClick={(e) => (e.stopPropagation(), props.onAll(false))}>
             Niets
-          </Button>
+          </Pill>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
-function ScheduleList({ schedule, currentIndex }: { schedule: Heat[]; currentIndex: number | null }) {
-  const { id, state } = useComp();
-  const done = (h: Heat) => h.phases.flat().filter((s) => state.passes.has(passKey(s.entryId, h.round, s.knockdown))).length;
-  const next = currentIndex === null ? [] : schedule.slice(currentIndex + 1, currentIndex + 4);
-
-  function focus(h: Heat) {
-    const firstOpen = h.phases.findIndex((ph) => ph.some((s) => !state.passes.has(passKey(s.entryId, h.round, s.knockdown))));
-    void updateLive(id, { focus: { heatKey: heatKey(h), phaseIndex: Math.max(0, firstOpen) } });
-  }
-
-  const groupOf = (h: Heat) => `Ronde ${h.round} · ${rankName(state, h.rankCode)}`;
+/** Who shoots which knockdown in every phase of this heat. */
+function SwapSchedule({ heat, phaseIndex }: { heat: Heat; phaseIndex: number }) {
+  const { state } = useComp();
+  const kds = Array.from({ length: state.snapshot.competition.knockdowns }, (_, i) => i + 1);
   return (
-    <aside className="flex flex-col gap-4">
-      <Card className="p-4">
-        <h3 className="font-semibold">Volgende</h3>
-        {next.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">Niemand meer.</p>
-        ) : (
-          <ol className="mt-2 flex flex-col gap-2">
-            {next.map((h) => (
-              <li key={heatKey(h)} className="text-sm">
-                <span className="text-xs text-muted">
-                  R{h.round} · {rankName(state, h.rankCode)}
-                </span>
-                <p className="font-medium">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</p>
-              </li>
-            ))}
-          </ol>
-        )}
-      </Card>
-      <Card className="max-h-[70vh] overflow-y-auto p-4">
-        <h3 className="font-semibold">Alle beurten</h3>
-        <ul className="mt-2 text-sm">
-          {schedule.map((h, i) => {
-            const header = i === 0 || groupOf(schedule[i - 1]) !== groupOf(h) ? groupOf(h) : null;
-            const n = done(h);
-            const total = h.phases.flat().length;
-            return (
-              <li key={heatKey(h)}>
-                {header && <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-muted first:mt-0">{header}</p>}
-                <button
-                  type="button"
-                  onClick={() => focus(h)}
-                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5 ${
-                    i === currentIndex ? "bg-[var(--gold)]/15" : ""
+    <Panel size="md" className="px-5 py-[1.125rem]">
+      <div className="mb-3 text-[0.9375rem] font-semibold">Wisselschema · beurt {heat.index + 1}</div>
+      <div className="grid gap-1.5 text-[0.8125rem]" style={{ gridTemplateColumns: `auto repeat(${kds.length}, minmax(0, 1fr))` }}>
+        <span />
+        {kds.map((k) => (
+          <span key={k} className="text-muted">
+            KD {k}
+          </span>
+        ))}
+        {heat.phases.map((ph, p) => (
+          <Fragment key={p}>
+            <span className={`self-center whitespace-nowrap ${p === phaseIndex ? "font-semibold" : "text-muted"}`}>
+              Fase {p + 1}
+              {p < phaseIndex ? " ✓" : ""}
+            </span>
+            {kds.map((k) => {
+              const s = ph.find((x) => x.knockdown === k);
+              return (
+                <span
+                  key={k}
+                  className={`truncate rounded-lg px-2.5 py-2 ${
+                    p === phaseIndex ? "bg-ink font-semibold text-white" : p < phaseIndex ? "bg-fill text-muted" : "bg-fill"
                   }`}
                 >
-                  <span aria-hidden className={n === total ? "text-[var(--hit)]" : n > 0 ? "text-gold" : "text-muted"}>
-                    {n === total ? "●" : n > 0 ? "◐" : "○"}
-                  </span>
-                  <span className="truncate">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Card>
-    </aside>
+                  {s ? entryShortName(state, s.entryId) : "–"}
+                </span>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </Panel>
   );
 }

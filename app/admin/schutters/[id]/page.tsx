@@ -32,12 +32,12 @@ export default async function EditShooterPage({ params }: PageProps<"/admin/schu
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
           {shooter.firstName} {shooter.lastName}
         </h1>
-        <Link href={`/schutter/${id}`} className="text-sm text-gold hover:underline">
+        <Link href={`/schutter/${id}`} className="text-sm underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
           Publiek profiel bekijken
         </Link>
       </div>
       <ShooterForm
-        values={{ id, firstName: shooter.firstName, lastName: shooter.lastName, birthdate: shooter.birthdate, active: shooter.active, notes: shooter.notes ?? "", rankCode: seasonRank?.rankCode ?? "" }}
+        values={{ id, firstName: shooter.firstName, lastName: shooter.lastName, birthdate: shooter.birthdate ?? "", active: shooter.active, notes: shooter.notes ?? "", rankCode: seasonRank?.rankCode ?? "" }}
         ranks={ranks}
         seasonYear={year}
         canDelete={!withEntries.has(id)}

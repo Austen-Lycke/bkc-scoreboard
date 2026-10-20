@@ -10,7 +10,7 @@ import { requireRole } from "@/lib/session";
 export const metadata: Metadata = { title: "Schutters" };
 
 const { shooters, shooterSeasonRanks } = schema;
-const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ink";
 
 export default async function ShootersPage({ searchParams }: PageProps<"/admin/schutters">) {
   await requireRole("admin");
@@ -50,10 +50,10 @@ export default async function ShootersPage({ searchParams }: PageProps<"/admin/s
           <p className="mt-1 text-muted">Klasse = indeling voor seizoen {year}.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a href="/api/admin/export/shooters" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-gold">
+          <a href="/api/admin/export/shooters" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink">
             Exporteren (CSV)
           </a>
-          <Link href="/admin/schutters/importeren" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-gold">
+          <Link href="/admin/schutters/importeren" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink">
             Ledenlijst importeren
           </Link>
           <Link href="/admin/schutters/nieuw" className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:opacity-90 dark:bg-gold dark:text-navy">
@@ -74,10 +74,10 @@ export default async function ShootersPage({ searchParams }: PageProps<"/admin/s
           <option value="geen">Nog niet ingedeeld</option>
         </select>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" name="toon" value="alle" defaultChecked={showInactive} className="size-4 accent-[var(--gold)]" />
+          <input type="checkbox" name="toon" value="alle" defaultChecked={showInactive} className="size-4 accent-[var(--ink)]" />
           Ook inactieve
         </label>
-        <button className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-gold">Filteren</button>
+        <button className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink">Filteren</button>
       </form>
 
       {rows.length === 0 ? (
@@ -102,11 +102,11 @@ export default async function ShootersPage({ searchParams }: PageProps<"/admin/s
                   <td className="px-4 py-2.5 font-medium">
                     {s.lastName} {s.firstName} {!s.active && <Badge>inactief</Badge>}
                   </td>
-                  <td className="px-4 py-2.5 tabular-nums">{formatBelgianDate(s.birthdate)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{s.birthdate ? formatBelgianDate(s.birthdate) : "–"}</td>
                   <td className="px-4 py-2.5">{rankName(s.rankCode) ?? <span className="text-muted">niet ingedeeld</span>}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{s.competitions}</td>
                   <td className="px-4 py-2.5 text-right">
-                    <Link href={`/admin/schutters/${s.id}`} className="font-medium text-gold hover:underline">
+                    <Link href={`/admin/schutters/${s.id}`} className="font-medium underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
                       Bewerken
                     </Link>
                   </td>

@@ -48,7 +48,8 @@ export const shooters = pgTable(
     id: uuid("id").primaryKey(),
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
-    birthdate: date("birthdate").notNull(),
+    /** Optional: walk-ins registered at the table have none. */
+    birthdate: date("birthdate"),
     active: boolean("active").notNull().default(true),
     notes: text("notes"),
     ...timestamps,

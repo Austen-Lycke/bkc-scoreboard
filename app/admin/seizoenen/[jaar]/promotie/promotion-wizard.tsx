@@ -6,7 +6,7 @@ import type { RankDef } from "@/lib/scoring";
 import type { PromotionRow } from "@/lib/server/promotion";
 import { savePromotion, type FormState } from "../../actions";
 
-const field = "rounded-lg border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-gold";
+const field = "rounded-lg border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ink";
 
 export function PromotionWizard({ year, ranks, rows }: { year: number; ranks: RankDef[]; rows: PromotionRow[] }) {
   const [decisions, setDecisions] = useState<Record<string, string>>({});

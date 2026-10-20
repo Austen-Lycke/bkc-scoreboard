@@ -51,14 +51,14 @@ export function seasonReferenceDate(seasonYear: number): string {
 
 /**
  * Rank for a shooter who has no rank yet this season (new walk-in).
- * Under 18 on the season reference date → Junior, otherwise the entry adult rank.
+ * Under 18 on the season reference date → Junior, otherwise (or without a birthdate) the entry adult rank.
  */
 export function initialRank(
-  birthdate: string,
+  birthdate: string | null,
   seasonYear: number,
   ranks: readonly RankDef[] = DEFAULT_RANKS,
 ): RankDef {
-  return ageOn(birthdate, seasonReferenceDate(seasonYear)) < JUNIOR_AGE_LIMIT
+  return birthdate && ageOn(birthdate, seasonReferenceDate(seasonYear)) < JUNIOR_AGE_LIMIT
     ? juniorRank(ranks)
     : entryAdultRank(ranks);
 }
@@ -69,7 +69,7 @@ export function initialRank(
  * adult rank, as the promotion wizard would), and a shooter we've never seen gets `initialRank`.
  */
 export function suggestSeasonRank(opts: {
-  birthdate: string;
+  birthdate: string | null;
   seasonYear: number;
   thisSeasonRank?: string | null;
   lastRank?: string | null;
@@ -79,7 +79,7 @@ export function suggestSeasonRank(opts: {
   if (thisSeasonRank) return thisSeasonRank;
   if (lastRank) {
     const isJunior = ranks.find((r) => r.code === lastRank)?.isJunior;
-    if (isJunior && ageOn(birthdate, seasonReferenceDate(seasonYear)) >= JUNIOR_AGE_LIMIT) {
+    if (isJunior && birthdate && ageOn(birthdate, seasonReferenceDate(seasonYear)) >= JUNIOR_AGE_LIMIT) {
       return entryAdultRank(ranks).code;
     }
     return lastRank;

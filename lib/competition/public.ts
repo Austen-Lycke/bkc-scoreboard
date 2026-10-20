@@ -57,19 +57,34 @@ export interface PublicView {
     swapped: boolean;
     shooters: { shooterId: string; name: string; knockdown: number; total: number; position: number | null }[];
   } | null;
-  next: { round: number; rankName: string; names: string[] }[];
+  next: { round: number; rankName: string; heatNumber: number; shooterIds: string[]; names: string[] }[];
   lastPasses: { name: string; rankName: string; round: number; knockdown: number; score: number; hits: string[]; setup: Setup; at: string }[];
   ranks: PublicRank[];
-  progress: { done: number; total: number };
+  progress: {
+    done: number;
+    total: number;
+    /** The round of every heat in shooting order, and the heat on the line (null when all are shot). */
+    heatRounds: number[];
+    heatIndex: number | null;
+  };
 }
 
 /** Public name: shortened for juniors and anyone under 18 on the reference date. */
 export function publicName(
-  shooter: { firstName: string; lastName: string; birthdate: string },
+  shooter: { firstName: string; lastName: string; birthdate: string | null },
   opts: { isJuniorRank: boolean; onDate: string },
 ): string {
-  const minor = opts.isJuniorRank || ageOn(shooter.birthdate, opts.onDate) < JUNIOR_AGE_LIMIT;
+  const minor = opts.isJuniorRank || (!!shooter.birthdate && ageOn(shooter.birthdate, opts.onDate) < JUNIOR_AGE_LIMIT);
   return publicDisplayName(shooter, minor);
+}
+
+/** The name the venue TV shows: like the website, juniors never with their full name. */
+export function tvName(state: CompetitionState, entryId: string): string {
+  const entry = state.entries.get(entryId);
+  const shooter = entry && state.shooters.get(entry.shooterId);
+  if (!entry || !shooter) return "Onbekend";
+  const isJuniorRank = !!state.snapshot.ranks.find((r) => r.code === entry.rankCode)?.isJunior;
+  return publicName(shooter, { isJuniorRank, onDate: state.snapshot.competition.date });
 }
 
 export function publicView(state: CompetitionState): PublicView {
@@ -164,10 +179,17 @@ export function publicView(state: CompetitionState): PublicView {
     next: (progress.heatIndex === null ? [] : schedule.slice(progress.heatIndex + 1, progress.heatIndex + 4)).map((h) => ({
       round: h.round,
       rankName: rankName(state, h.rankCode),
+      heatNumber: h.index + 1,
+      shooterIds: h.shooters.map(shooterIdOf),
       names: h.shooters.map(nameOf),
     })),
     lastPasses,
     ranks,
-    progress: { done: state.passes.size, total: activeShooters * expectedPasses(state) },
+    progress: {
+      done: state.passes.size,
+      total: activeShooters * expectedPasses(state),
+      heatRounds: schedule.map((h) => h.round),
+      heatIndex: progress.heatIndex,
+    },
   };
 }

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { CompetitionEvent, CompetitionSnapshot } from "@/lib/competition";
+import type { CompetitionEvent, CompetitionSnapshot, CompetitionStatus } from "@/lib/competition";
 
 /**
  * Local storage on the operator laptop (IndexedDB). It is the source of truth during a competition;
@@ -20,6 +20,8 @@ export interface LiveRecord {
   /** Targets tapped but not saved yet, per pass key. */
   drafts: Record<string, string[]>;
   shootoff: ShootoffDraft | null;
+  /** End of the break countdown shown on the TV (ISO), or null when no timer runs. */
+  pauseEndsAt?: string | null;
   updatedAt: string;
 }
 
@@ -28,6 +30,8 @@ export interface ShootoffDraft {
   participants: string[];
   calls: { targetId: string; points: number }[];
   results: Record<string, (boolean | null)[]>;
+  /** The phase before this afkamping switched the day to "Afkamping"; restored on cancel. */
+  returnStatus?: CompetitionStatus | null;
 }
 
 class OfflineDb extends Dexie {

@@ -6,7 +6,7 @@ import type { RankDef } from "@/lib/scoring";
 import { deleteCompetition, releaseLease, updateCompetition, type FormState } from "../actions";
 import { CLUB_TIME_ZONE } from "@/components/public/format";
 
-const field = "rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-gold disabled:opacity-60";
+const field = "rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-ink disabled:opacity-60";
 const when = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short", timeZone: CLUB_TIME_ZONE });
 
 export function CompetitionForm({
@@ -57,7 +57,7 @@ export function CompetitionForm({
           <input name="location" defaultValue={c.location} className={field} />
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input name="countsForSeason" type="checkbox" defaultChecked={c.countsForSeason} className="size-4 accent-[var(--gold)]" />
+          <input name="countsForSeason" type="checkbox" defaultChecked={c.countsForSeason} className="size-4 accent-[var(--ink)]" />
           Telt mee voor het seizoensklassement
         </label>
 

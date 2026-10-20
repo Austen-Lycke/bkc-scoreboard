@@ -29,12 +29,12 @@ export default function OperatorHome() {
     <main className="mx-auto w-full max-w-5xl px-6 py-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-gold">BKC Wedstrijden</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-muted">BKC Wedstrijden</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Wedstrijdleiding</h1>
         </div>
         <Link
           href="/operator/live?c=demo"
-          className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-gold"
+          className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink"
         >
           Demowedstrijd openen (oefenen)
         </Link>

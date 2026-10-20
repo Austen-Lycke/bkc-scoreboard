@@ -63,7 +63,7 @@ export function ImportForm({ ranks, seasonYear, existingKeys }: { ranks: RankDef
         onChange={(e) => (setText(e.target.value), setResult(null))}
         rows={6}
         placeholder={EXAMPLE}
-        className="w-full rounded-lg border border-border bg-background p-3 font-mono text-sm outline-none focus:border-gold"
+        className="w-full rounded-lg border border-border bg-background p-3 font-mono text-sm outline-none focus:border-ink"
         aria-label="CSV-inhoud"
       />
 

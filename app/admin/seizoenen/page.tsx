@@ -44,7 +44,7 @@ export default async function SeasonsPage() {
               <a href={`/api/admin/export/seasons/${s.year}`} className="text-muted hover:text-foreground">
                 Klassement (CSV)
               </a>
-              <Link href={`/admin/seizoenen/${s.year}/promotie`} className="font-medium text-gold hover:underline">
+              <Link href={`/admin/seizoenen/${s.year}/promotie`} className="font-medium underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
                 Promotie naar {s.year + 1} →
               </Link>
             </div>

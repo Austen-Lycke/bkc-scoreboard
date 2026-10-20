@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { createCompetition, type CreateCompetitionState } from "./actions";
 
 const field =
-  "rounded-lg border border-border bg-background px-3 py-2 text-base outline-none focus:border-gold";
+  "rounded-lg border border-border bg-background px-3 py-2 text-base outline-none focus:border-ink";
 
 export function NewCompetitionForm({ setups }: { setups: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState<CreateCompetitionState, FormData>(createCompetition, {});
@@ -37,7 +37,7 @@ export function NewCompetitionForm({ setups }: { setups: { id: string; name: str
         </select>
       </label>
       <label className="flex items-center gap-2 text-sm">
-        <input name="countsForSeason" type="checkbox" defaultChecked className="size-4 accent-[var(--gold)]" />
+        <input name="countsForSeason" type="checkbox" defaultChecked className="size-4 accent-[var(--ink)]" />
         Telt mee voor het seizoensklassement
       </label>
       {state.error && (

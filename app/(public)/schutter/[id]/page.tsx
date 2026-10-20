@@ -28,7 +28,7 @@ async function Profile({ params }: Pick<PageProps<"/schutter/[id]">, "params">) 
   return (
     <div className="flex flex-col gap-8">
       <header>
-        {profile.currentRank && <p className="text-sm font-semibold uppercase tracking-widest text-gold">{profile.currentRank}</p>}
+        {profile.currentRank && <p className="text-sm font-semibold uppercase tracking-widest text-muted">{profile.currentRank}</p>}
         <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">{profile.name}</h1>
       </header>
 

@@ -12,7 +12,7 @@ export default async function Home() {
   return (
     <div className="flex flex-col gap-12">
       <section>
-        <p className="text-sm font-semibold uppercase tracking-widest text-gold">Brugse Katapultclub</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-muted">Brugse Katapultclub</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">Wedstrijden</h1>
         <p className="mt-3 max-w-xl text-lg text-muted">Volg de wedstrijden live, bekijk de uitslagen en het seizoensklassement per klasse.</p>
       </section>

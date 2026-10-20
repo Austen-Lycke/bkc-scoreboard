@@ -25,7 +25,7 @@ export function StandingsTable({ rank, passLabels, highlight }: { rank: PublicRa
             const tie = row.withdrawn ? "afgehaakt" : TIE[row.tie];
             const active = highlight?.includes(row.shooterId);
             return (
-              <tr key={row.shooterId} className={`border-b border-border last:border-0 ${active ? "bg-[var(--gold)]/10" : ""} ${row.withdrawn ? "text-muted" : ""}`}>
+              <tr key={row.shooterId} className={`border-b border-border last:border-0 ${active ? "bg-yellow-light" : ""} ${row.withdrawn ? "text-muted" : ""}`}>
                 <td className="px-3 py-2.5 font-semibold tabular-nums sm:px-4">
                   {row.position === null ? "–" : row.position <= 3 && rank.complete ? <Medal place={row.position} /> : row.position}
                 </td>
@@ -37,7 +37,7 @@ export function StandingsTable({ rank, passLabels, highlight }: { rank: PublicRa
                   <span className="mt-0.5 block text-xs tabular-nums text-muted sm:hidden">{row.passes.map((p) => p ?? "·").join("  ")}</span>
                 </td>
                 {row.passes.map((p, i) => (
-                  <td key={i} className={`hidden px-2 py-2.5 text-center tabular-nums sm:table-cell ${p === rank.maxPass ? "font-semibold text-gold" : ""}`}>
+                  <td key={i} className={`hidden px-2 py-2.5 text-center tabular-nums sm:table-cell ${p === rank.maxPass ? "font-bold underline decoration-yellow decoration-[3px] underline-offset-4" : ""}`}>
                     {p ?? <span className="text-muted">·</span>}
                   </td>
                 ))}
@@ -52,6 +52,6 @@ export function StandingsTable({ rank, passLabels, highlight }: { rank: PublicRa
 }
 
 function Medal({ place }: { place: number }) {
-  const colors = ["bg-[var(--gold)] text-navy", "bg-slate-300 text-navy", "bg-amber-700 text-white"];
+  const colors = ["bg-yellow text-ink", "bg-fill text-ink", "bg-[#e9e9e4] text-ink"];
   return <span className={`inline-flex size-6 items-center justify-center rounded-full text-xs ${colors[place - 1]}`}>{place}</span>;
 }

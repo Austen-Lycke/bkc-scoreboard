@@ -49,7 +49,8 @@ describe("publicView", () => {
     expect(view.next[0].rankName).toBe("Junior");
     expect(view.lastPasses).toHaveLength(2);
     expect(view.lastPasses[0].score).toBe(19);
-    expect(view.progress).toEqual({ done: 2, total: 17 * 4 });
+    expect(view.progress).toMatchObject({ done: 2, total: 17 * 4, heatIndex: 0 });
+    expect(view.progress.heatRounds).toHaveLength(22);
     expect(view.passLabels).toEqual(["R1 KD1", "R1 KD2", "R2 KD1", "R2 KD2"]);
     const junior = view.ranks.find((r) => r.code === "junior")!;
     expect(junior.rows[0].passes.filter((p) => p !== null)).toHaveLength(1);

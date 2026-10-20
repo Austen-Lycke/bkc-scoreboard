@@ -6,7 +6,7 @@ import { Button, Card } from "@/components/ui";
 import { maxPassScore, type Setup } from "@/lib/scoring";
 import { updateSetup } from "./actions";
 
-const field = "w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-gold";
+const field = "w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-ink";
 
 export function SetupForm({ id, setup }: { id: string; setup: Setup }) {
   const [targets, setTargets] = useState(setup.targets);

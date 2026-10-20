@@ -1,0 +1,1 @@
+ALTER TABLE "shooters" ALTER COLUMN "birthdate" DROP NOT NULL;

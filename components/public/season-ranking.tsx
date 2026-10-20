@@ -20,7 +20,7 @@ export async function SeasonRankingView({ year }: { year: number }) {
                 key={y}
                 href={`/klassement/${y}`}
                 aria-current={y === year ? "page" : undefined}
-                className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${y === year ? "bg-navy text-white dark:bg-gold dark:text-navy" : "border border-border bg-surface hover:border-gold"}`}
+                className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${y === year ? "bg-navy text-white dark:bg-gold dark:text-navy" : "border border-border bg-surface hover:border-ink"}`}
               >
                 {y}
               </Link>

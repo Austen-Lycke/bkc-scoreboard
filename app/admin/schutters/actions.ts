@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -21,7 +21,7 @@ const shooterInput = z.object({
   id: z.uuid().optional(),
   firstName: z.string().trim().min(1, "Voornaam is verplicht").max(80),
   lastName: z.string().trim().min(1, "Achternaam is verplicht").max(80),
-  birthdate: z.iso.date("Ongeldige geboortedatum"),
+  birthdate: z.iso.date("Ongeldige geboortedatum").nullable(),
   active: z.boolean(),
   notes: z.string().trim().max(500).optional(),
   rankCode: z.string().optional(),
@@ -38,7 +38,7 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
     id: form.get("id") || undefined,
     firstName: form.get("firstName"),
     lastName: form.get("lastName"),
-    birthdate: form.get("birthdate"),
+    birthdate: form.get("birthdate") || null,
     active: form.get("active") === "on",
     notes: form.get("notes") || undefined,
     rankCode: form.get("rankCode") || undefined,
@@ -52,7 +52,7 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
     await db
       .select()
       .from(shooters)
-      .where(and(sql`lower(${shooters.firstName}) = lower(${input.firstName})`, sql`lower(${shooters.lastName}) = lower(${input.lastName})`, eq(shooters.birthdate, input.birthdate)))
+      .where(and(sql`lower(${shooters.firstName}) = lower(${input.firstName})`, sql`lower(${shooters.lastName}) = lower(${input.lastName})`, input.birthdate ? eq(shooters.birthdate, input.birthdate) : isNull(shooters.birthdate)))
   ).filter((s) => s.id !== input.id);
   if (sameKey.length) return { error: "Er bestaat al een schutter met deze naam en geboortedatum." };
 

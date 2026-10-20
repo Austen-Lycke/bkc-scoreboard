@@ -31,6 +31,6 @@ export interface SnapshotShooter {
   id: string;
   firstName: string;
   lastName: string;
-  birthdate: string;
+  birthdate: string | null;
   rankCode: string;
 }

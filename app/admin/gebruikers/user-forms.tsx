@@ -4,7 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { Badge, Button } from "@/components/ui";
 import { createUser, deleteUser, setPassword, setRole, type FormState } from "./actions";
 
-const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ink";
 
 export function UserRow({ user, isSelf }: { user: { id: string; name: string; email: string; role: string }; isSelf: boolean }) {
   const [result, setResult] = useState<FormState>({});

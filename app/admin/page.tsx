@@ -37,7 +37,7 @@ export default async function AdminHome() {
       <h1 className="text-3xl font-semibold tracking-tight">Beheer</h1>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (
-          <Link key={c.href} href={c.href} className="rounded-xl border border-border bg-surface p-5 hover:border-gold">
+          <Link key={c.href} href={c.href} className="rounded-xl border border-border bg-surface p-5 hover:border-ink">
             <p className="text-sm text-muted">{c.label}</p>
             <p className="mt-1 text-3xl font-semibold tabular-nums">{c.value}</p>
             <p className="mt-2 text-sm text-muted">{c.detail}</p>

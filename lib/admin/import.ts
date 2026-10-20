@@ -56,8 +56,8 @@ export function parseRank(input: string, ranks: readonly RankDef[]): string | nu
   return null;
 }
 
-export const shooterKey = (s: { firstName: string; lastName: string; birthdate: string }) =>
-  `${norm(s.firstName)}|${norm(s.lastName)}|${s.birthdate}`;
+export const shooterKey = (s: { firstName: string; lastName: string; birthdate: string | null }) =>
+  `${norm(s.firstName)}|${norm(s.lastName)}|${s.birthdate ?? ""}`;
 
 export function validateImport(
   text: string,

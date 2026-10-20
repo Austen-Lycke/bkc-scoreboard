@@ -26,7 +26,8 @@ export interface RankProposal {
  */
 export function proposeRanks(opts: {
   ranks: readonly RankDef[];
-  shooters: readonly { shooterId: string; rankCode: string; birthdate: string }[];
+  /** Without a birthdate a junior stays junior; the board can still move them by hand. */
+  shooters: readonly { shooterId: string; rankCode: string; birthdate: string | null }[];
   standings: ReadonlyMap<string, SeasonRow[]>;
   nextSeasonYear: number;
   promoteCount?: number;
@@ -50,7 +51,7 @@ export function proposeRanks(opts: {
 
   return shooters.map(({ shooterId, rankCode, birthdate }) => {
     if (juniorCodes.has(rankCode)) {
-      return ageOn(birthdate, refDate) >= JUNIOR_AGE_LIMIT
+      return birthdate && ageOn(birthdate, refDate) >= JUNIOR_AGE_LIMIT
         ? { shooterId, fromRank: rankCode, toRank: entryAdultRank(ranks).code, reason: "junior_age_out" }
         : { shooterId, fromRank: rankCode, toRank: rankCode, reason: "stay" };
     }

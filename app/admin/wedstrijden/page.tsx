@@ -65,7 +65,7 @@ export default async function CompetitionsAdminPage() {
                     <Link href={`/admin/wedstrijden/${c.id}/afdrukken`} className="mr-4 text-muted hover:text-foreground">
                       Afdrukken
                     </Link>
-                    <Link href={`/admin/wedstrijden/${c.id}`} className="font-medium text-gold hover:underline">
+                    <Link href={`/admin/wedstrijden/${c.id}`} className="font-medium underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
                       Bewerken
                     </Link>
                   </td>

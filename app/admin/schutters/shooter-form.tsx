@@ -4,7 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { Button } from "@/components/ui";
 import { deleteShooter, saveShooter, type FormState } from "./actions";
 
-const field = "rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-gold";
+const field = "rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-ink";
 
 export interface ShooterFormValues {
   id?: string;
@@ -45,8 +45,8 @@ export function ShooterForm({
         </label>
       </div>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Geboortedatum
-        <input name="birthdate" type="date" required defaultValue={values.birthdate} className={field} />
+        Geboortedatum (optioneel)
+        <input name="birthdate" type="date" defaultValue={values.birthdate} className={field} />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Klasse in seizoen {seasonYear}
@@ -64,7 +64,7 @@ export function ShooterForm({
         <textarea name="notes" rows={2} defaultValue={values.notes} className={field} />
       </label>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="active" defaultChecked={values.active} className="size-4 accent-[var(--gold)]" />
+        <input type="checkbox" name="active" defaultChecked={values.active} className="size-4 accent-[var(--ink)]" />
         Actief lid (verschijnt bij inschrijving)
       </label>
       {(state.error || deleteError) && (

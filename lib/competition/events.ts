@@ -13,7 +13,8 @@ const shooterInfo = z.object({
   id: z.uuid(),
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
-  birthdate: z.iso.date(),
+  /** Not asked at the table any more; club shooters from the admin may have one. */
+  birthdate: z.iso.date().nullable(),
 });
 
 const round = z.number().int().min(1).max(10);

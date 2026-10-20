@@ -5,7 +5,7 @@ import { Button } from "@/components/ui";
 import type { SeasonRule } from "@/lib/scoring";
 import { updateRule, type FormState } from "./actions";
 
-const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-gold";
+const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ink";
 
 export function RuleForm({ year, rule }: { year: number; rule: SeasonRule }) {
   const [state, action, pending] = useActionState<FormState, FormData>(updateRule, {});
