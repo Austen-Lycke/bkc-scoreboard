@@ -57,11 +57,17 @@ export async function getCompetitionView(slug: string): Promise<PublicView | nul
 }
 
 /**
- * The live view: deliberately not cached by Next, so it's never behind the laptop. The public API
- * puts a short CDN cache in front of it, which keeps the database load flat however many follow along.
+ * The live view, polled by every viewer. Cached per competition rather than per URL (a made-up query
+ * string can't skip the cache and hit the database), for a second at most; every sync with something
+ * new expires it right away, so it's never behind the laptop.
  */
 export async function getLiveView(slug: string): Promise<PublicView | null> {
-  return (await viewFor(slug))?.view ?? null;
+  "use cache";
+  cacheLife("seconds");
+  cacheTag(tags.competitions);
+  const result = await viewFor(slug);
+  if (result) cacheTag(tags.competition(result.competitionId));
+  return result?.view ?? null;
 }
 
 export async function getSeasonYears(): Promise<number[]> {

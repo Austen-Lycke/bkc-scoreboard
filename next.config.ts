@@ -10,7 +10,20 @@ const nextConfig: NextConfig = {
     useOffline: true,
   },
   async headers() {
+    const noFraming = [
+      { key: "X-Frame-Options", value: "SAMEORIGIN" },
+      { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+    ];
     return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+      // Signed-in screens can't be framed by another site (clickjacking); public pages stay embeddable.
+      ...["/admin/:path*", "/operator/:path*", "/login", "/tv"].map((source) => ({ source, headers: noFraming })),
       {
         source: "/sw.js",
         headers: [
