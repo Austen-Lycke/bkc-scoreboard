@@ -24,10 +24,14 @@ export async function POST(request: Request, ctx: RouteContext<"/api/operator/co
     deviceId: parsed.data.deviceId,
     takeover: parsed.data.takeover ?? false,
     events: parsed.data.events,
+    mayEditClosedSeason: auth.session.user.role === "admin",
   });
   if (result.kind === "not_found") return Response.json({ error: "Wedstrijd niet gevonden" }, { status: 404 });
   if (result.kind === "lease") {
     return Response.json({ error: "Een ander toestel beheert deze wedstrijd", holder: result.holder, since: result.since }, { status: 409 });
+  }
+  if (result.kind === "closed") {
+    return Response.json({ error: `Seizoen ${result.seasonYear} is afgesloten: alleen een beheerder kan deze wedstrijd nog aanpassen` }, { status: 423 });
   }
   // Public pages for this competition, its season and the shooters: fresh on the next visit.
   for (const tag of result.tags) revalidateTag(tag, { expire: 0 });

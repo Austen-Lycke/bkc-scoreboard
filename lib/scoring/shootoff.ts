@@ -1,7 +1,10 @@
 import type { ShootoffIteration } from "./types";
 
-const sameSet = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((x) => b.includes(x));
+/** Exactly the same shooters, each once: ["a", "a"] is not the set {a, b}. */
+const sameSet = (a: readonly string[], b: readonly string[]) => {
+  const set = new Set(a);
+  return set.size === a.length && set.size === b.length && b.every((x) => set.has(x));
+};
 
 export function iterationScore(it: ShootoffIteration, entryId: string): number {
   const hits = it.results[entryId] ?? [];

@@ -181,11 +181,11 @@ function NewShooterForm({ initialName, onDone, onCancel }: { initialName: string
       <div className="grid grid-cols-2 gap-2.5">
         <label className="flex min-w-0 flex-col gap-[0.3125rem] text-[0.8125rem] font-semibold">
           Voornaam
-          <input autoFocus required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} />
+          <input autoFocus required maxLength={80} value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} />
         </label>
         <label className="flex min-w-0 flex-col gap-[0.3125rem] text-[0.8125rem] font-semibold">
           Achternaam
-          <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} />
+          <input required maxLength={80} value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} />
         </label>
       </div>
       <div className="flex flex-col gap-1.5">

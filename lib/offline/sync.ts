@@ -4,7 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { CLUB_TIME_ZONE } from "@/components/public/format";
 import { downloadSnapshot } from "./api";
 import { deviceId, offlineDb, type StoredEvent } from "./db";
-import { saveSnapshot } from "./store";
+import { saveSnapshot, updateLive } from "./store";
 
 /**
  * Pushes this device's events to the server whenever there is a connection. The laptop stays the
@@ -80,11 +80,18 @@ export async function syncNow(competitionId: string, { takeover = false } = {}):
         return;
       }
       if (!res.ok) {
-        setStatus(competitionId, { state: "error", message: `Server antwoordde ${res.status}` });
+        const body = await res.json().catch(() => ({}));
+        setStatus(competitionId, { state: "error", message: body.error ?? `Server antwoordde ${res.status}` });
         return;
       }
       const body: { accepted: string[]; invalid: { id: string; reason: string }[] } = await res.json();
-      if (body.invalid.length) console.warn("Door de server geweigerde acties", body.invalid);
+      if (body.invalid.length) {
+        // Shown to the operator until dismissed: the website won't have these.
+        console.warn("Door de server geweigerde acties", body.invalid);
+        await updateLive(competitionId, (live) => ({
+          refused: { count: (live.refused?.count ?? 0) + body.invalid.length, reason: body.invalid.at(-1)!.reason },
+        }));
+      }
       // Invalid events can never be accepted; mark them too so they don't block the queue.
       await db.events.where("id").anyOf([...body.accepted, ...body.invalid.map((i) => i.id)]).modify({ synced: 1 });
       pending = pending.slice(batch.length);

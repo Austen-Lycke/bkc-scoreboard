@@ -1,12 +1,12 @@
 import "server-only";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { buildState, competitionEventSchema, type CompetitionEvent, type CompetitionState } from "@/lib/competition";
 import { getDb, schema } from "@/lib/db";
 import { buildSnapshot } from "./snapshot";
 import { tags } from "./tags";
 
-const { competitions, entries, events, passes, shooters, shooterSeasonRanks, shootoffIterations, startOrders } = schema;
+const { competitions, entries, events, passes, seasons, shooters, shooterSeasonRanks, shootoffIterations, startOrders } = schema;
 
 export type SyncResult =
   | {
@@ -15,23 +15,28 @@ export type SyncResult =
       invalid: { id: string; reason: string }[];
       rejected: { id: string; reason: string }[];
       status: string;
-      /** Cache tags of public pages showing this competition. */
+      /** Cache tags of public pages showing this competition; empty when nothing changed. */
       tags: string[];
     }
   | { kind: "not_found" }
-  | { kind: "lease"; holder: string; since: string | null };
+  | { kind: "lease"; holder: string; since: string | null }
+  /** The season is closed (promotions are done): only an admin can still change its competitions. */
+  | { kind: "closed"; seasonYear: number };
 
 /**
- * Receives events from the operator laptop. Events are stored idempotently (same id twice = no-op),
- * then the competition tables are rebuilt from the full event log with the same reducer the laptop
- * uses, in one transaction. Only the device holding the lease may write; another device has to take
- * over explicitly.
+ * Receives events from the operator laptop. The competition is rebuilt from the stored log plus the
+ * new events with the same reducer the laptop uses, and the new events and the tables built from
+ * them are written in one transaction, so they never get out of step. Events already stored are a
+ * no-op; a sync with nothing new (the heartbeat) only renews the lease. Only the device holding the
+ * lease may write; another device has to take over explicitly.
  */
 export async function applySync(opts: {
   competitionId: string;
   deviceId: string;
   takeover: boolean;
   events: unknown[];
+  /** Admins may still correct a competition of a closed season. */
+  mayEditClosedSeason: boolean;
 }): Promise<SyncResult> {
   const db = getDb();
   const comp = await db.query.competitions.findFirst({ where: eq(competitions.id, opts.competitionId) });
@@ -51,42 +56,71 @@ export async function applySync(opts: {
     else valid.push(parsed.data);
   }
 
-  if (valid.length) {
-    await db
-      .insert(events)
-      .values(
-        valid.map((e) => ({
-          id: e.id,
-          competitionId: e.competitionId,
-          deviceId: e.deviceId,
-          type: e.type,
-          payload: e.payload,
-          clientCreatedAt: new Date(e.at),
-        })),
-      )
-      .onConflictDoNothing();
+  const [snapshot, season] = await Promise.all([
+    buildSnapshot(comp.id),
+    db.query.seasons.findFirst({ where: eq(seasons.year, comp.seasonYear), columns: { status: true } }),
+  ]);
+  const stored = new Set(snapshot!.events.map((e) => e.id));
+  const unseen = valid.filter((e) => !stored.has(e.id));
+  // An id another competition already uses would be skipped by the insert, yet counted below.
+  const taken = new Set<string>();
+  if (unseen.length) {
+    const rows = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(and(inArray(events.id, unseen.map((e) => e.id)), ne(events.competitionId, comp.id)));
+    for (const { id } of rows) {
+      taken.add(id);
+      invalid.push({ id, reason: "id al in gebruik" });
+    }
   }
+  const fresh = unseen.filter((e) => !taken.has(e.id));
+  const closed = season?.status === "closed" && !opts.mayEditClosedSeason;
+  if (closed && fresh.length) return { kind: "closed", seasonYear: comp.seasonYear };
 
-  // Rebuild from the complete log (buildSnapshot includes every stored event).
-  const snapshot = (await buildSnapshot(comp.id))!;
-  const state = buildState(snapshot);
-  await materialize(state, {
-    deviceId: opts.deviceId,
-    keepPublished: comp.status === "published",
-  });
-
-  return {
-    kind: "ok",
-    accepted: valid.map((e) => e.id),
+  const state = buildState(snapshot!, fresh);
+  const result = {
+    kind: "ok" as const,
+    accepted: valid.filter((e) => !taken.has(e.id)).map((e) => e.id),
     invalid,
     rejected: state.rejected.map((r) => ({ id: r.event.id, reason: r.reason })),
     status: state.status,
-    tags: [tags.competitions, tags.competition(comp.id), tags.season(comp.seasonYear), tags.shooters],
   };
+
+  // Looking at a closed season's competition is fine; it just isn't written to.
+  if (closed) return { ...result, tags: [] };
+  if (!fresh.length && comp.operatorDeviceId === opts.deviceId) {
+    // Heartbeat: nothing new, so the tables and the public pages stay as they are.
+    await db.update(competitions).set({ operatorLeaseAt: new Date() }).where(eq(competitions.id, comp.id));
+    return { ...result, tags: [] };
+  }
+
+  const insert = fresh.length
+    ? [
+        db
+          .insert(events)
+          .values(
+            fresh.map((e) => ({
+              id: e.id,
+              competitionId: e.competitionId,
+              deviceId: e.deviceId,
+              type: e.type,
+              payload: e.payload,
+              clientCreatedAt: new Date(e.at),
+            })),
+          )
+          .onConflictDoNothing(),
+      ]
+    : [];
+  // neon-http runs a batch as a single transaction.
+  const ops = [...insert, ...materialize(state, { deviceId: opts.deviceId, keepPublished: comp.status === "published" })];
+  await db.batch(ops as [BatchItem<"pg">, ...BatchItem<"pg">[]]);
+
+  return { ...result, tags: [tags.competitions, tags.competition(comp.id), tags.season(comp.seasonYear), tags.shooters] };
 }
 
-/** Writes the derived tables (entries, passes, orders, afkamping, new shooters, season ranks) in one transaction. */
-async function materialize(state: CompetitionState, opts: { deviceId: string; keepPublished: boolean }) {
+/** The statements that rewrite the derived tables (entries, passes, orders, afkamping, new shooters, season ranks). */
+function materialize(state: CompetitionState, opts: { deviceId: string; keepPublished: boolean }): BatchItem<"pg">[] {
   const db = getDb();
   const comp = state.snapshot.competition;
   const juniorRanks = new Set(state.snapshot.ranks.filter((r) => r.isJunior).map((r) => r.code));
@@ -203,6 +237,5 @@ async function materialize(state: CompetitionState, opts: { deviceId: string; ke
       .where(eq(competitions.id, comp.id)),
   );
 
-  // neon-http runs a batch as a single transaction.
-  await db.batch(ops as [BatchItem<"pg">, ...BatchItem<"pg">[]]);
+  return ops;
 }

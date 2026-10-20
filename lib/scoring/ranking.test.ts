@@ -133,4 +133,9 @@ describe("resolveTie", () => {
   it("ignores an iteration for a different set of shooters", () => {
     expect(resolveTie(["a", "b"], [iteration({ a: hits(5), z: hits(1) })])).toEqual([["a", "b"]]);
   });
+
+  it("doesn't let a shooter listed twice settle someone else's tie", () => {
+    const forged = { ...iteration({ a: hits(5) }), participants: ["a", "a"] };
+    expect(resolveTie(["a", "b"], [forged])).toEqual([["a", "b"]]);
+  });
 });

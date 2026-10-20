@@ -70,37 +70,43 @@ export async function resetDemo(): Promise<void> {
 
 /** Records an operator action. This is the only way the competition changes. */
 export async function emit<T extends EventType>(competitionId: string, type: T, payload: EventPayload<T>): Promise<void> {
-  const event = {
-    id: crypto.randomUUID(),
-    competitionId,
-    deviceId: await deviceId(),
-    at: new Date().toISOString(),
-    type,
-    payload,
-    synced: 0,
-  } as StoredEvent;
-  await offlineDb().events.add(event);
+  await emitMany(competitionId, [{ type, payload }]);
 }
 
 /** Several actions at once (e.g. both passes of a phase), atomically. */
 export async function emitMany(competitionId: string, actions: { type: EventType; payload: EventPayload<EventType> }[]) {
   const db = offlineDb();
-  const device = await deviceId();
-  const base = Date.now();
-  await db.events.bulkAdd(
-    actions.map(
-      (a, i) =>
-        ({
-          id: crypto.randomUUID(),
-          competitionId,
-          deviceId: device,
-          at: new Date(base + i).toISOString(),
-          type: a.type,
-          payload: a.payload,
-          synced: 0,
-        }) as StoredEvent,
-    ),
-  );
+  await db.transaction("rw", [db.events, db.snapshots, db.meta], async () => {
+    const device = await deviceId();
+    const base = await nextEventTime(competitionId);
+    await db.events.bulkAdd(
+      actions.map(
+        (a, i) =>
+          ({
+            id: crypto.randomUUID(),
+            competitionId,
+            deviceId: device,
+            at: new Date(base + i).toISOString(),
+            type: a.type,
+            payload: a.payload,
+            synced: 0,
+          }) as StoredEvent,
+      ),
+    );
+  });
+}
+
+/**
+ * The time of the next action, which orders the log: now, but never before an event this device
+ * already has (its own, or the other laptop's after a takeover). A clock that is behind, or that
+ * jumps back once it finds a network, then can't put a correction before the score it corrects.
+ */
+async function nextEventTime(competitionId: string): Promise<number> {
+  const db = offlineDb();
+  const [last, stored] = await Promise.all([db.events.where("competitionId").equals(competitionId).last(), db.snapshots.get(competitionId)]);
+  let latest = last ? Date.parse(last.at) : 0;
+  for (const e of stored?.snapshot.events ?? []) latest = Math.max(latest, Date.parse(e.at));
+  return Math.max(Date.now(), latest + 1);
 }
 
 type LivePatch = Partial<Omit<LiveRecord, "competitionId">>;

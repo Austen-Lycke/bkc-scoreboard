@@ -22,6 +22,8 @@ export interface LiveRecord {
   shootoff: ShootoffDraft | null;
   /** End of the break countdown shown on the TV (ISO), or null when no timer runs. */
   pauseEndsAt?: string | null;
+  /** Actions the server refused as invalid: they stay on this device but never reach the website. */
+  refused?: { count: number; reason: string } | null;
   updatedAt: string;
 }
 

@@ -19,6 +19,10 @@ const shooterInfo = z.object({
 
 const round = z.number().int().min(1).max(10);
 const knockdown = z.number().int().min(1).max(10);
+const rankCode = z.string().min(1).max(40);
+const feeCents = z.number().int().min(0).max(100_000);
+/** Tie groups are small; the cap only keeps a forged event from bloating every rebuild. */
+const MAX_SHOOTOFF = 50;
 
 export const eventPayloads = {
   /** Shooter reported at the table. `isNewShooter` = first time we see them (created offline). */
@@ -26,40 +30,44 @@ export const eventPayloads = {
     entryId: z.uuid(),
     shooter: shooterInfo,
     isNewShooter: z.boolean(),
-    rankCode: z.string(),
+    rankCode,
     feePaid: z.boolean(),
-    feeCents: z.number().int().min(0),
+    feeCents,
   }),
   "entry.updated": z.object({
     entryId: z.uuid(),
-    rankCode: z.string().optional(),
+    rankCode: rankCode.optional(),
     feePaid: z.boolean().optional(),
-    feeCents: z.number().int().min(0).optional(),
+    feeCents: feeCents.optional(),
     /** Left during the competition: keeps their scores, no longer scheduled or ranked. */
     withdrawn: z.boolean().optional(),
   }),
   /** Checked in by mistake; only allowed before they shot. */
   "entry.removed": z.object({ entryId: z.uuid() }),
   "order.set": z.object({
-    rankCode: z.string(),
-    entryIds: z.array(z.uuid()),
+    rankCode,
+    entryIds: z.array(z.uuid()).max(500),
     source: z.enum(["reverse_ranking", "random", "manual"]),
-    seed: z.string().optional(),
+    seed: z.string().max(200).optional(),
   }),
   /** One pass (7 shots on one knockdown). Recording the same pass again is a correction. */
   "pass.recorded": z.object({
     entryId: z.uuid(),
     round,
     knockdown,
-    hits: z.array(z.string()).max(20),
+    hits: z.array(z.string().max(40)).max(20),
   }),
   "pass.cleared": z.object({ entryId: z.uuid(), round, knockdown }),
   "shootoff.recorded": z.object({
     iterationId: z.uuid(),
-    rankCode: z.string(),
-    participants: z.array(z.uuid()).min(2),
-    calls: z.array(z.object({ targetId: z.string(), points: z.number().int().min(0) })).min(1),
-    results: z.record(z.string(), z.array(z.boolean())),
+    rankCode,
+    participants: z
+      .array(z.uuid())
+      .min(2)
+      .max(MAX_SHOOTOFF)
+      .refine((ids) => new Set(ids).size === ids.length, "Dubbele schutter in afkamping"),
+    calls: z.array(z.object({ targetId: z.string().max(40), points: z.number().int().min(0).max(100) })).min(1).max(MAX_SHOOTOFF),
+    results: z.record(z.uuid(), z.array(z.boolean()).max(MAX_SHOOTOFF)),
   }),
   "shootoff.cleared": z.object({ iterationId: z.uuid() }),
   "status.set": z.object({ status: competitionStatus }),
@@ -72,7 +80,11 @@ interface EventEnvelope {
   id: string;
   competitionId: string;
   deviceId: string;
-  /** Device clock, ISO. Single writer per competition, so this orders the log. */
+  /**
+   * Device clock as `toISOString()` gives it (UTC, milliseconds), so comparing strings compares
+   * times. Orders the log: the device never issues a time before an event it already knows
+   * (see `emit` in lib/offline/store.ts), so a clock that is behind can't reorder history.
+   */
   at: string;
 }
 
@@ -87,7 +99,7 @@ export const competitionEventSchema = z.discriminatedUnion(
       id: z.uuid(),
       competitionId: z.string(),
       deviceId: z.string().min(1).max(100),
-      at: z.iso.datetime({ offset: true }),
+      at: z.iso.datetime({ precision: 3 }),
       type: z.literal(type),
       payload: eventPayloads[type],
     }),

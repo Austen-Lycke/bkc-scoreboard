@@ -99,6 +99,38 @@ describe("competition state", () => {
     expect(standings.rows.map((r) => r.entryId)).toEqual([b, a, c]);
   });
 
+  it("keeps a corrected afkamping in its place among the iterations", () => {
+    const snapshot = buildDemoSnapshot();
+    const run = shootEverything(snapshot);
+    const group = pendingShootoffs(run.state).find((p) => p.rankCode === "junior")!.groups[0];
+    const [a, b] = group;
+    const calls = SPANISH_KNOCKDOWN.targets.map((t) => ({ targetId: t.id, points: t.points }));
+    const shot = (loser?: string) => Object.fromEntries(group.map((id) => [id, calls.map((_, i) => id !== loser || i !== 2)]));
+    const first = crypto.randomUUID();
+    run.emit("shootoff.recorded", { iterationId: first, rankCode: "junior", participants: group, calls, results: shot() }); // all equal
+    run.emit("shootoff.recorded", { iterationId: crypto.randomUUID(), rankCode: "junior", participants: group, calls, results: shot(a) });
+    // The judge corrects the first iteration: b had missed the 10 there. That iteration decides first.
+    run.emit("shootoff.recorded", { iterationId: first, rankCode: "junior", participants: group, calls, results: shot(b) });
+    const rows = standingsFor(buildState(snapshot, run.events), "junior").rows;
+    expect(rows.find((r) => r.entryId === b)).toMatchObject({ position: group.length, tie: "resolved" });
+    expect(rows.find((r) => r.entryId === a)?.position).toBe(1);
+  });
+
+  it("doesn't let a walk-in check-in rename a known club shooter", () => {
+    const { events, emit, snapshot } = makeEventsWithDemo();
+    // The demo has one club shooter who isn't checked in yet.
+    const known = snapshot.shooters.find((s) => ![...buildState(snapshot).entries.values()].some((e) => e.shooterId === s.id))!;
+    emit("entry.checked_in", {
+      entryId: crypto.randomUUID(),
+      shooter: { id: known.id, firstName: "Iemand", lastName: "Anders", birthdate: null },
+      isNewShooter: true,
+      rankCode: known.rankCode,
+      feePaid: true,
+      feeCents: 0,
+    });
+    expect(buildState(snapshot, events).shooters.get(known.id)?.lastName).toBe(known.lastName);
+  });
+
   it("treats a second recording of a pass as a correction", () => {
     const { events, emit, snapshot } = makeEventsWithDemo();
     const entryId = [...buildState(snapshot).entries.keys()][0];
@@ -186,6 +218,17 @@ describe("event validation and export", () => {
     expect(competitionEventSchema.safeParse(event).success).toBe(true);
     expect(competitionEventSchema.safeParse({ ...event, type: "pass.recorded" }).success).toBe(false);
     expect(competitionEventSchema.safeParse({ ...event, payload: { ...event.payload, feeCents: -1 } }).success).toBe(false);
+    // Times are compared as strings, so only the toISOString() form is accepted.
+    expect(competitionEventSchema.safeParse({ ...event, at: "2026-11-07T11:00:00+01:00" }).success).toBe(false);
+    expect(competitionEventSchema.safeParse({ ...event, at: "2026-11-07T10:00:00Z" }).success).toBe(false);
+    const [a, b] = [crypto.randomUUID(), crypto.randomUUID()];
+    const shootoff = (participants: string[]) => ({
+      ...event,
+      type: "shootoff.recorded",
+      payload: { iterationId: crypto.randomUUID(), rankCode: "junior", participants, calls: [{ targetId: "top-10", points: 10 }], results: { [a]: [true], [b]: [false] } },
+    });
+    expect(competitionEventSchema.safeParse(shootoff([a, b])).success).toBe(true);
+    expect(competitionEventSchema.safeParse(shootoff([a, a])).success).toBe(false);
   });
 
   it("exports results as Excel-friendly CSV", () => {

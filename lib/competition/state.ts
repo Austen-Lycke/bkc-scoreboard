@@ -90,7 +90,8 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
         return "Schutter is al ingeschreven";
       }
       if (!rankExists(p.rankCode)) return `Onbekende klasse ${p.rankCode}`;
-      if (p.isNewShooter || !state.shooters.has(p.shooter.id)) {
+      // A known shooter keeps the name the club has for them (the admin may have corrected it since).
+      if (!state.shooters.has(p.shooter.id)) {
         state.shooters.set(p.shooter.id, { ...p.shooter, rankCode: p.rankCode });
       }
       state.entries.set(p.entryId, {
@@ -170,7 +171,9 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
         return "Afkamping onvolledig: niet elke schutter heeft een resultaat per geroepen doel";
       }
       const record = { id: p.iterationId, rankCode: p.rankCode, participants: p.participants, calls: p.calls, results: p.results, at: event.at };
-      state.shootoffs = [...state.shootoffs.filter((s) => s.id !== p.iterationId), record];
+      // A correction keeps its place: iterations settle a tie in the order they were shot.
+      const i = state.shootoffs.findIndex((s) => s.id === p.iterationId);
+      state.shootoffs = i === -1 ? [...state.shootoffs, record] : state.shootoffs.map((s, j) => (j === i ? record : s));
       return;
     }
     case "shootoff.cleared": {

@@ -175,7 +175,7 @@ function Shell() {
 
 /** Lease, login and rejected-action messages: rare, but they must be impossible to miss. */
 function Notices({ sync }: { sync: SyncStatus }) {
-  const { id, state } = useComp();
+  const { id, state, live } = useComp();
   const items = [];
   if (sync.state === "lease") {
     items.push(
@@ -209,6 +209,18 @@ function Notices({ sync }: { sync: SyncStatus }) {
       <p key="rejected" className="rounded-2xl bg-error-light px-4 py-2.5 text-sm font-semibold text-error">
         {state.rejected.length} actie(s) konden niet toegepast worden: {state.rejected.at(-1)!.reason}
       </p>,
+    );
+  }
+  if (live?.refused) {
+    items.push(
+      <div key="refused" className="flex flex-wrap items-center gap-3 rounded-2xl bg-error-light px-4 py-2.5 text-sm font-semibold text-error">
+        <span className="flex-1">
+          De server weigerde {live.refused.count} actie(s) ({live.refused.reason}). Ze staan op dit toestel, maar niet op de website.
+        </span>
+        <Pill tone="ink" size="sm" onClick={() => updateLive(id, { refused: null })}>
+          Begrepen
+        </Pill>
+      </div>,
     );
   }
   if (!items.length) return null;
