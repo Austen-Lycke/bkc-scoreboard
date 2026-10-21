@@ -1,10 +1,11 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   competitionProgress,
   competitionSchedule,
+  entryShortName,
   entryTotal,
   passOf,
   pendingShootoffs,
@@ -127,6 +128,17 @@ const welcomeDate = (date: string) => {
 const heatNames = (state: CompetitionState, heat: Heat) => heat.shooters.map((e) => tvName(state, e)).join(" & ");
 const heatMeta = (state: CompetitionState, heat: Heat) => `Ronde ${heat.round} · ${rankName(state, heat.rankCode)}`;
 
+/**
+ * Names on the afkamping cards. `short` (narrow cards): "Pieter D.", unless two of them would read
+ * the same; then those keep their TV name.
+ */
+function shootoffNames(state: CompetitionState, participants: string[], short: boolean): Map<string, string> {
+  const shortNames = participants.map((p) => entryShortName(state, p));
+  return new Map(
+    participants.map((p, i) => [p, short && shortNames.indexOf(shortNames[i]) === shortNames.lastIndexOf(shortNames[i]) ? shortNames[i] : tvName(state, p)]),
+  );
+}
+
 function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | undefined }) {
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);
@@ -219,6 +231,42 @@ function TvPlates({ setup, look, scale, gap }: { setup: Setup; look: (targetId: 
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Space between plates in FitPlates, in mm of real plate (scales with them). */
+const FIT_GAP_MM = 20;
+
+/**
+ * The plates as large as their box allows (width and height), at most `scale` like TvPlates: for
+ * afkamping cards, whose width depends on how many shooters are tied. Sets `--mm` (one mm of real
+ * plate), so a look can size its border along with the plates.
+ */
+function FitPlates({ setup, look, scale }: { setup: Setup; look: (targetId: string) => PlateLook; scale: number }) {
+  const rows = plateRows(setup);
+  const widest = Math.max(...rows.map((row) => row.reduce((mm, t) => mm + t.sizeMm, 0) + (row.length - 1) * FIT_GAP_MM));
+  const tallest = rows.reduce((mm, row) => mm + Math.max(...row.map((t) => t.sizeMm)), 0) + (rows.length - 1) * FIT_GAP_MM;
+  // The smallest of what fits across, what fits down, and the design size.
+  const mm = `min(${(100 / widest).toFixed(4)}cqw, ${(100 / tallest).toFixed(4)}cqh, ${(scale / 16).toFixed(4)}rem)`;
+  const gap = `calc(var(--mm) * ${FIT_GAP_MM})`;
+  return (
+    <div className="grid min-h-0 w-full flex-1 place-items-center" style={{ containerType: "size" }}>
+      <div className="flex flex-col" style={{ gap, "--mm": mm } as CSSProperties}>
+        {rows.map((row, r) => (
+          <div key={r} className="flex items-end justify-center" style={{ gap }}>
+            {row.map((t) => {
+              const d = `var(--mm) * ${t.sizeMm}`;
+              return (
+                // Numbers like TvPlates (at least 1.125rem), but never wider than half the plate.
+                <Plate key={t.id} size={`calc(${d})`} fontSize={`min(calc(${d} * 0.45), max(1.125rem, calc(${d} * 0.36)))`} look={look(t.id)}>
+                  {t.points}
+                </Plate>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -553,6 +601,19 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
     calls: draft.calls,
     results: Object.fromEntries(draft.participants.map((p) => [p, draft.results[p].map(Boolean)])),
   };
+  // Up to five tied shooters side by side; more go on two rows, with the plates beside the score.
+  const n = draft.participants.length;
+  const twoRows = n > 5;
+  const cols = twoRows ? Math.ceil(n / 2) : n;
+  const look =
+    n <= 2
+      ? { card: "gap-5 px-14 py-11", name: "4.5rem", score: "9.375rem" }
+      : n === 3
+        ? { card: "gap-5 px-14 py-11", name: "3.5rem", score: "9.375rem" }
+        : !twoRows
+          ? { card: "gap-5 px-8 py-9", name: "3rem", score: "7rem" }
+          : { card: "gap-3 px-8 py-6", name: "2.75rem", score: "6rem" };
+  const names = shootoffNames(state, draft.participants, n > 3);
 
   return (
     <>
@@ -574,40 +635,56 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
           </div>
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 auto-cols-[minmax(0,1fr)] grid-flow-col gap-8">
+      <div
+        className="grid min-h-0 flex-1 gap-8"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${twoRows ? 2 : 1}, minmax(0, 1fr))` }}
+      >
         {draft.participants.map((p) => {
           const result = lastId ? draft.results[p][last] : null;
-          return (
-            <section key={p} className="flex min-w-0 flex-col items-center gap-5 rounded-[2.75rem] bg-ink px-14 py-11 text-white">
-              <span
-                className="max-w-full truncate font-semibold leading-[1.05] tracking-[-0.03em]"
-                style={{ fontSize: draft.participants.length > 2 ? "3.5rem" : "4.5rem" }}
-              >
-                {tvName(state, p)}
+          const plates = (
+            <FitPlates
+              setup={setup}
+              scale={0.9}
+              look={(id) => {
+                const i = draft.calls.findIndex((c) => c.targetId === id);
+                const called = i >= 0;
+                const hit = called && draft.results[p][i] === true;
+                const isLast = id === lastId;
+                return {
+                  background: hit ? "var(--yellow)" : "transparent",
+                  color: hit ? "var(--ink)" : called ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.35)",
+                  borderColor: isLast || hit ? "var(--yellow)" : called ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.25)",
+                  // 0.4375rem and 0.1875rem at full size, thinner when the plates shrink.
+                  borderWidth: isLast ? "calc(var(--mm) * 7.8)" : "calc(var(--mm) * 3.3)",
+                };
+              }}
+            />
+          );
+          const score = (
+            <div className="flex flex-none flex-wrap items-baseline justify-center gap-x-6 gap-y-2 self-center">
+              <span className="font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums" style={{ fontSize: look.score }}>
+                {iterationScore(iteration, p)}
               </span>
-              <div className="flex flex-1 flex-col justify-center">
-                <TvPlates
-                  setup={setup}
-                  scale={0.9}
-                  gap="1.125rem"
-                  look={(id) => {
-                    const i = draft.calls.findIndex((c) => c.targetId === id);
-                    const called = i >= 0;
-                    const hit = called && draft.results[p][i] === true;
-                    const isLast = id === lastId;
-                    return {
-                      background: hit ? "var(--yellow)" : "transparent",
-                      color: hit ? "var(--ink)" : called ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.35)",
-                      borderColor: isLast || hit ? "var(--yellow)" : called ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.25)",
-                      borderWidth: isLast ? "0.4375rem" : "0.1875rem",
-                    };
-                  }}
-                />
-              </div>
-              <div className="flex items-baseline gap-6">
-                <span className="text-[9.375rem] font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums">{iterationScore(iteration, p)}</span>
-                {lastId && result !== null && <span className="text-[1.875rem] text-white/60">{`${label(lastId)} ${result ? "raak" : "mis"}`}</span>}
-              </div>
+              {lastId && result !== null && <span className="text-[1.875rem] text-white/60">{`${label(lastId)} ${result ? "raak" : "mis"}`}</span>}
+            </div>
+          );
+          return (
+            <section key={p} className={`flex min-h-0 min-w-0 flex-col items-center rounded-[2.75rem] bg-ink text-white ${look.card}`}>
+              <span className="line-clamp-2 max-w-full text-balance text-center font-semibold leading-[1.05] tracking-[-0.03em]" style={{ fontSize: look.name }}>
+                {names.get(p)}
+              </span>
+              {twoRows ? (
+                // Stretched, not centred: the plates' box takes its height from this row.
+                <div className="flex min-h-0 w-full flex-1 gap-8">
+                  {plates}
+                  {score}
+                </div>
+              ) : (
+                <>
+                  {plates}
+                  {score}
+                </>
+              )}
             </section>
           );
         })}

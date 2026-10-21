@@ -135,6 +135,60 @@ test("Einde asks on Afronden before scoring locks", async ({ page }) => {
   await expect(einde).toHaveAttribute("aria-checked", "true");
 });
 
+test("the TV afkamping keeps five tied shooters and their plates inside their cards", async ({ context, page, isMobile }) => {
+  test.skip(isMobile, "uses the keyboard to shoot the whole day");
+  test.setTimeout(90_000);
+  await openDemoInRound1(page);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+
+  // Every pass Niets: all ranks end tied, 3de klasse five-way.
+  const where = page.locator("main").getByText(/^Fase \d van \d/);
+  const heading = page.locator("main").getByText(/ · ronde \d · beurt \d+$/);
+  for (let i = 0; i < 60 && (await heading.count()) > 0; i++) {
+    const before = `${await heading.innerText()} ${await where.innerText()}`;
+    for (const key of ["0", "w", "0", "Enter"]) await page.keyboard.press(key);
+    await expect
+      .poll(async () => ((await heading.count()) ? `${await heading.innerText()} ${await where.innerText()}` : "done"))
+      .not.toBe(before);
+  }
+  await expect(page.getByText("Alle beurten zijn geschoten")).toBeVisible();
+
+  await page.getByRole("radio", { name: "Afkamping" }).click();
+  await page.getByRole("button", { name: /^Afkamping/ }).click();
+  const card = page
+    .locator("main div")
+    .filter({ has: page.getByText("3de klasse", { exact: true }) })
+    .filter({ has: page.getByRole("button", { name: "Afkamping starten" }) })
+    .last();
+  await card.getByRole("button", { name: "Afkamping starten" }).click();
+
+  const tv = await context.newPage();
+  await tv.setViewportSize({ width: 1920, height: 1080 });
+  await tv.goto("/tv?c=demo");
+  await expect(tv.getByText("Afkamping · 3de klasse")).toBeVisible();
+  const cards = tv.locator("section");
+  await expect(cards).toHaveCount(5);
+  await expect(cards.first()).toContainText("Jens V.");
+
+  const problems = await cards.evaluateAll((sections) =>
+    sections.flatMap((s) => {
+      const box = s.getBoundingClientRect();
+      const name = s.firstElementChild as HTMLElement;
+      const out = [...s.querySelectorAll<HTMLElement>("span.rounded-full")].filter((p) => {
+        const r = p.getBoundingClientRect();
+        return r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1;
+      });
+      // A hidden line, not the few px the tight line height lets glyphs stick out.
+      const halfLine = parseFloat(getComputedStyle(name).fontSize) / 2;
+      return [
+        ...(out.length ? [`${name.innerText}: ${out.length} plates outside the card`] : []),
+        ...(name.scrollWidth > name.clientWidth + 1 || name.scrollHeight > name.clientHeight + halfLine ? [`${name.innerText}: name cut off`] : []),
+      ];
+    }),
+  );
+  expect(problems).toEqual([]);
+});
+
 test("on a touchscreen every operator control is at least 44px", async ({ page, isMobile }) => {
   test.skip(!isMobile, "touch layout only");
   await openDemoInRound1(page);
