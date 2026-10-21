@@ -5,3 +5,8 @@
 .claude
 skills-lock.json
 backups
+# Local test and build leftovers (Playwright results, the tsc cache).
+test-results
+playwright-report
+blob-report
+tsconfig.tsbuildinfo
