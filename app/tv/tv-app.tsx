@@ -201,7 +201,7 @@ function TopBar({ name, phase, progress }: { name: string; phase?: string | null
 }
 
 const TV_HIT: PlateLook = { background: "var(--yellow)", color: "var(--ink)", borderColor: "var(--yellow)", borderWidth: "0.1875rem" };
-const TV_OPEN: PlateLook = { background: "transparent", color: "rgba(255,255,255,.55)", borderColor: "rgba(255,255,255,.3)", borderWidth: "0.1875rem" };
+const TV_OPEN: PlateLook = { background: "transparent", color: "rgba(255,255,255,.55)", borderColor: "rgba(255,255,255,.4)", borderWidth: "0.1875rem" };
 
 /** `scale`: diameter per mm of real plate, in 1/16 rem (px at the default root size). `gap` is a CSS length. */
 function TvPlates({ setup, look, scale, gap }: { setup: Setup; look: (targetId: string) => PlateLook; scale: number; gap: string }) {
@@ -266,7 +266,7 @@ function LiveHeat({
                 ...divider,
                 <div key={kd} className="flex min-w-0 flex-col gap-4">
                   <div className="text-[1.875rem] text-white/50">Knockdown {kd}</div>
-                  <div className="text-[3.5rem] font-semibold text-white/30">vrij in deze fase</div>
+                  <div className="text-[3.5rem] font-semibold text-white/50">vrij in deze fase</div>
                 </div>,
               ];
             }
@@ -357,7 +357,7 @@ function LiveStandings({
     const r = ranked[i];
     items.push(
       <div key={r.entryId} className={`-mx-[1.125rem] flex items-center gap-6 rounded-[0.875rem] px-[1.125rem] py-0.5 leading-[1.2] ${r.live ? "bg-yellow-light" : ""}`}>
-        <span className={`w-[3.25rem] text-[2.125rem] font-semibold tabular-nums ${r.live ? "text-ink" : "text-subtle"}`}>{r.pos}</span>
+        <span className={`w-[3.25rem] text-[2.125rem] font-semibold tabular-nums ${r.live ? "text-ink" : "text-muted"}`}>{r.pos}</span>
         <span className={`min-w-0 flex-1 truncate text-[2.125rem] ${r.live ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
         <div className="flex gap-2">
           {r.passes.map((p, k) => (
@@ -381,7 +381,7 @@ function LiveStandings({
     <section className="flex min-h-0 flex-col overflow-hidden rounded-[2.25rem] border-[0.1875rem] border-border bg-surface px-11 pb-6 pt-[1.625rem]">
       <div className="flex items-baseline justify-between pb-1">
         <span className="text-[1.875rem] font-semibold">Voorlopige stand · {rankName(state, heat.rankCode)}</span>
-        <span className="text-[1.5rem] text-subtle">passages</span>
+        <span className="text-[1.5rem] text-muted">passages</span>
       </div>
       <div className="flex flex-1 flex-col justify-between">{items}</div>
     </section>
@@ -391,7 +391,7 @@ function LiveStandings({
 function Gap({ text }: { text?: string }) {
   return (
     <div className="flex items-center gap-6 pl-0.5 text-[1.75rem] leading-none tracking-[0.3em] text-plate">
-      ···{text && <span className="text-[1.375rem] tracking-normal text-subtle">{text}</span>}
+      ···{text && <span className="text-[1.375rem] tracking-normal text-muted">{text}</span>}
     </div>
   );
 }
@@ -433,7 +433,7 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
       <div className="flex min-h-0 flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <span className="text-[2.5rem] font-semibold tracking-[-0.02em]">{doneRounds > 0 ? `Voorlopige stand na ronde ${doneRounds}` : "Voorlopige stand"}</span>
-          <span className="text-[1.625rem] text-subtle">
+          <span className="text-[1.625rem] text-muted">
             {doneRounds * knockdowns} van {rounds * knockdowns} passages
           </span>
         </div>
@@ -449,7 +449,7 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
                 <Marquee>
                   {rows.map((r) => (
                     <div key={r.entryId} className="flex items-baseline gap-4 leading-[1.18]">
-                      <span className={`w-10 text-[1.75rem] font-semibold tabular-nums ${r.position === 1 ? "text-ink" : "text-subtle"}`}>{r.position ?? "–"}</span>
+                      <span className={`w-10 text-[1.75rem] font-semibold tabular-nums ${r.position === 1 ? "text-ink" : "text-muted"}`}>{r.position ?? "–"}</span>
                       <span className={`min-w-0 flex-1 truncate text-[1.875rem] ${r.position === 1 ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
                       <span className="text-[2rem] font-semibold tabular-nums">{r.total}</span>
                     </div>
@@ -597,8 +597,8 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
                     const isLast = id === lastId;
                     return {
                       background: hit ? "var(--yellow)" : "transparent",
-                      color: hit ? "var(--ink)" : called ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.2)",
-                      borderColor: isLast || hit ? "var(--yellow)" : called ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.12)",
+                      color: hit ? "var(--ink)" : called ? "rgba(255,255,255,.5)" : "rgba(255,255,255,.35)",
+                      borderColor: isLast || hit ? "var(--yellow)" : called ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.25)",
                       borderWidth: isLast ? "0.4375rem" : "0.1875rem",
                     };
                   }}

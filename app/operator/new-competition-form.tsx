@@ -6,10 +6,24 @@ import { createCompetition, type CreateCompetitionState } from "./actions";
 const field =
   "rounded-lg border border-border bg-background px-3 py-2 text-base outline-none focus:border-ink";
 
-export function NewCompetitionForm({ setups }: { setups: { id: string; name: string }[] }) {
+/** Filled in from the latest competition, so a regular club day only needs a name and a date. */
+export interface CompetitionDefaults {
+  from: string;
+  location: string;
+  fee: string;
+  setupId?: string;
+  countsForSeason: boolean;
+}
+
+export function NewCompetitionForm({ setups, defaults }: { setups: { id: string; name: string }[]; defaults?: CompetitionDefaults }) {
   const [state, action, pending] = useActionState<CreateCompetitionState, FormData>(createCompetition, {});
   return (
     <form action={action} className="mt-3 flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
+      {defaults && (
+        <p className="text-sm text-muted">
+          Locatie, inschrijvingsgeld en opstelling komen van <span className="font-medium text-ink">{defaults.from}</span>. Pas aan waar nodig.
+        </p>
+      )}
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Naam
         <input name="name" required placeholder="Clubwedstrijd november" className={field} />
@@ -20,15 +34,15 @@ export function NewCompetitionForm({ setups }: { setups: { id: string; name: str
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Locatie <span className="font-normal text-muted">(optioneel)</span>
-        <input name="location" placeholder="Clublokaal" className={field} />
+        <input name="location" placeholder="Clublokaal" defaultValue={defaults?.location} className={field} />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Inschrijvingsgeld (€)
-        <input name="fee" inputMode="decimal" placeholder="5" className={field} />
+        <input name="fee" inputMode="decimal" placeholder="5" defaultValue={defaults?.fee} className={field} />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Opstelling
-        <select name="setupId" defaultValue="spanish_knockdown" className={field}>
+        <select name="setupId" defaultValue={defaults?.setupId ?? "spanish_knockdown"} className={field}>
           {setups.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
@@ -37,7 +51,7 @@ export function NewCompetitionForm({ setups }: { setups: { id: string; name: str
         </select>
       </label>
       <label className="flex items-center gap-2 text-sm">
-        <input name="countsForSeason" type="checkbox" defaultChecked className="size-4 accent-[var(--ink)]" />
+        <input name="countsForSeason" type="checkbox" defaultChecked={defaults?.countsForSeason ?? true} className="size-4 accent-[var(--ink)]" />
         Telt mee voor het seizoensklassement
       </label>
       {state.error && (

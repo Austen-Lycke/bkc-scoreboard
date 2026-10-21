@@ -104,3 +104,15 @@ button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Printed results for the notice board: A4 (paper has a fixed size, so its margins are in mm). */
+@page {
+  size: A4;
+  margin: 15mm 12mm;
+}
+
+@media print {
+  body {
+    background: white;
+  }
+}

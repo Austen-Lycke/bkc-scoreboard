@@ -50,9 +50,21 @@ async function Competitions() {
   const session = await requireRole("admin", "operator");
   const db = getDb();
   const [rows, setups] = await Promise.all([
-    db.select().from(schema.competitions).orderBy(desc(schema.competitions.date)).limit(30),
+    db.select().from(schema.competitions).orderBy(desc(schema.competitions.date), desc(schema.competitions.createdAt)).limit(30),
     db.select({ id: schema.setups.id, name: schema.setups.name }).from(schema.setups),
   ]);
+  // A new competition starts from the latest one: same place, fee and setup.
+  const last = rows[0];
+  const lastSetupId = last && Object.values(last.setupByRank)[0]?.id;
+  const defaults = last
+    ? {
+        from: last.name,
+        location: last.location ?? "",
+        fee: last.feeCents ? (last.feeCents / 100).toLocaleString("nl-BE", { useGrouping: false }) : "",
+        setupId: setups.some((s) => s.id === lastSetupId) ? lastSetupId! : undefined,
+        countsForSeason: last.countsForSeason,
+      }
+    : undefined;
 
   return (
     <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_22rem]">
@@ -98,7 +110,7 @@ async function Competitions() {
       </section>
       <aside>
         <h2 className="text-lg font-semibold">Nieuwe wedstrijd</h2>
-        <NewCompetitionForm setups={setups} />
+        <NewCompetitionForm setups={setups} defaults={defaults} />
       </aside>
     </div>
   );
