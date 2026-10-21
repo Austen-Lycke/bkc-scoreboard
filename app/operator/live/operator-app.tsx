@@ -17,7 +17,7 @@ import { emitMany, resetDemo, saveSnapshot, updateLive, useLocalCompetition } fr
 import { syncNow, useSyncLoop, useSyncStatus, type SyncStatus } from "@/lib/offline/sync";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useQueryParam } from "@/lib/offline/url";
-import { CompetitionContext, NavContext, useComp, type Tab } from "./context";
+import { CompetitionContext, NavContext, useComp, useNav, type Tab } from "./context";
 import { HeatProgress } from "@/components/heat-progress";
 import { Pill } from "@/components/ui";
 import { formatClock, useNow } from "@/components/use-now";
@@ -86,12 +86,19 @@ function Shell() {
     state.status === "prepared" ? "checkin" : state.status === "finished" ? "close" : "scoring",
   );
   const [activeKd, setActiveKd] = useState(1);
+  // Afronden's "beëindigen?" question; it closes again when the operator leaves that tab.
+  const [askingFinish, setAskingFinish] = useState(false);
   const showTimer = state.status === "break" || !!live?.pauseEndsAt;
   const nav = useMemo(
     () => ({
       goTo: (t: Tab, kd?: number) => {
         setTab(t);
+        setAskingFinish(false);
         if (kd) setActiveKd(kd);
+      },
+      askToFinish: () => {
+        setTab("close");
+        setAskingFinish(true);
       },
     }),
     [],
@@ -134,7 +141,7 @@ function Shell() {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setTab(t.id)}
+                onClick={() => nav.goTo(t.id)}
                 aria-current={on ? "page" : undefined}
                 className={`flex cursor-pointer items-center gap-[0.4375rem] rounded-full px-[0.875rem] py-[0.4375rem] text-sm font-semibold transition ${
                   on ? "bg-ink text-white" : "text-muted hover:text-ink"
@@ -166,7 +173,7 @@ function Shell() {
           {tab === "scoring" && <ScoringView activeKd={activeKd} setActiveKd={setActiveKd} />}
           {tab === "standings" && <StandingsView />}
           {tab === "shootoff" && <ShootoffView />}
-          {tab === "close" && <CloseView />}
+          {tab === "close" && <CloseView asking={askingFinish} setAsking={setAskingFinish} />}
         </main>
       </div>
     </NavContext.Provider>
@@ -286,12 +293,17 @@ const STATUSES: { id: CompetitionStatus; label: string }[] = [
   { id: "finished", label: "Einde" },
 ];
 
-/** The phase of the day. Drives what the TV shows; scoring itself follows the schedule. */
+/**
+ * The phase of the day. Drives what the TV shows; scoring itself follows the schedule.
+ * "Einde" locks scoring, so it asks first, on Afronden, where the open passages and ties are listed.
+ */
 function StatusControl() {
   const { id, state, live } = useComp();
+  const { askToFinish } = useNav();
 
   async function setStatus(status: CompetitionStatus) {
     if (status === state.status) return;
+    if (status === "finished") return askToFinish();
     // Starting: freeze the shooting order of every rank, so late arrivals don't reshuffle pairs.
     const freeze =
       status === "warmup" || status === "round1"

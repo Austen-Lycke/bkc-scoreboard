@@ -114,6 +114,27 @@ test("a knockdown nobody filled in is only saved as 0 after asking", async ({ pa
   await expect(question).toHaveCount(0);
 });
 
+test("Einde asks on Afronden before scoring locks", async ({ page }) => {
+  await openDemoInRound1(page);
+  const einde = page.getByRole("radio", { name: "Einde" });
+
+  await einde.click();
+  await expect(page.getByRole("heading", { name: "Afronden" })).toBeVisible();
+  await expect(page.getByText("Nog niet alles is volledig. Toch beëindigen?")).toBeVisible();
+  await expect(einde).toHaveAttribute("aria-checked", "false");
+
+  // Leaving the tab drops the question; scoring still works.
+  await page.getByRole("button", { name: "Scoren", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Opslaan & wisselen" })).toBeEnabled();
+  await page.getByRole("button", { name: "Afronden" }).click();
+  await expect(page.getByText("Toch beëindigen?")).toHaveCount(0);
+
+  await einde.click();
+  await page.getByRole("button", { name: "Ja, beëindigen" }).click();
+  await expect(page.getByText("Wedstrijd beëindigd ✓")).toBeVisible();
+  await expect(einde).toHaveAttribute("aria-checked", "true");
+});
+
 test("on a touchscreen every operator control is at least 44px", async ({ page, isMobile }) => {
   test.skip(!isMobile, "touch layout only");
   await openDemoInRound1(page);

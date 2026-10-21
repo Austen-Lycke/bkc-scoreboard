@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { entryName, expectedPasses, ranksInShootingOrder, resultsCsv, standingsFor } from "@/lib/competition";
 import { emit, eventsForExport } from "@/lib/offline/store";
 import { useComp } from "../context";
@@ -13,10 +12,12 @@ function download(filename: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-/** End of the day: check every rank is complete and tie-free, export, close the competition. */
-export function CloseView() {
+/**
+ * End of the day: check every rank is complete and tie-free, export, close the competition.
+ * `asking` lives in the shell, so the "Einde" phase button can open this tab with the question showing.
+ */
+export function CloseView({ asking, setAsking }: { asking: boolean; setAsking: (asking: boolean) => void }) {
   const { id, state } = useComp();
-  const [asking, setAsking] = useState(false);
   const comp = state.snapshot.competition;
   const finished = state.status === "finished";
   const ranks = ranksInShootingOrder(state)
