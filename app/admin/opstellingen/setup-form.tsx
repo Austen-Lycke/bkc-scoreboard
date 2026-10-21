@@ -6,7 +6,8 @@ import { Pill } from "@/components/ui";
 import { maxPassScore, type Setup } from "@/lib/scoring";
 import { updateSetup } from "./actions";
 
-const COLS = "grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_6.5rem] items-center gap-2";
+// Phone: a narrower "rij · mm" column, on two lines.
+const COLS = "grid grid-cols-[1.25rem_minmax(0,1fr)_3.75rem_3.5rem] items-center gap-2 sm:grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_6.5rem]";
 const input = "w-full min-w-0 rounded-[0.625rem] border-[0.09375rem] border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ink";
 const PLATE: PlateLook = { background: "var(--surface)", color: "var(--ink)", borderColor: "var(--ink)" };
 
@@ -27,8 +28,8 @@ export function SetupForm({ id, setup }: { id: string; setup: Setup }) {
   }
 
   return (
-    <section className="flex flex-col gap-[0.875rem] rounded-[1.5rem] border border-border bg-surface px-[1.375rem] py-5">
-      <div className="flex items-baseline justify-between gap-3">
+    <section className="flex flex-col gap-[0.875rem] rounded-[1.5rem] border border-border bg-surface px-4 py-5 sm:px-[1.375rem]">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 className="text-[1.0625rem] font-semibold">{setup.name}</h2>
         <span className="whitespace-nowrap text-[0.8125rem] text-muted">max {maxPassScore(preview)} per beurt</span>
       </div>
@@ -63,7 +64,7 @@ export function SetupForm({ id, setup }: { id: string; setup: Setup }) {
               className={input}
               aria-label={`Punten doel ${i + 1}`}
             />
-            <span className="whitespace-nowrap text-right text-xs text-muted">
+            <span className="text-right text-xs leading-tight text-muted sm:whitespace-nowrap">
               rij {t.row} · {t.sizeMm} mm
             </span>
           </div>

@@ -36,8 +36,8 @@ export function CheckInView() {
   };
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,23.75rem)_minmax(0,1fr)] items-start gap-5 overflow-auto px-8 pb-8 pt-2">
-      <Panel className="flex flex-col gap-[0.875rem] p-[1.375rem]">
+    <div className="grid min-h-0 flex-1 grid-cols-1 items-start gap-5 overflow-auto px-4 pb-8 pt-2 sm:px-8 md:grid-cols-[minmax(0,23.75rem)_minmax(0,1fr)]">
+      <Panel className="flex flex-col gap-[0.875rem] p-4 sm:p-[1.375rem]">
         <h2 className="text-[1.0625rem] font-semibold">Schutter inschrijven</h2>
         {creating ? (
           <NewShooterForm initialName={query} onDone={done} onCancel={() => setCreating(false)} />
@@ -131,7 +131,7 @@ function ConfirmEntry({ shooterId, onDone, onCancel }: { shooterId: string; onDo
     <div className="my-1 flex flex-col gap-3 rounded-2xl bg-hover p-[0.875rem]">
       <span className="text-base font-semibold">{fullName(shooter)}</span>
       <RankChips value={rankCode} onChange={setRankCode} />
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         <Pill tone="yellow" size="lg" onClick={confirm} autoFocus>
           Inschrijven
         </Pill>
@@ -193,7 +193,7 @@ function NewShooterForm({ initialName, onDone, onCancel }: { initialName: string
         <RankChips value={rankCode} onChange={setRankCode} />
       </div>
       {duplicate && <span className="text-[0.8125rem] font-semibold text-error">{duplicate}</span>}
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         <Pill tone="yellow" size="lg" type="submit" disabled={!valid}>
           Toevoegen en inschrijven
         </Pill>

@@ -26,7 +26,7 @@ const dateFormat = new Intl.DateTimeFormat("nl-BE", { weekday: "short", day: "nu
 
 export default function OperatorHome() {
   return (
-    <main className="touch-targets mx-auto w-full max-w-5xl px-6 py-10">
+    <main className="touch-targets mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-muted">BKC Wedstrijden</p>
@@ -67,7 +67,7 @@ async function Competitions() {
     : undefined;
 
   return (
-    <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_22rem]">
+    <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <section>
         <h2 className="text-lg font-semibold">Wedstrijden</h2>
         {rows.length === 0 ? (
@@ -77,7 +77,7 @@ async function Competitions() {
         ) : (
           <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
             {rows.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-4 px-5 py-4">
+              <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{c.name}</p>
                   <p className="text-sm text-muted">

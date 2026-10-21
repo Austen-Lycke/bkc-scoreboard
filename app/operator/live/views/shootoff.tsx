@@ -18,7 +18,7 @@ export function ShootoffView() {
 
   const pending = pendingShootoffs(state).flatMap(({ rankCode, groups }) => groups.map((group) => ({ rankCode, group })));
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-8 pb-8 pt-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pb-8 pt-2 sm:px-8">
       <h2 className="px-1 text-[1.375rem] font-semibold">Afkamping</h2>
       {pending.length === 0 && (
         <div className="rounded-[1.5rem] border-[0.09375rem] border-dashed border-plate bg-surface p-8 text-center text-[0.9375rem] text-muted">
@@ -46,11 +46,11 @@ function PendingGroup({ rankCode, group }: { rankCode: string; group: string[] }
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-5 rounded-[1.5rem] border-2 border-ink bg-surface px-6 py-[1.375rem]">
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[1.5rem] border-2 border-ink bg-surface px-4 py-[1.375rem] sm:px-6">
       <Tag tone="yellow" className="px-[0.6875rem] py-1 text-[0.8125rem]">
         {rankName(state, rankCode)}
       </Tag>
-      <div className="min-w-[13.75rem] flex-1">
+      <div className="min-w-[min(13.75rem,100%)] flex-1">
         <div className="text-[1.625rem] font-semibold tracking-[-0.02em]">{group.map((e) => entryName(state, e)).join(" & ")}</div>
         <div className="mt-0.5 text-sm text-muted">
           {entryTotal(state, group[0])} punten · gedeelde plaats{position ? ` ${position}` : ""}
@@ -127,15 +127,16 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
   const width = (i: number) => (i === last ? "9.375rem" : "4rem");
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-8 pb-8 pt-2">
-      <div className="flex items-baseline justify-between px-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pb-8 pt-2 sm:px-8">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
         <h2 className="text-[1.375rem] font-semibold">Afkamping · {rankName(state, draft.rankCode)}</h2>
         <span className="text-sm text-muted">
           {draft.calls.length} van {setup.targets.length} doelen geroepen
         </span>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_clamp(17.5rem,30vw,25rem)] items-start gap-4">
-        <Panel className="flex flex-col gap-[1.125rem] px-6 py-[1.375rem]">
+      {/* Phone: the called target with its rack goes under the scoring. */}
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[minmax(0,1fr)_clamp(17.5rem,30vw,25rem)]">
+        <Panel className="flex min-w-0 flex-col gap-[1.125rem] px-4 py-[1.375rem] sm:px-6">
           <div className="text-[0.9375rem] font-semibold">Welk doel roept de scheidsrechter?</div>
           <div className="flex flex-wrap items-end gap-[0.875rem]">
             {remaining.map((t) => (
@@ -217,7 +218,7 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
             </Pill>
           </div>
         </Panel>
-        <Panel className="flex flex-col gap-1.5 px-6 py-[1.375rem]">
+        <Panel className="flex flex-col gap-1.5 px-4 py-[1.375rem] sm:px-6">
           <span className="text-[0.8125rem] text-muted">Geroepen</span>
           <span className="text-[2.125rem] font-semibold tracking-[-0.02em]">{last >= 0 ? label(draft.calls[last].targetId) : "Nog geen doel"}</span>
           <div className="flex flex-col gap-[0.875rem] pb-1.5 pt-[1.375rem]">
@@ -273,9 +274,9 @@ function History() {
     <Panel size="md" className="flex flex-col gap-1 px-5 py-[1.125rem]">
       <div className="pb-2 text-[0.9375rem] font-semibold">Gespeelde afkampingen</div>
       {state.shootoffs.map((s) => (
-        <div key={s.id} className="flex items-center gap-3 border-t border-divider py-2.5 text-sm">
+        <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-divider py-2.5 text-sm">
           <Tag>{rankName(state, s.rankCode)}</Tag>
-          <span className="flex-1 font-medium">{s.participants.map((p) => `${entryName(state, p)} ${iterationScore(s, p)}`).join(" · ")}</span>
+          <span className="min-w-[min(12rem,100%)] flex-1 font-medium">{s.participants.map((p) => `${entryName(state, p)} ${iterationScore(s, p)}`).join(" · ")}</span>
           <button
             type="button"
             onClick={() => emit(id, "shootoff.cleared", { iterationId: s.id })}

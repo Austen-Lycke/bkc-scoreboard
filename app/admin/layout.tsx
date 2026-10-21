@@ -12,8 +12,9 @@ export const metadata: Metadata = { title: { default: "Beheer", template: "%s ·
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="sticky top-0 z-10 bg-background print:hidden">
-        <header className="flex items-center gap-6 px-4 pb-3 pt-[1.125rem] sm:px-8">
+      {/* Sticky from a tablet up; on a phone it would take half the screen, so it scrolls away. */}
+      <div className="z-10 bg-background sm:sticky sm:top-0 print:hidden">
+        <header className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 pb-3 pt-[1.125rem] sm:px-8">
           <Link href="/admin" className="flex items-baseline gap-2.5">
             <span className="text-[0.8125rem] font-bold tracking-[0.2em]">BKC</span>
             <span className="text-[0.9375rem] text-muted">Beheer</span>

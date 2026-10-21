@@ -11,7 +11,8 @@ import { competitionStatus, PageHead, TableCard, tableHeadClass, tableRowClass }
 
 export const metadata: Metadata = { title: "Wedstrijden" };
 
-const COLS = "grid-cols-[7.5rem_minmax(0,1fr)_9rem_6rem_15rem]";
+// Phone: the name on top, date and status under it, then the buttons.
+const COLS = "grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[7.5rem_minmax(0,1fr)_9rem_6rem_15rem]";
 
 export default async function CompetitionsAdminPage() {
   await requireRole("admin");
@@ -55,9 +56,9 @@ export default async function CompetitionsAdminPage() {
           {rows.map((c) => {
             const status = competitionStatus(c.status);
             return (
-              <div key={c.id} className={`${tableRowClass} ${COLS} py-2.5`}>
+              <div key={c.id} className={`${tableRowClass} ${COLS} py-2.5 max-sm:py-3`}>
                 <span className="text-sm text-muted tabular-nums">{formatCompactDate(c.date, !c.date.startsWith(String(year)))}</span>
-                <span className="flex min-w-0 items-center gap-2 text-[0.9375rem] font-semibold">
+                <span className="flex min-w-0 items-center gap-2 text-[0.9375rem] font-semibold max-sm:order-first max-sm:col-span-2">
                   <span className="truncate">{c.name}</span>
                   {!c.countsForSeason && (
                     <Tag tone="muted" size="sm">
@@ -68,8 +69,8 @@ export default async function CompetitionsAdminPage() {
                 <span>
                   <Tag tone={status.tone}>{status.label}</Tag>
                 </span>
-                <span className="text-right text-[0.9375rem] tabular-nums">{c.entries}</span>
-                <span className="flex justify-end gap-1.5">
+                <span className="text-right text-[0.9375rem] tabular-nums max-sm:hidden">{c.entries}</span>
+                <span className="flex justify-end gap-1.5 max-sm:col-span-2 max-sm:flex-wrap max-sm:justify-start max-sm:pt-1">
                   <a href={`/api/admin/export/competitions/${c.id}`} className={pillClass("quiet", "xs")}>
                     CSV
                   </a>

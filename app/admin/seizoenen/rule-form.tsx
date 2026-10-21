@@ -26,7 +26,7 @@ export function RuleForm({ year, rule }: { year: number; rule: SeasonRule }) {
     >
       <input type="hidden" name="year" value={year} />
       <input type="hidden" name="type" value={type} />
-      <div className="flex flex-col gap-1.5">
+      <div className="flex min-w-0 max-w-full flex-col gap-1.5">
         <span className="text-[0.8125rem] font-semibold">Klassement</span>
         <Segmented label={`Klassement ${year}`} options={TYPES} value={type} onChange={(t) => (setType(t), clear())} />
       </div>

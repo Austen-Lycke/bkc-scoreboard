@@ -89,7 +89,10 @@ export function Chip({
   );
 }
 
-/** Two or three mutually exclusive options in one outlined pill. */
+/**
+ * Two or three mutually exclusive options in one outlined pill. Wraps onto a second line when the
+ * options don't fit (phone); the corners match a full pill on one line.
+ */
 export function Segmented<T extends string>({
   options,
   value,
@@ -111,7 +114,9 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={`flex gap-[0.125rem] self-start rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] ${disabled ? "opacity-50" : ""} ${className}`}
+      className={`flex max-w-full flex-wrap gap-[0.125rem] self-start border-[0.09375rem] border-border bg-surface p-[0.1875rem] ${
+        size === "sm" ? "rounded-[1.125rem]" : "rounded-[1.3125rem]"
+      } ${disabled ? "opacity-50" : ""} ${className}`}
     >
       {options.map((o) => {
         const on = o.value === value;

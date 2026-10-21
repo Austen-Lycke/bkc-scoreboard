@@ -14,7 +14,8 @@ interface Row {
   competitions: number;
 }
 
-const COLS = "grid-cols-[minmax(0,1fr)_10rem_7rem_7rem]";
+// Phone: name and rank only; the whole row opens the shooter.
+const COLS = "grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_10rem_7rem_7rem]";
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
 /** The member list, filtered in the browser; the filters are kept in the URL (?q=, ?klasse=, ?toon=alle). */
@@ -101,8 +102,8 @@ export function ShooterList({
             <span>
               <Tag tone={s.rankCode ? "fill" : "soft"}>{rankName(s.rankCode) ?? "niet ingedeeld"}</Tag>
             </span>
-            <span className="text-right text-[0.9375rem] tabular-nums">{s.competitions}</span>
-            <span className="text-right text-[0.8125rem] font-semibold text-muted">Bewerken →</span>
+            <span className="text-right text-[0.9375rem] tabular-nums max-sm:hidden">{s.competitions}</span>
+            <span className="text-right text-[0.8125rem] font-semibold text-muted max-sm:hidden">Bewerken →</span>
           </Link>
         ))}
         {list.length === 0 && <p className="border-t border-divider px-[0.875rem] py-5 text-sm text-muted">Geen schutters gevonden.</p>}

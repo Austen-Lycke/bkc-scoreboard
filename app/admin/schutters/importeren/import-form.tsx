@@ -9,7 +9,8 @@ import type { RankDef } from "@/lib/scoring";
 import { TableCard, tableHeadClass, tableRowClass } from "../../kit";
 import { importShooters } from "../actions";
 
-const COLS = "grid-cols-[4rem_minmax(0,1fr)_12rem_14rem]";
+// Phone: rank and status go under the name.
+const COLS = "grid-cols-[2rem_minmax(0,1fr)] sm:grid-cols-[4rem_minmax(0,1fr)_12rem_14rem]";
 const STATUS: Record<ImportRow["status"], "good" | "fill" | "error"> = { new: "good", duplicate: "fill", error: "error" };
 const plural = (n: number) => `${n} ${n === 1 ? "schutter" : "schutters"}`;
 
@@ -103,12 +104,14 @@ export function ImportForm({ ranks, existingKeys }: { ranks: RankDef[]; existing
               <div key={r.line} className={`${tableRowClass} ${COLS} py-2 text-sm ${r.status === "new" ? "" : "text-faint"}`}>
                 <span className="font-mono text-xs text-faint">{r.line}</span>
                 <span className="truncate font-semibold">{`${r.firstName} ${r.lastName}`.trim() || "–"}</span>
-                <span>
+                <span className="max-sm:col-start-2">
                   {rankName(r.rankCode) ?? r.rankText}
                   {r.rankSource === "default" && <span className="text-xs text-faint"> · standaard</span>}
                 </span>
-                <span>
-                  <Tag tone={STATUS[r.status]}>{r.status === "new" ? "nieuw" : r.message}</Tag>
+                <span className="max-sm:col-start-2">
+                  <Tag tone={STATUS[r.status]} className="max-w-full whitespace-normal!">
+                    {r.status === "new" ? "nieuw" : r.message}
+                  </Tag>
                 </span>
               </div>
             ))}

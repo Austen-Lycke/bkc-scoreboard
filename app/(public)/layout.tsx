@@ -4,7 +4,7 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
   return (
     <>
       <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-[75rem] flex-wrap items-center gap-x-8 gap-y-3 px-6 py-4">
+        <div className="mx-auto flex max-w-[75rem] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-4 sm:px-6">
           <Link href="/" className="text-xl font-bold tracking-[0.2em] hover:no-underline">
             BKC
           </Link>
@@ -22,9 +22,9 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[75rem] flex-1 px-6 pb-12 pt-8">{children}</main>
+      <main className="mx-auto w-full max-w-[75rem] flex-1 px-4 pb-12 pt-8 sm:px-6">{children}</main>
       <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-[75rem] flex-wrap justify-between gap-x-6 gap-y-2 px-6 py-5 text-[0.8125rem] text-subtle">
+        <div className="mx-auto flex max-w-[75rem] flex-wrap justify-between gap-x-6 gap-y-2 px-4 py-5 text-[0.8125rem] text-subtle sm:px-6">
           <span>De scores worden live doorgegeven door de wedstrijdleiding.</span>
           <span>
             Brugse Katapultclub ·{" "}

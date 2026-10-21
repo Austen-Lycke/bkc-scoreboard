@@ -34,7 +34,7 @@ export default async function SeasonsPage() {
       </PageHead>
       {rows.length === 0 && <Empty>Nog geen seizoenen. Een seizoen begint met de eerste wedstrijd.</Empty>}
       {rows.map((s) => (
-        <section key={s.year} className="flex flex-col gap-4 rounded-[1.5rem] border border-border bg-surface px-6 py-[1.375rem]">
+        <section key={s.year} className="flex flex-col gap-4 rounded-[1.5rem] border border-border bg-surface px-4 py-[1.375rem] sm:px-6">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-[1.0625rem] font-semibold">Seizoen {s.year}</h2>
             <Tag tone={s.status === "open" ? "good" : "fill"}>{s.status === "open" ? "lopend" : "afgesloten"}</Tag>

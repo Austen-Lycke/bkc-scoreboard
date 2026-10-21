@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   competitionProgress,
   competitionSchedule,
@@ -194,7 +194,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
 
   if (state.entries.size === 0) {
     return (
-      <div className="min-h-0 flex-1 overflow-auto px-8 pb-8 pt-2">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-8 pt-2 sm:px-8">
         <Empty>Schrijf eerst schutters in.</Empty>
       </div>
     );
@@ -219,8 +219,10 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
   const saveLabel = finished ? "Op slot" : justSaved ? "Opgeslagen ✓" : lastPhase ? "Opslaan & volgende" : "Opslaan & wisselen";
 
   return (
-    // Portrait (tablet upright): the side column goes under the knockdowns, so their plates keep their size.
-    <div className="flex min-h-0 flex-1 gap-5 px-8 pb-7 pt-2 portrait:flex-col">
+    // Landscape from a tablet up: a side column next to the knockdowns. Upright tablet: that column goes
+    // under them, so their plates keep their size. Phone: everything stacks and the page scrolls, with
+    // undo and save stuck to the bottom of the screen.
+    <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-7 pt-2 sm:px-8 md:landscape:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[0.875rem]">
         {heat && phase && phaseIndex !== null && setup ? (
           <>
@@ -239,7 +241,11 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
               </span>
             </div>
             {finished && <FinishedBanner />}
-            <div className="grid min-h-0 flex-1 gap-4" style={{ gridTemplateColumns: `repeat(${knockdowns}, minmax(0, 1fr))` }}>
+            {/* Side by side, except on a narrow phone: there they're stacked, at full width. */}
+            <div
+              className="grid min-h-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-[repeat(var(--knockdowns),minmax(0,1fr))]"
+              style={{ "--knockdowns": knockdowns } as CSSProperties}
+            >
               {Array.from({ length: knockdowns }, (_, i) => i + 1).map((kd) => {
                 const a = phase.find((s) => s.knockdown === kd);
                 if (!a) {
@@ -277,7 +283,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
             <Panel className="flex flex-col items-start gap-3 px-7 py-6">
               <span className="text-[1.375rem] font-semibold">Alle beurten zijn geschoten</span>
               <span className="text-[0.9375rem] text-muted">Kijk de stand na en los eventuele gelijke standen op via Afkamping.</span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Pill tone="ink" onClick={() => goTo("standings")}>
                   Naar de stand
                 </Pill>
@@ -287,9 +293,10 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
           </>
         )}
       </div>
-      <aside className="flex min-h-0 w-[clamp(14.375rem,22vw,18.75rem)] flex-none flex-col gap-4 pt-11 portrait:w-auto portrait:flex-row portrait:items-end portrait:pt-0">
+      {/* Phone: `contents`, so the save block can stick to the bottom over the whole view. */}
+      <aside className="flex min-h-0 flex-none flex-col gap-4 max-md:contents md:portrait:flex-row md:portrait:items-end md:landscape:w-[clamp(14.375rem,22vw,18.75rem)] md:landscape:pt-11">
         {/* On a short screen (tablet in landscape) these scroll, so undo and save always stay in view. */}
-        <div className="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-1 portrait:flex-row portrait:items-start portrait:*:min-w-0 portrait:*:flex-1">
+        <div className="-m-1 flex min-h-0 flex-1 flex-col gap-4 p-1 sm:max-md:flex-row sm:max-md:items-start sm:max-md:*:min-w-0 sm:max-md:*:flex-1 md:overflow-y-auto md:overscroll-contain md:portrait:flex-row md:portrait:items-start md:portrait:*:min-w-0 md:portrait:*:flex-1">
           {heat && phaseIndex !== null && heat.phases.length > 1 && <SwapSchedule heat={heat} phaseIndex={phaseIndex} />}
           <Panel size="md" className="flex flex-col gap-3 px-5 py-[1.125rem]">
             <div className="text-[0.9375rem] font-semibold">Daarna</div>
@@ -310,7 +317,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
             )}
           </Panel>
         </div>
-        <div className="flex flex-none flex-col gap-2.5 portrait:w-[clamp(14.375rem,30vw,18.75rem)]">
+        <div className="flex flex-none flex-col gap-2.5 max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mb-4 max-md:bg-background max-md:pb-4 max-md:pt-2 md:portrait:w-[clamp(14.375rem,30vw,18.75rem)]">
           {canUndo && (
             <button
               type="button"
@@ -407,7 +414,7 @@ function KnockdownPanel(props: {
       role="group"
       aria-label={`Knockdown ${kd}: ${name}`}
       onClick={props.onActivate}
-      className={`flex min-h-0 min-w-0 cursor-pointer select-none flex-col overflow-hidden rounded-[1.5rem] border-2 bg-surface px-6 py-[1.375rem] transition-colors ${
+      className={`flex min-h-0 min-w-0 cursor-pointer select-none flex-col overflow-hidden rounded-[1.5rem] border-2 bg-surface px-4 py-4 transition-colors sm:px-6 sm:py-[1.375rem] ${
         active ? "border-ink" : "border-border"
       } ${locked ? "opacity-45" : ""}`}
     >

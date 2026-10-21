@@ -105,6 +105,16 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* A row that scrolls sideways on a phone (tabs, phase): swiped, so it needs no scrollbar. */
+@utility scroll-row {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Printed results for the notice board: A4 (paper has a fixed size, so its margins are in mm). */
 @page {
   size: A4;

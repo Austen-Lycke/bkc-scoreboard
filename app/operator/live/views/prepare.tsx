@@ -84,12 +84,12 @@ export function PrepareView() {
   const offlineOk = sw === "development" ? null : sw === "unsupported" ? false : sw === "active" && !!warm?.ok;
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-8 pb-8 pt-2">
+    <div className="min-h-0 flex-1 overflow-auto px-4 pb-8 pt-2 sm:px-8">
       <h2 className="px-1 pb-[0.875rem] text-[1.375rem] font-semibold">Voorbereiden</h2>
       <div className="grid max-w-[68.75rem] grid-cols-[repeat(auto-fit,minmax(min(100%,23.75rem),1fr))] items-start gap-4">
-        <Panel className="flex flex-col gap-[1.125rem] px-[1.625rem] py-6">
+        <Panel className="flex flex-col gap-[1.125rem] px-5 py-6 sm:px-[1.625rem]">
           <h3 className="text-[1.0625rem] font-semibold">Wedstrijd op dit toestel</h3>
-          <dl className="grid grid-cols-[9.375rem_1fr] gap-y-2.5 text-sm">
+          <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-sm sm:grid-cols-[9.375rem_minmax(0,1fr)] sm:gap-x-0">
             {facts.map(([k, v]) => (
               <div key={k} className="contents">
                 <dt className="text-muted">{k}</dt>
@@ -130,7 +130,7 @@ export function PrepareView() {
           </div>
         </Panel>
 
-        <Panel className="flex flex-col gap-[1.125rem] px-[1.625rem] py-6">
+        <Panel className="flex flex-col gap-[1.125rem] px-5 py-6 sm:px-[1.625rem]">
           <h3 className="text-[1.0625rem] font-semibold">Klaar voor een wedstrijd zonder internet</h3>
           <div className="flex flex-col gap-3">
             <Check
@@ -186,7 +186,7 @@ function Check({
         <span className="text-sm font-semibold">{label}</span>
         {note && <span className="text-[0.8125rem] text-muted">{note}</span>}
         {action && (
-          <Pill tone="ink" size="sm" className="self-start" onClick={action.run} disabled={action.disabled}>
+          <Pill tone="ink" size="sm" className="max-w-full self-start whitespace-normal!" onClick={action.run} disabled={action.disabled}>
             {action.label}
           </Pill>
         )}

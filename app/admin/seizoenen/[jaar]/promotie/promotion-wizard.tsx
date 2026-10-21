@@ -7,7 +7,8 @@ import type { RankDef } from "@/lib/scoring";
 import type { PromotionRow } from "@/lib/server/promotion";
 import { savePromotion } from "../../actions";
 
-const COLS = "grid-cols-[3rem_minmax(0,1fr)_5rem_13rem_21rem]";
+// Phone: place, name and points on one line; the proposal and the rank choice under the name.
+const COLS = "grid-cols-[2rem_minmax(0,1fr)_auto] sm:grid-cols-[3rem_minmax(0,1fr)_5rem_13rem_21rem]";
 const points = new Intl.NumberFormat("nl-BE", { maximumFractionDigits: 1 });
 
 export function PromotionWizard({ year, ranks, rows }: { year: number; ranks: RankDef[]; rows: PromotionRow[] }) {
@@ -48,12 +49,12 @@ export function PromotionWizard({ year, ranks, rows }: { year: number; ranks: Ra
         if (!list.length) return null;
         return (
           <section key={rank.code} className="overflow-x-auto rounded-[1.5rem] border border-border bg-surface px-2.5 pb-1.5 pt-4">
-            <div className="min-w-[52rem]">
-              <div className="flex items-center gap-2.5 px-[0.875rem] pb-2">
+            <div className="sm:min-w-[52rem]">
+              <div className="flex items-center gap-2.5 px-[0.875rem] pb-2 max-sm:px-2">
                 <h2 className="text-[1.0625rem] font-semibold">{rank.name}</h2>
                 <Tag>{list.length}</Tag>
               </div>
-              <div className={`grid ${COLS} px-[0.875rem] py-2 text-xs font-semibold text-faint`}>
+              <div className={`grid ${COLS} px-[0.875rem] py-2 text-xs font-semibold text-faint max-sm:hidden`}>
                 <span>Pl.</span>
                 <span>Naam</span>
                 <span className="text-right">Punten</span>
@@ -67,16 +68,20 @@ export function PromotionWizard({ year, ranks, rows }: { year: number; ranks: Ra
                 return (
                   <div
                     key={r.shooterId}
-                    className={`grid ${COLS} items-center rounded-lg border-t border-divider px-[0.875rem] py-[0.4375rem] ${r.reason === "tie_at_cut" && !t ? "bg-yellow-light" : ""}`}
+                    className={`grid ${COLS} items-center rounded-lg border-t border-divider px-[0.875rem] py-[0.4375rem] max-sm:gap-x-2 max-sm:gap-y-1.5 max-sm:px-2 max-sm:py-2.5 ${r.reason === "tie_at_cut" && !t ? "bg-yellow-light" : ""}`}
                   >
                     <span className="text-[0.9375rem] font-semibold tabular-nums">{r.position ?? "–"}</span>
                     <span className="truncate text-[0.9375rem] font-semibold">{r.name}</span>
                     <span className="text-right text-[0.9375rem] tabular-nums">{r.points === null ? "–" : points.format(r.points)}</span>
-                    <span className="flex items-center gap-1.5 pl-6">
+                    <span className="flex items-center gap-1.5 pl-6 max-sm:col-span-2 max-sm:col-start-2 max-sm:pl-0">
                       <Tag tone={tone}>{tag}</Tag>
                       {changed && <span className="text-xs text-faint">aangepast</span>}
                     </span>
-                    <div role="group" aria-label={`Klasse ${year + 1} voor ${r.name}`} className="flex gap-[0.125rem]">
+                    <div
+                      role="group"
+                      aria-label={`Klasse ${year + 1} voor ${r.name}`}
+                      className="flex gap-[0.125rem] max-sm:col-span-2 max-sm:col-start-2 max-sm:flex-wrap"
+                    >
                       {ranks.map((x) => (
                         <Chip key={x.code} size="sm" on={t === x.code} title={x.name} onClick={() => setDecisions((d) => ({ ...d, [r.shooterId]: x.code }))}>
                           {rankShortName(x.name)}

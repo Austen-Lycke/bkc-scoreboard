@@ -85,7 +85,7 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,27.5rem),1fr))] items-start gap-6">
         {isLive && current && (
           <div className="flex min-w-0 flex-col gap-6">
-            <section className="flex flex-col gap-5 rounded-3xl bg-ink px-7 pb-7 pt-6 text-white">
+            <section className="flex flex-col gap-5 rounded-3xl bg-ink px-5 pb-7 pt-6 text-white sm:px-7">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <span className="rounded-full bg-yellow px-3.5 py-1 text-base font-bold text-ink">
                   {comp.status === "break" ? "Na de pauze" : comp.status === "warmup" ? "Als eerste" : "Nu aan de lijn"}
@@ -110,7 +110,7 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
                 ))}
               </div>
             </section>
-            <section className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface px-7 py-[1.375rem]">
+            <section className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface px-5 py-[1.375rem] sm:px-7">
               <span className="text-[0.9375rem] font-semibold text-muted">Hierna</span>
               {view.next.length === 0 && <span className="text-[1.0625rem] text-muted">Laatste beurt van de wedstrijd.</span>}
               {view.next.map((h, i) => (
@@ -129,13 +129,13 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
         )}
 
         {view.ranks.length > 0 && selectedRank && (
-          <section className="flex min-w-0 flex-col gap-4 rounded-3xl border border-border bg-surface px-7 pb-6 pt-[1.375rem]">
+          <section className="flex min-w-0 flex-col gap-4 rounded-3xl border border-border bg-surface px-5 pb-6 pt-[1.375rem] sm:px-7">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className="text-[1.375rem] font-semibold tracking-[-0.01em]">{isLive ? "Voorlopige stand" : "Uitslag"}</h2>
               <span className="text-[0.8125rem] text-subtle">{view.passLabels.length} passages per schutter</span>
             </div>
             <div
-              className="sticky top-0 z-[2] -mx-7 flex flex-nowrap gap-1.5 overflow-x-auto bg-surface px-7 py-2.5 [scrollbar-width:none] sm:static sm:mx-0 sm:flex-wrap sm:px-0 sm:py-0"
+              className="sticky top-0 z-[2] -mx-5 flex flex-nowrap gap-1.5 overflow-x-auto bg-surface px-5 py-2.5 [scrollbar-width:none] sm:static sm:mx-0 sm:flex-wrap sm:px-0 sm:py-0"
               role="tablist"
             >
               {view.ranks.map((r) => {
@@ -191,7 +191,7 @@ function RankList({ rank, view, isLive }: { rank: PublicRank; view: PublicView; 
           return (
             <div
               key={row.shooterId}
-              className={`-mx-3 flex items-center gap-3.5 rounded-xl border-b border-[#f0f0ec] px-3 py-2.5 ${onLine ? "bg-yellow-light" : ""} ${row.withdrawn ? "text-faint" : ""}`}
+              className={`-mx-3 flex items-center gap-2.5 rounded-xl sm:gap-3.5 border-b border-[#f0f0ec] px-3 py-2.5 ${onLine ? "bg-yellow-light" : ""} ${row.withdrawn ? "text-faint" : ""}`}
             >
               <span className={`w-6 text-base font-semibold tabular-nums ${strong ? "text-ink" : "text-subtle"}`}>{row.position ?? "–"}</span>
               <div className="flex min-w-0 flex-1 flex-col gap-[0.0625rem]">

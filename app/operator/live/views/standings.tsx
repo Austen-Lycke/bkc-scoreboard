@@ -45,7 +45,7 @@ export function StandingsView() {
 
   if (ranks.length === 0 || !rankCode) {
     return (
-      <div className="min-h-0 flex-1 overflow-auto px-8 pb-8 pt-2">
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-8 pt-2 sm:px-8">
         <Empty>Nog geen schutters.</Empty>
       </div>
     );
@@ -54,11 +54,13 @@ export function StandingsView() {
   const setup = setupForRank(state.snapshot, rankCode);
   const cols: [number, number][] = [];
   for (let r = 1; r <= rounds; r++) for (let k = 1; k <= knockdowns; k++) cols.push([r, k]);
-  const grid = { gridTemplateColumns: `3.5rem minmax(10rem, 1fr) repeat(${cols.length}, 5.75rem) 6rem 9.375rem` };
+  const grid = { gridTemplateColumns: `3.5rem minmax(var(--name-col), 1fr) repeat(${cols.length}, 5.75rem) 6rem 9.375rem` };
+  // Place and name stay put while the passes scroll sideways (phone, upright tablet).
+  const pinned = "sticky z-[1] self-stretch flex items-center bg-surface";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-[0.875rem] overflow-auto px-8 pb-8 pt-2">
-      <div className="flex flex-wrap items-center gap-1.5" role="tablist">
+    <div className="flex min-h-0 flex-1 flex-col gap-[0.875rem] overflow-auto px-4 pb-8 pt-2 sm:px-8">
+      <div className="flex flex-wrap items-center gap-1.5 max-sm:gap-y-2" role="tablist">
         {ranks.map((r) => {
           const on = r.code === rankCode;
           return (
@@ -82,10 +84,11 @@ export function StandingsView() {
         </span>
       </div>
       <div className="overflow-x-auto rounded-[1.5rem] border border-border bg-surface px-2.5 py-2">
-        <div style={{ minWidth: `${47.5 + (cols.length - 4) * 5.75}rem` }}>
-          <div className="grid items-center py-2.5 text-xs font-semibold text-faint" style={grid}>
-            <span className="pl-[0.875rem]">Pl.</span>
-            <span>Naam</span>
+        {/* A narrower name column on a phone leaves room for a pass or two beside it. */}
+        <div className="[--name-col:7.5rem] sm:[--name-col:10rem]" style={{ minWidth: `${47.5 + (cols.length - 4) * 5.75}rem` }}>
+          <div className="grid items-center text-xs font-semibold text-faint" style={grid}>
+            <span className={`${pinned} left-0 py-2.5 pl-[0.875rem]`}>Pl.</span>
+            <span className={`${pinned} left-[3.5rem] py-2.5`}>Naam</span>
             {cols.map(([r, k]) => (
               <span key={`${r}${k}`} className="text-center">
                 R{r} · KD{k}
@@ -98,8 +101,10 @@ export function StandingsView() {
             const tag = row.withdrawn ? ({ label: "afgehaakt", tone: "muted" } as const) : TIE_TAG[row.tie];
             return (
               <div key={row.entryId} className={`grid items-center border-t border-divider ${row.withdrawn ? "text-faint" : ""}`} style={grid}>
-                <span className="pl-[0.875rem] text-xl font-semibold tabular-nums">{row.position ?? "–"}</span>
-                <span className="truncate pr-2 text-base font-semibold">{entryName(state, row.entryId)}</span>
+                <span className={`${pinned} left-0 pl-[0.875rem] text-xl font-semibold tabular-nums`}>{row.position ?? "–"}</span>
+                <span className={`${pinned} left-[3.5rem] min-w-0 pr-2 text-base font-semibold`}>
+                  <span className="truncate">{entryName(state, row.entryId)}</span>
+                </span>
                 {cols.map(([r, k]) => {
                   const pass = passOf(state, row.entryId, r, k);
                   const isLive = !!heat && heat.round === r && onLine.some((s) => s.entryId === row.entryId && s.knockdown === k);
@@ -164,29 +169,31 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
   }
 
   return (
-    <div className="fixed inset-0 z-30 grid place-items-center bg-ink/35 p-5" onClick={onClose}>
+    <div className="fixed inset-0 z-30 grid overflow-y-auto bg-ink/35 p-3 [place-items:safe_center] sm:p-5" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Passage aanpassen"
         onClick={(e) => e.stopPropagation()}
-        className="box-border flex w-[min(35rem,100%)] flex-col gap-1.5 rounded-[1.75rem] bg-surface px-7 py-[1.625rem]"
+        className="box-border flex w-[min(35rem,100%)] flex-col gap-1.5 rounded-[1.75rem] bg-surface px-5 py-[1.375rem] sm:px-7 sm:py-[1.625rem]"
       >
         <span className="text-[0.8125rem] text-muted">
           Ronde {round} · Knockdown {knockdown}
         </span>
         <span className="text-[1.75rem] font-semibold tracking-[-0.02em]">{entryName(state, entryId)}</span>
-        <div className="flex flex-col gap-4 py-[1.375rem]">
+        {/* Plates at their size, smaller only when the dialog is narrower (phone). */}
+        <div className="@container flex flex-col gap-4 py-[1.375rem]">
           {plateRows(setup).map((row, r) => (
-            <div key={r} className="flex items-end justify-center gap-[0.875rem]">
+            <div key={r} className="flex items-end justify-center gap-[min(0.875rem,3cqw)]">
               {row.map((t) => {
                 const hit = hits.includes(t.id);
                 const d = Math.max(2.75, (t.sizeMm * 0.62) / 16);
+                const c = t.sizeMm * 0.2;
                 return (
                   <Plate
                     key={t.id}
-                    size={`${d.toFixed(3)}rem`}
-                    fontSize={`${Math.max(0.875, d * 0.34).toFixed(3)}rem`}
+                    size={`max(2.75rem, min(${d.toFixed(3)}rem, ${c.toFixed(2)}cqw))`}
+                    fontSize={`max(0.875rem, min(${(d * 0.34).toFixed(3)}rem, ${(c * 0.34).toFixed(2)}cqw))`}
                     look={hit ? OPERATOR_HIT : OPERATOR_OPEN}
                     label={`${t.label} (${t.points} ptn)${hit ? ", geraakt" : ""}`}
                     onClick={() => setHits((h) => (h.includes(t.id) ? h.filter((x) => x !== t.id) : [...h, t.id]))}
@@ -202,7 +209,7 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
           <span className="text-[3.5rem] font-semibold leading-[0.9] tracking-[-0.03em] tabular-nums">{scorePass(setup, hits)}</span>
           <span className="text-[0.9375rem] text-muted">{existing ? `was ${existing.score}` : "nog niet geschoten"}</span>
         </div>
-        <div className="flex items-center gap-2 pt-4">
+        <div className="flex flex-wrap items-center gap-2 pt-4">
           <button type="button" onClick={save} className="cursor-pointer rounded-[0.875rem] bg-yellow px-5 py-3 text-[0.9375rem] font-bold hover:brightness-95">
             Opslaan
           </button>

@@ -29,7 +29,7 @@ export function OrderView() {
   const ranks = ranksInShootingOrder(state).filter((r) => entriesOfRank(state, r.code, { includeWithdrawn: true }).length > 0);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-[0.875rem] overflow-auto px-8 pb-8 pt-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-[0.875rem] overflow-auto px-4 pb-8 pt-2 sm:px-8">
       <div className="flex flex-wrap items-baseline justify-between gap-5 px-1">
         <h2 className="text-[1.375rem] font-semibold">Volgorde</h2>
         <p className="max-w-[45rem] text-pretty text-sm text-muted">
@@ -68,8 +68,8 @@ export function OrderView() {
             };
 
             return (
-              <Panel key={rank.code} className="flex flex-col gap-3 px-[1.375rem] py-5">
-                <div className="flex items-center gap-2.5">
+              <Panel key={rank.code} className="flex flex-col gap-3 px-3 py-5 sm:px-[1.375rem]">
+                <div className="flex flex-wrap items-center gap-2.5 max-sm:px-1">
                   <h3 className="mr-auto text-[1.0625rem] font-semibold">{rank.name}</h3>
                   <Tag tone={stored?.source === "manual" ? "yellow" : "fill"} className="py-1">
                     {!stored ? "automatisch" : stored.source === "manual" ? "handmatig aangepast" : "vastgezet"}
@@ -85,7 +85,7 @@ export function OrderView() {
                   )}
                 </div>
                 {withdrawn.length > 0 && (
-                  <span className="text-[0.8125rem] text-muted">Afgehaakt: {withdrawn.map((e) => entryName(state, e.entryId)).join(", ")}</span>
+                  <span className="text-[0.8125rem] text-muted max-sm:px-1">Afgehaakt: {withdrawn.map((e) => entryName(state, e.entryId)).join(", ")}</span>
                 )}
                 {heats.length === 0 && <span className="text-sm text-faint">Niemand meer actief.</span>}
                 {heats.map((heat, h) => {
@@ -108,15 +108,20 @@ export function OrderView() {
                         const points = state.snapshot.seasonPoints[state.entries.get(entryId)!.shooterId];
                         const kd = heat.length === 1 && perHeat > 1 ? `KD ${Array.from({ length: perHeat }, (_, k) => k + 1).join("+")}` : `KD ${j + 1}`;
                         return (
-                          <div key={entryId} className="flex items-center gap-2.5 py-1.5 pl-[0.875rem] pr-2">
-                            <span className="w-[1.375rem] font-mono text-xs font-medium text-faint">{index + 1}</span>
-                            <span className="w-[3.25rem] whitespace-nowrap text-xs font-semibold text-faint">{kd}</span>
-                            <span className="min-w-[7.5rem] flex-1 truncate text-[0.9375rem] font-semibold">{entryName(state, entryId)}</span>
-                            <span className="min-w-0 truncate whitespace-nowrap text-xs text-muted" title={points === undefined ? "Nog geen seizoenspunten" : undefined}>
-                              {points === undefined ? "geen punten" : `${Math.round(points)} ptn`}
+                          <div key={entryId} className="flex items-center gap-2.5 py-1.5 pl-2.5 pr-2 sm:pl-[0.875rem]">
+                            {/* Phone: the place in the order over the knockdown, and the season points under the name. */}
+                            <span className="flex w-[3.25rem] flex-none flex-col sm:w-auto sm:flex-row sm:items-center sm:gap-2.5">
+                              <span className="w-[1.375rem] font-mono text-xs font-medium text-faint">{index + 1}</span>
+                              <span className="w-[3.25rem] whitespace-nowrap text-xs font-semibold text-faint">{kd}</span>
+                            </span>
+                            <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2.5">
+                              <span className="truncate text-[0.9375rem] font-semibold sm:min-w-[7.5rem] sm:flex-1">{entryName(state, entryId)}</span>
+                              <span className="min-w-0 truncate whitespace-nowrap text-xs text-muted" title={points === undefined ? "Nog geen seizoenspunten" : undefined}>
+                                {points === undefined ? "geen punten" : `${Math.round(points)} ptn`}
+                              </span>
                             </span>
                             {locked ? (
-                              <span className="w-[5.5rem] whitespace-nowrap text-right text-xs text-muted">{now ? "wordt geschoten" : "geschoten"}</span>
+                              <span className="w-[6.25rem] flex-none whitespace-nowrap text-right text-xs text-muted">{now ? "wordt geschoten" : "geschoten"}</span>
                             ) : (
                               <>
                                 <Arrow label="Naar boven" disabled={index <= fixed} onClick={() => move(index, index - 1)}>
@@ -149,7 +154,7 @@ function Arrow({ label, disabled, onClick, children }: { label: string; disabled
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-11 cursor-pointer place-items-center rounded-full text-sm hover:bg-fill disabled:cursor-default disabled:opacity-25 disabled:hover:bg-transparent"
+      className="grid size-11 flex-none cursor-pointer place-items-center rounded-full text-sm hover:bg-fill disabled:cursor-default disabled:opacity-25 disabled:hover:bg-transparent"
     >
       {children}
     </button>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ScrollRow } from "@/components/scroll-row";
 
 const LINKS = [
   { href: "/admin", label: "Overzicht" },
@@ -24,7 +25,8 @@ export function AdminNavFallback() {
 
 function NavLinks({ pathname }: { pathname: string | null }) {
   return (
-    <nav className="flex flex-wrap items-center gap-1 px-4 pb-2.5 sm:px-8" aria-label="Beheer">
+    // Phone: one line that scrolls sideways instead of three wrapped lines.
+    <ScrollRow as="nav" active={pathname} className="flex items-center gap-1 px-4 pb-2.5 sm:flex-wrap sm:px-8" aria-label="Beheer">
       {LINKS.map((l) => {
         const active = pathname !== null && (l.href === "/admin" ? pathname === "/admin" : pathname.startsWith(l.href));
         return (
@@ -32,12 +34,12 @@ function NavLinks({ pathname }: { pathname: string | null }) {
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
-            className={`rounded-full px-[0.875rem] py-[0.4375rem] text-sm font-semibold transition ${active ? "bg-ink text-white" : "text-ink hover:bg-hover"}`}
+            className={`flex-none whitespace-nowrap rounded-full px-[0.875rem] py-[0.4375rem] text-sm font-semibold transition ${active ? "bg-ink text-white" : "text-ink hover:bg-hover"}`}
           >
             {l.label}
           </Link>
         );
       })}
-    </nav>
+    </ScrollRow>
   );
 }

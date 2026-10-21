@@ -40,7 +40,7 @@ export function CloseView({ asking, setAsking }: { asking: boolean; setAsking: (
   const reopen = () => emit(id, "status.set", { status: state.previousStatus && state.previousStatus !== "finished" ? state.previousStatus : "round2" });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-8 pb-8 pt-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pb-8 pt-2 sm:px-8">
       <h2 className="px-1 text-[1.375rem] font-semibold">Afronden</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18.75rem),1fr))] items-start gap-[0.875rem]">
         {ranks.map((r) => {
@@ -70,7 +70,7 @@ export function CloseView({ asking, setAsking }: { asking: boolean; setAsking: (
           );
         })}
       </div>
-      <Panel className="flex flex-wrap items-center gap-2.5 px-6 py-[1.375rem]">
+      <Panel className="flex flex-wrap items-center gap-2.5 px-4 py-[1.375rem] sm:px-6">
         {asking ? (
           <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border-[0.09375rem] border-yellow bg-yellow-light py-2.5 pl-4 pr-3">
             <span className="text-sm font-semibold">

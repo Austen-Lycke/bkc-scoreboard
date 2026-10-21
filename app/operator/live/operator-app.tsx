@@ -19,6 +19,7 @@ import { openTvWindow } from "@/lib/offline/tv-window";
 import { useQueryParam } from "@/lib/offline/url";
 import { CompetitionContext, NavContext, useComp, useNav, type Tab } from "./context";
 import { HeatProgress } from "@/components/heat-progress";
+import { ScrollRow } from "@/components/scroll-row";
 import { Pill } from "@/components/ui";
 import { formatClock, useNow } from "@/components/use-now";
 import { CheckInView } from "./views/check-in";
@@ -108,20 +109,25 @@ function Shell() {
 
   return (
     <NavContext.Provider value={nav}>
-      <div className="touch-targets flex h-dvh min-h-[40rem] flex-col bg-background">
-        <header className="flex flex-none items-center gap-6 px-8 pb-3 pt-[1.125rem]">
+      {/*
+        From a tablet up the app fills the screen and each view scrolls on its own, so the save
+        button stays in view. On a phone the page simply scrolls.
+      */}
+      <div className="touch-targets flex min-h-dvh flex-col bg-background md:h-dvh md:min-h-[40rem]">
+        <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2.5 px-4 pb-3 pt-4 sm:gap-x-6 sm:px-8 sm:pt-[1.125rem]">
           <Link href="/operator" title="Naar de wedstrijdleiding" className="text-[0.8125rem] font-bold tracking-[0.2em]">
             BKC
           </Link>
-          <span className="max-w-[16rem] truncate text-[0.9375rem] text-muted">
+          <span className="min-w-0 flex-1 truncate text-[0.9375rem] text-muted md:max-w-[16rem] md:flex-none">
             {state.snapshot.competition.name}
             {demo && " · demo"}
           </span>
+          {/* Phone: on a line of its own under the header, full width. */}
           <HeatProgress
             variant="operator"
             rounds={schedule.map((h) => h.round)}
             current={progress.heatIndex}
-            className="mx-auto max-w-[35rem] flex-1"
+            className="order-last basis-full md:order-none md:mx-auto md:max-w-[35rem] md:flex-1 md:basis-auto"
           />
           <SyncBadge sync={sync} unsynced={unsynced} demo={demo} onSync={() => syncNow(id)} />
           <button
@@ -133,34 +139,37 @@ function Shell() {
             TV
           </button>
         </header>
-        <nav className="flex flex-none flex-wrap items-center gap-1 px-8 pb-2.5" aria-label="Onderdelen">
-          {TABS.map((t) => {
-            const on = t.id === tab;
-            const badge = badges[t.id];
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => nav.goTo(t.id)}
-                aria-current={on ? "page" : undefined}
-                className={`flex cursor-pointer items-center gap-[0.4375rem] rounded-full px-[0.875rem] py-[0.4375rem] text-sm font-semibold transition ${
-                  on ? "bg-ink text-white" : "text-muted hover:text-ink"
-                }`}
-              >
-                {t.label}
-                {!!badge && (
-                  <span
-                    className={`box-border grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-[0.3125rem] text-[0.6875rem] ${
-                      t.id === "shootoff" ? "bg-alert text-white" : on ? "bg-white/20 text-white" : "bg-[#e9e9e4] text-ink"
-                    }`}
-                  >
-                    {badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+        <nav className="flex flex-none flex-wrap items-center gap-x-1 gap-y-2 px-4 pb-2.5 sm:px-8" aria-label="Onderdelen">
+          {/* Phone: the tabs and the phase each scroll sideways on one line. From a tablet up they wrap. */}
+          <ScrollRow active={tab} className={`flex gap-1 ${BLEED} md:contents`}>
+            {TABS.map((t) => {
+              const on = t.id === tab;
+              const badge = badges[t.id];
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => nav.goTo(t.id)}
+                  aria-current={on ? "page" : undefined}
+                  className={`flex flex-none cursor-pointer items-center gap-[0.4375rem] whitespace-nowrap rounded-full px-[0.875rem] py-[0.4375rem] text-sm font-semibold transition ${
+                    on ? "bg-ink text-white" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {t.label}
+                  {!!badge && (
+                    <span
+                      className={`box-border grid h-[1.125rem] min-w-[1.125rem] place-items-center rounded-full px-[0.3125rem] text-[0.6875rem] ${
+                        t.id === "shootoff" ? "bg-alert text-white" : on ? "bg-white/20 text-white" : "bg-[#e9e9e4] text-ink"
+                      }`}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </ScrollRow>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 max-md:w-full md:ml-auto md:justify-end">
             {showTimer && <PauseTimer />}
             <StatusControl />
           </div>
@@ -231,8 +240,13 @@ function Notices({ sync }: { sync: SyncStatus }) {
     );
   }
   if (!items.length) return null;
-  return <div className="flex flex-none flex-col gap-2 px-8 pb-2.5">{items}</div>;
+  return <div className="flex flex-none flex-col gap-2 px-4 pb-2.5 sm:px-8">{items}</div>;
 }
+
+/** A scrolling line runs to the edges of the screen, past the page padding (PHONE_BLEED: below md only). */
+const BLEED = "-mx-4 w-[calc(100%+2rem)] px-4 sm:-mx-8 sm:w-[calc(100%+4rem)] sm:px-8";
+const PHONE_BLEED =
+  "max-md:-mx-4 max-md:w-[calc(100%+2rem)] max-md:px-4 max-md:sm:-mx-8 max-md:sm:w-[calc(100%+4rem)] max-md:sm:px-8";
 
 const startPause = (competitionId: string, minutes: number) =>
   updateLive(competitionId, { pauseEndsAt: new Date(Date.now() + minutes * 60_000).toISOString() });
@@ -247,11 +261,14 @@ function PauseTimer() {
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-full border-[0.09375rem] border-border py-[0.1875rem] pl-[0.875rem] pr-[0.1875rem] text-xs font-semibold ${
+      className={`scroll-row flex max-w-full items-center gap-2 rounded-full border-[0.09375rem] border-border py-[0.1875rem] pl-[0.875rem] pr-[0.1875rem] text-xs font-semibold ${
         done ? "bg-yellow" : "bg-surface"
       }`}
     >
-      <span className="font-medium text-faint">Pauzetimer op TV</span>
+      <span className="flex-none font-medium text-faint">
+        <span className="max-sm:hidden">Pauzetimer op TV</span>
+        <span className="sm:hidden">Timer</span>
+      </span>
       {end === null ? (
         <div className="flex gap-0.5">
           {[5, 10, 15, 20].map((m) => (
@@ -319,9 +336,9 @@ function StatusControl() {
   }
 
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-xs text-faint">Fase</span>
-      <div role="radiogroup" aria-label="Fase" className="flex gap-0.5 rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] text-xs font-semibold">
+    <ScrollRow active={state.status} className={`flex items-center gap-2.5 ${PHONE_BLEED}`}>
+      <span className="flex-none text-xs text-faint">Fase</span>
+      <div role="radiogroup" aria-label="Fase" className="flex flex-none gap-0.5 rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] text-xs font-semibold">
         {STATUSES.map((s) => {
           const on = state.status === s.id;
           return (
@@ -331,14 +348,14 @@ function StatusControl() {
               role="radio"
               aria-checked={on}
               onClick={() => setStatus(s.id)}
-              className={`cursor-pointer rounded-full px-2.5 py-[0.3125rem] transition ${on ? "bg-yellow text-ink" : "text-muted hover:text-ink"}`}
+              className={`cursor-pointer whitespace-nowrap rounded-full px-2.5 py-[0.3125rem] transition ${on ? "bg-yellow text-ink" : "text-muted hover:text-ink"}`}
             >
               {s.label}
             </button>
           );
         })}
       </div>
-    </div>
+    </ScrollRow>
   );
 }
 
@@ -365,15 +382,18 @@ function SyncBadge({ sync, unsynced, demo, onSync }: { sync: SyncStatus; unsynce
       : sync.state === "offline"
         ? "Alles wordt lokaal bewaard en gedeeld zodra er verbinding is."
         : undefined;
+  // A long error message is cut off rather than pushing the header wider than a phone.
   const content = (
     <>
       <span className="size-[0.4375rem] flex-none rounded-full" style={{ background: dot }} />
-      {demo ? "Demo · niet gedeeld" : label[sync.state]}
-      {!demo && unsynced > 0 && <span className="text-faint">· {unsynced} nog te delen</span>}
+      <span className="truncate">
+        {demo ? "Demo · niet gedeeld" : label[sync.state]}
+        {!demo && unsynced > 0 && <span className="text-faint"> · {unsynced} nog te delen</span>}
+      </span>
     </>
   );
   if (demo) {
-    return <span className="flex shrink-0 items-center gap-1.5 text-[0.8125rem] text-muted">{content}</span>;
+    return <span className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] text-muted">{content}</span>;
   }
   return (
     <button
@@ -382,7 +402,7 @@ function SyncBadge({ sync, unsynced, demo, onSync }: { sync: SyncStatus; unsynce
       disabled={sync.state === "syncing"}
       aria-live="polite"
       title={title ? `${title} Tik om nu te synchroniseren.` : "Tik om nu te synchroniseren."}
-      className="-mx-2.5 flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.8125rem] text-muted hover:bg-hover hover:text-ink disabled:cursor-progress"
+      className="-mx-2.5 flex min-w-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.8125rem] text-muted hover:bg-hover hover:text-ink disabled:cursor-progress"
     >
       {content}
     </button>
