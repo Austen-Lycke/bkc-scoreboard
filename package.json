@@ -12,9 +12,11 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
+    "db:backup": "tsx scripts/backup.ts",
     "create-user": "tsx --conditions=react-server scripts/create-admin.ts",
-    "db:migrate:prod": "DB_ENV=production drizzle-kit migrate",
+    "db:migrate:prod": "npm run db:backup:prod && DB_ENV=production drizzle-kit migrate",
     "db:seed:prod": "DB_ENV=production tsx scripts/seed.ts",
+    "db:backup:prod": "DB_ENV=production tsx scripts/backup.ts",
     "create-user:prod": "DB_ENV=production tsx --conditions=react-server scripts/create-admin.ts"
   },
   "dependencies": {

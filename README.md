@@ -39,6 +39,10 @@ npm run dev
 npm run db:migrate:prod     # live database: run after adding a migration, before/with the deploy
 ```
 
+`db:migrate:prod` first copies every table to `backups/neondb-<time>.json` (`npm run db:backup:prod`
+on its own) and stops if that fails. The file holds members and password hashes: it stays on your
+machine, out of git. Neon's restore window (project settings) is the second safety net.
+
 Admins can also manage accounts in `/admin/gebruikers`.
 
 ## Layout
