@@ -7,7 +7,7 @@ import { maxPassScore, type Setup } from "@/lib/scoring";
 import { updateSetup } from "./actions";
 
 const COLS = "grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_6.5rem] items-center gap-2";
-const input = "w-full min-w-0 rounded-[0.625rem] border-[1.5px] border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ink";
+const input = "w-full min-w-0 rounded-[0.625rem] border-[0.09375rem] border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ink";
 const PLATE: PlateLook = { background: "var(--surface)", color: "var(--ink)", borderColor: "var(--ink)" };
 
 export function SetupForm({ id, setup }: { id: string; setup: Setup }) {

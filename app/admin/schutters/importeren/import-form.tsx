@@ -70,7 +70,7 @@ export function ImportForm({ ranks, existingKeys }: { ranks: RankDef[]; existing
           rows={7}
           placeholder="Voornaam;Achternaam;Klasse"
           aria-label="CSV-inhoud"
-          className="w-full resize-y rounded-[0.875rem] border-[1.5px] border-border bg-background px-[0.875rem] py-3 font-mono text-[0.8125rem] leading-[1.6] outline-none focus:border-ink"
+          className="w-full resize-y rounded-[0.875rem] border-[0.09375rem] border-border bg-background px-[0.875rem] py-3 font-mono text-[0.8125rem] leading-[1.6] outline-none focus:border-ink"
         />
         {preview?.error && <p className="text-[0.8125rem] font-semibold text-error">{preview.error}</p>}
         {result?.error && <p className="text-[0.8125rem] font-semibold text-error">{result.error}</p>}

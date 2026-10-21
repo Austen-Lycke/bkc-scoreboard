@@ -175,7 +175,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
                 const a = phase.find((s) => s.knockdown === kd);
                 if (!a) {
                   return (
-                    <div key={kd} className="grid place-items-center rounded-[1.5rem] border-[1.5px] border-dashed border-plate p-6 text-[0.9375rem] text-muted">
+                    <div key={kd} className="grid place-items-center rounded-[1.5rem] border-[0.09375rem] border-dashed border-plate p-6 text-[0.9375rem] text-muted">
                       Knockdown {kd}: niemand in deze fase
                     </div>
                   );
@@ -226,7 +226,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
           ) : (
             next.map((h, j) => (
               <div key={heatKey(h)} className="flex items-center gap-3">
-                <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[1.5px] border-border text-xs font-semibold">{j + 1}</span>
+                <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[0.09375rem] border-border text-xs font-semibold">{j + 1}</span>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</div>
                   <div className="text-xs text-muted">
@@ -262,7 +262,7 @@ function FinishedBanner() {
       <button
         type="button"
         onClick={() => emit(id, "status.set", { status: state.previousStatus && state.previousStatus !== "finished" ? state.previousStatus : "round2" })}
-        className="cursor-pointer rounded-full border-[1.5px] border-white px-[0.875rem] py-1.5 text-[0.8125rem]"
+        className="cursor-pointer rounded-full border-[0.09375rem] border-white px-[0.875rem] py-1.5 text-[0.8125rem]"
       >
         Heropenen
       </button>

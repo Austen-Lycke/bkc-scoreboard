@@ -9,13 +9,13 @@ export type PillSize = "xs" | "sm" | "md" | "lg";
 const PILL_TONES: Record<PillTone, string> = {
   ink: "bg-ink text-white hover:bg-black",
   yellow: "bg-yellow font-bold text-ink hover:brightness-95",
-  outline: "border-[1.5px] border-border text-ink hover:border-ink",
-  quiet: "border-[1.5px] border-border text-muted hover:border-ink hover:text-ink",
-  surface: "border-[1.5px] border-border bg-surface text-ink hover:border-ink",
-  "outline-ink": "border-[1.5px] border-ink text-ink hover:bg-hover",
+  outline: "border-[0.09375rem] border-border text-ink hover:border-ink",
+  quiet: "border-[0.09375rem] border-border text-muted hover:border-ink hover:text-ink",
+  surface: "border-[0.09375rem] border-border bg-surface text-ink hover:border-ink",
+  "outline-ink": "border-[0.09375rem] border-ink text-ink hover:bg-hover",
   ghost: "text-muted hover:text-ink",
   danger: "bg-error text-white hover:brightness-110",
-  "danger-outline": "border-[1.5px] border-border text-error hover:border-error",
+  "danger-outline": "border-[0.09375rem] border-border text-error hover:border-error",
 };
 
 const PILL_SIZES: Record<PillSize, string> = {
@@ -31,7 +31,7 @@ export const pillClass = (tone: PillTone = "outline", size: PillSize = "md") =>
 
 /** Text input / textarea on a white card. */
 export const fieldClass =
-  "w-full min-w-0 rounded-xl border-[1.5px] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink disabled:opacity-60";
+  "w-full min-w-0 rounded-xl border-[0.09375rem] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink disabled:opacity-60";
 
 /** Underlined text link with the yellow accent. */
 export const textLinkClass = "text-[0.8125rem] font-semibold underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink";

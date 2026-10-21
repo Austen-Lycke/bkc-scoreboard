@@ -68,7 +68,7 @@ export function StandingsView() {
               role="tab"
               aria-selected={on}
               onClick={() => setRankCode(r.code)}
-              className={`cursor-pointer rounded-full border-[1.5px] px-4 py-2 text-[0.9375rem] font-semibold ${
+              className={`cursor-pointer rounded-full border-[0.09375rem] px-4 py-2 text-[0.9375rem] font-semibold ${
                 on ? "border-ink bg-ink text-white" : "border-border bg-surface hover:border-ink"
               }`}
             >
@@ -108,7 +108,7 @@ export function StandingsView() {
                       type="button"
                       onClick={() => (isLive ? goTo("scoring", k) : setEditing({ entryId: row.entryId, round: r, knockdown: k }))}
                       aria-label={isLive ? `Ronde ${r} knockdown ${k}: wordt nu geschoten` : `Ronde ${r} knockdown ${k} aanpassen`}
-                      className={`mx-1 my-1.5 flex h-11 cursor-pointer items-center justify-center gap-[0.3125rem] rounded-xl text-[1.0625rem] font-semibold tabular-nums hover:outline-[1.5px] hover:outline-ink ${tone}`}
+                      className={`mx-1 my-1.5 flex h-11 cursor-pointer items-center justify-center gap-[0.3125rem] rounded-xl text-[1.0625rem] font-semibold tabular-nums hover:outline-[0.09375rem] hover:outline-ink ${tone}`}
                     >
                       {isLive ? scorePass(setup, draft ?? pass?.hits ?? []) : pass ? pass.score : "·"}
                       {isLive && <span className="text-[0.625rem] font-bold tracking-[0.04em]">NU</span>}
@@ -178,12 +178,12 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
             <div key={r} className="flex items-end justify-center gap-[0.875rem]">
               {row.map((t) => {
                 const hit = hits.includes(t.id);
-                const d = Math.max(44, Math.round(t.sizeMm * 0.62));
+                const d = Math.max(2.75, (t.sizeMm * 0.62) / 16);
                 return (
                   <Plate
                     key={t.id}
-                    size={`${d / 16}rem`}
-                    fontSize={`${Math.max(14, Math.round(d * 0.34)) / 16}rem`}
+                    size={`${d.toFixed(3)}rem`}
+                    fontSize={`${Math.max(0.875, d * 0.34).toFixed(3)}rem`}
                     look={hit ? OPERATOR_HIT : OPERATOR_OPEN}
                     label={`${t.label} (${t.points} ptn)${hit ? ", geraakt" : ""}`}
                     onClick={() => setHits((h) => (h.includes(t.id) ? h.filter((x) => x !== t.id) : [...h, t.id]))}

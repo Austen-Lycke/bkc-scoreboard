@@ -7,7 +7,7 @@ import { entryAdultRank, fullName } from "@/lib/scoring";
 import { useComp } from "../context";
 import { Panel, Pill, Tag } from "@/components/ui";
 
-const input = "w-full min-w-0 rounded-xl border-[1.5px] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink";
+const input = "w-full min-w-0 rounded-xl border-[0.09375rem] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink";
 
 /**
  * Walk-in registration at the table: find or add the shooter and confirm their rank. Whoever shoots
@@ -72,7 +72,7 @@ export function CheckInView() {
             <button
               type="button"
               onClick={() => setCreating(true)}
-              className="cursor-pointer rounded-[0.875rem] border-[1.5px] border-dashed border-plate p-3 text-center text-sm font-semibold hover:border-ink"
+              className="cursor-pointer rounded-[0.875rem] border-[0.09375rem] border-dashed border-plate p-3 text-center text-sm font-semibold hover:border-ink"
             >
               + Nieuwe schutter
             </button>
@@ -98,7 +98,7 @@ function RankChips({ value, onChange }: { value: string; onChange: (code: string
             aria-checked={on}
             title={r.name}
             onClick={() => onChange(r.code)}
-            className={`cursor-pointer rounded-full border-[1.5px] px-[0.6875rem] py-1.5 text-[0.8125rem] font-semibold ${
+            className={`cursor-pointer rounded-full border-[0.09375rem] px-[0.6875rem] py-1.5 text-[0.8125rem] font-semibold ${
               on ? "border-ink bg-ink text-white" : "border-border bg-surface hover:border-ink"
             }`}
           >
@@ -234,7 +234,7 @@ function EntryList() {
                       onClick={() =>
                         shot ? emit(id, "entry.updated", { entryId: e.entryId, withdrawn: !e.withdrawn }) : emit(id, "entry.removed", { entryId: e.entryId })
                       }
-                      className="cursor-pointer whitespace-nowrap rounded-full border-[1.5px] border-border px-2.5 py-[0.1875rem] text-xs font-semibold text-muted hover:border-ink hover:text-ink"
+                      className="cursor-pointer whitespace-nowrap rounded-full border-[0.09375rem] border-border px-2.5 py-[0.1875rem] text-xs font-semibold text-muted hover:border-ink hover:text-ink"
                     >
                       {!shot ? "Uitschrijven" : e.withdrawn ? "Terug actief" : "Afgehaakt"}
                     </button>

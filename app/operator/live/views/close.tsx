@@ -71,7 +71,7 @@ export function CloseView() {
       </div>
       <Panel className="flex flex-wrap items-center gap-2.5 px-6 py-[1.375rem]">
         {asking ? (
-          <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border-[1.5px] border-yellow bg-yellow-light py-2.5 pl-4 pr-3">
+          <div className="flex flex-wrap items-center gap-2.5 rounded-2xl border-[0.09375rem] border-yellow bg-yellow-light py-2.5 pl-4 pr-3">
             <span className="text-sm font-semibold">
               {ready ? "Wedstrijd beëindigen? Scoren gaat daarna op slot." : "Nog niet alles is volledig. Toch beëindigen? Scoren gaat daarna op slot."}
             </span>

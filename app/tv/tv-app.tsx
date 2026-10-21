@@ -25,8 +25,9 @@ import { Plate, plateRows, type PlateLook } from "@/components/plates";
 import { formatClock, useNow } from "@/components/use-now";
 import { CLUB_TIME_ZONE } from "@/components/public/format";
 
-const W = 1920;
-const H = 1080;
+/** The canvas in rem: 1920×1080 at the default 16px root size. */
+const W = 120;
+const H = 67.5;
 
 export function TvApp() {
   const fromUrl = useQueryParam("c");
@@ -51,14 +52,17 @@ export function TvApp() {
   );
 }
 
-/** A fixed 1920×1080 canvas, scaled to fit any screen; cursor hidden when idle; one-click fullscreen. */
+/** A fixed 120×67.5rem canvas (1920×1080 at the default root size), scaled to fit any screen; cursor hidden when idle; one-click fullscreen. */
 function Stage({ children }: { children: ReactNode }) {
   const [scale, setScale] = useState(0.5);
   const [idle, setIdle] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / W, window.innerHeight / H));
+    const fit = () => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      setScale(Math.min(window.innerWidth / (W * rem), window.innerHeight / (H * rem)));
+    };
     fit();
     window.addEventListener("resize", fit);
     let timer: ReturnType<typeof setTimeout>;
@@ -85,7 +89,7 @@ function Stage({ children }: { children: ReactNode }) {
       onDoubleClick={() => document.documentElement.requestFullscreen?.()}
     >
       <div
-        style={{ width: W, height: H, transform: `translate(-50%, -50%) scale(${scale})` }}
+        style={{ width: `${W}rem`, height: `${H}rem`, transform: `translate(-50%, -50%) scale(${scale})` }}
         className="absolute left-1/2 top-1/2 box-border flex origin-center flex-col gap-8 bg-background px-20 pb-14 pt-12"
       >
         {children}
@@ -167,7 +171,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       <TopBar
         name={comp.name}
         phase={shooting ? null : PHASE_LABEL[state.status]}
-        progress={shooting ? <HeatProgress variant="tv" rounds={schedule.map((h) => h.round)} current={progress.heatIndex} className="w-[760px]" /> : null}
+        progress={shooting ? <HeatProgress variant="tv" rounds={schedule.map((h) => h.round)} current={progress.heatIndex} className="w-[47.5rem]" /> : null}
       />
       {body}
     </>
@@ -186,28 +190,29 @@ function TopBar({ name, phase, progress }: { name: string; phase?: string | null
 
   return (
     <header className="flex flex-none items-center gap-12">
-      <span className="text-[32px] font-bold tracking-[0.2em]">BKC</span>
-      <span className="truncate text-[32px] text-muted">{name}</span>
+      <span className="text-[2rem] font-bold tracking-[0.2em]">BKC</span>
+      <span className="truncate text-[2rem] text-muted">{name}</span>
       <div className="flex-1" />
-      {phase && <span className="text-[32px] font-semibold">{phase}</span>}
+      {phase && <span className="text-[2rem] font-semibold">{phase}</span>}
       {progress}
-      <span className="ml-6 text-[32px] tabular-nums text-muted">{time}</span>
+      <span className="ml-6 text-[2rem] tabular-nums text-muted">{time}</span>
     </header>
   );
 }
 
-const TV_HIT: PlateLook = { background: "var(--yellow)", color: "var(--ink)", borderColor: "var(--yellow)", borderWidth: "3px" };
-const TV_OPEN: PlateLook = { background: "transparent", color: "rgba(255,255,255,.55)", borderColor: "rgba(255,255,255,.3)", borderWidth: "3px" };
+const TV_HIT: PlateLook = { background: "var(--yellow)", color: "var(--ink)", borderColor: "var(--yellow)", borderWidth: "0.1875rem" };
+const TV_OPEN: PlateLook = { background: "transparent", color: "rgba(255,255,255,.55)", borderColor: "rgba(255,255,255,.3)", borderWidth: "0.1875rem" };
 
-function TvPlates({ setup, look, scale, gap }: { setup: Setup; look: (targetId: string) => PlateLook; scale: number; gap: number }) {
+/** `scale`: diameter per mm of real plate, in 1/16 rem (px at the default root size). `gap` is a CSS length. */
+function TvPlates({ setup, look, scale, gap }: { setup: Setup; look: (targetId: string) => PlateLook; scale: number; gap: string }) {
   return (
     <div className="flex flex-col" style={{ gap }}>
       {plateRows(setup).map((row, r) => (
         <div key={r} className="flex items-end justify-center" style={{ gap }}>
           {row.map((t) => {
-            const d = Math.round(t.sizeMm * scale);
+            const d = (t.sizeMm * scale) / 16;
             return (
-              <Plate key={t.id} size={`${d}px`} fontSize={`${Math.max(18, Math.round(d * 0.36))}px`} look={look(t.id)}>
+              <Plate key={t.id} size={`${d.toFixed(3)}rem`} fontSize={`${Math.max(1.125, d * 0.36).toFixed(3)}rem`} look={look(t.id)}>
                 {t.points}
               </Plate>
             );
@@ -240,14 +245,14 @@ function LiveHeat({
   const hitsOf = (entryId: string, kd: number) => live?.drafts[passKey(entryId, heat.round, kd)] ?? passOf(state, entryId, heat.round, kd)?.hits ?? [];
   const liveTotal = (entryId: string, kd: number) =>
     entryTotal(state, entryId) - (passOf(state, entryId, heat.round, kd)?.score ?? 0) + scorePass(setup, hitsOf(entryId, kd));
-  const columns = Array.from({ length: knockdowns }, () => "minmax(0,1fr)").join(" 2px ");
+  const columns = Array.from({ length: knockdowns }, () => "minmax(0,1fr)").join(" 0.125rem ");
 
   return (
     <>
-      <section className="flex flex-none flex-col gap-5 rounded-[44px] bg-ink px-16 pb-10 pt-9 text-white">
+      <section className="flex flex-none flex-col gap-5 rounded-[2.75rem] bg-ink px-16 pb-10 pt-9 text-white">
         <div className="flex items-center justify-between">
-          <span className="rounded-full bg-yellow px-[26px] py-2 text-[34px] font-bold text-ink">Nu aan de lijn</span>
-          <span className="text-[34px] text-white/60">
+          <span className="rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">Nu aan de lijn</span>
+          <span className="text-[2.125rem] text-white/60">
             Ronde {heat.round} · {rankName(state, heat.rankCode)} · beurt {heat.index + 1}/{heatsInRank}
             {phaseIndex > 0 ? " · gewisseld" : ""}
           </span>
@@ -260,8 +265,8 @@ function LiveHeat({
               return [
                 ...divider,
                 <div key={kd} className="flex min-w-0 flex-col gap-4">
-                  <div className="text-[30px] text-white/50">Knockdown {kd}</div>
-                  <div className="text-[56px] font-semibold text-white/30">vrij in deze fase</div>
+                  <div className="text-[1.875rem] text-white/50">Knockdown {kd}</div>
+                  <div className="text-[3.5rem] font-semibold text-white/30">vrij in deze fase</div>
                 </div>,
               ];
             }
@@ -270,14 +275,14 @@ function LiveHeat({
               ...divider,
               <div key={kd} className="flex min-w-0 flex-col gap-4">
                 <div className="min-w-0">
-                  <div className="text-[30px] text-white/50">Knockdown {kd}</div>
-                  <div className="truncate text-[88px] font-semibold leading-[1.02] tracking-[-0.03em]">{tvName(state, a.entryId)}</div>
+                  <div className="text-[1.875rem] text-white/50">Knockdown {kd}</div>
+                  <div className="truncate text-[5.5rem] font-semibold leading-[1.02] tracking-[-0.03em]">{tvName(state, a.entryId)}</div>
                 </div>
                 <div className="flex items-end justify-between gap-8">
-                  <TvPlates setup={setup} scale={0.62} gap={14} look={(id) => (hits.includes(id) ? TV_HIT : TV_OPEN)} />
+                  <TvPlates setup={setup} scale={0.62} gap="0.875rem" look={(id) => (hits.includes(id) ? TV_HIT : TV_OPEN)} />
                   <div className="text-right">
-                    <div className="text-[132px] font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums">{scorePass(setup, hits)}</div>
-                    <div className="mt-[18px] text-[30px] text-white/60">totaal {liveTotal(a.entryId, kd)}</div>
+                    <div className="text-[8.25rem] font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums">{scorePass(setup, hits)}</div>
+                    <div className="mt-[1.125rem] text-[1.875rem] text-white/60">totaal {liveTotal(a.entryId, kd)}</div>
                   </div>
                 </div>
               </div>,
@@ -286,17 +291,17 @@ function LiveHeat({
         </div>
       </section>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[600px_minmax(0,1fr)] gap-8">
-        <section className="flex flex-col gap-[14px] rounded-[36px] border-[3px] border-border bg-surface px-11 py-10">
-          <span className="text-[30px] font-semibold text-muted">Hierna klaarmaken</span>
+      <div className="grid min-h-0 flex-1 grid-cols-[37.5rem_minmax(0,1fr)] gap-8">
+        <section className="flex flex-col gap-[0.875rem] rounded-[2.25rem] border-[0.1875rem] border-border bg-surface px-11 py-10">
+          <span className="text-[1.875rem] font-semibold text-muted">Hierna klaarmaken</span>
           {next ? (
             <>
               {next.shooters.map((e) => (
-                <span key={e} className="truncate text-[64px] font-semibold leading-[1.05] tracking-[-0.02em]">
+                <span key={e} className="truncate text-[4rem] font-semibold leading-[1.05] tracking-[-0.02em]">
                   {tvName(state, e)}
                 </span>
               ))}
-              <span className="mt-auto text-[28px] text-muted">
+              <span className="mt-auto text-[1.75rem] text-muted">
                 {heatMeta(state, next)} · beurt {next.index + 1}
                 {next.shooters.length === 1 && knockdowns > 1
                   ? ` · alleen op KD ${Array.from({ length: knockdowns }, (_, k) => k + 1).join(" en ")}`
@@ -304,7 +309,7 @@ function LiveHeat({
               </span>
             </>
           ) : (
-            <span className="text-[48px] font-semibold text-muted">Dit is de laatste beurt</span>
+            <span className="text-[3rem] font-semibold text-muted">Dit is de laatste beurt</span>
           )}
         </section>
         <LiveStandings state={state} heat={heat} phase={phase} hitsOf={hitsOf} setup={setup} />
@@ -351,14 +356,14 @@ function LiveStandings({
     if (j > 0 && i > show[j - 1] + 1) items.push(<Gap key={`g${i}`} />);
     const r = ranked[i];
     items.push(
-      <div key={r.entryId} className={`-mx-[18px] flex items-center gap-6 rounded-[14px] px-[18px] py-0.5 leading-[1.2] ${r.live ? "bg-yellow-light" : ""}`}>
-        <span className={`w-[52px] text-[34px] font-semibold tabular-nums ${r.live ? "text-ink" : "text-subtle"}`}>{r.pos}</span>
-        <span className={`min-w-0 flex-1 truncate text-[34px] ${r.live ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
+      <div key={r.entryId} className={`-mx-[1.125rem] flex items-center gap-6 rounded-[0.875rem] px-[1.125rem] py-0.5 leading-[1.2] ${r.live ? "bg-yellow-light" : ""}`}>
+        <span className={`w-[3.25rem] text-[2.125rem] font-semibold tabular-nums ${r.live ? "text-ink" : "text-subtle"}`}>{r.pos}</span>
+        <span className={`min-w-0 flex-1 truncate text-[2.125rem] ${r.live ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
         <div className="flex gap-2">
           {r.passes.map((p, k) => (
             <span
               key={k}
-              className="box-border size-4 rounded-full border-[2.5px]"
+              className="box-border size-4 rounded-full border-[0.15625rem]"
               style={{
                 background: p.state === "live" ? "var(--yellow)" : p.state === "shot" ? "var(--ink)" : "transparent",
                 borderColor: p.state === "open" ? "var(--plate)" : "var(--ink)",
@@ -366,17 +371,17 @@ function LiveStandings({
             />
           ))}
         </div>
-        <span className="w-[90px] text-right text-[36px] font-semibold tabular-nums">{r.total}</span>
+        <span className="w-[5.625rem] text-right text-[2.25rem] font-semibold tabular-nums">{r.total}</span>
       </div>,
     );
   });
   if (show.length && show[show.length - 1] < ranked.length - 1) items.push(<Gap key="end" text={`${ranked.length} schutters`} />);
 
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-[36px] border-[3px] border-border bg-surface px-11 pb-6 pt-[26px]">
+    <section className="flex min-h-0 flex-col overflow-hidden rounded-[2.25rem] border-[0.1875rem] border-border bg-surface px-11 pb-6 pt-[1.625rem]">
       <div className="flex items-baseline justify-between pb-1">
-        <span className="text-[30px] font-semibold">Voorlopige stand · {rankName(state, heat.rankCode)}</span>
-        <span className="text-[24px] text-subtle">passages</span>
+        <span className="text-[1.875rem] font-semibold">Voorlopige stand · {rankName(state, heat.rankCode)}</span>
+        <span className="text-[1.5rem] text-subtle">passages</span>
       </div>
       <div className="flex flex-1 flex-col justify-between">{items}</div>
     </section>
@@ -385,8 +390,8 @@ function LiveStandings({
 
 function Gap({ text }: { text?: string }) {
   return (
-    <div className="flex items-center gap-6 pl-0.5 text-[28px] leading-none tracking-[0.3em] text-plate">
-      ···{text && <span className="text-[22px] tracking-normal text-subtle">{text}</span>}
+    <div className="flex items-center gap-6 pl-0.5 text-[1.75rem] leading-none tracking-[0.3em] text-plate">
+      ···{text && <span className="text-[1.375rem] tracking-normal text-subtle">{text}</span>}
     </div>
   );
 }
@@ -402,33 +407,33 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
   const ranks = ranksInShootingOrder(state).filter((r) => standingsFor(state, r.code).rows.some((x) => !x.withdrawn));
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[520px_minmax(0,1fr)] gap-10">
+    <div className="grid min-h-0 flex-1 grid-cols-[32.5rem_minmax(0,1fr)] gap-10">
       <div className="flex min-h-0 flex-col gap-8">
         <div className="flex flex-1 flex-col justify-center gap-5">
-          <span className="self-start rounded-full bg-yellow px-[26px] py-2 text-[34px] font-bold">Pauze</span>
+          <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">Pauze</span>
           {end !== null ? (
             <>
-              <span className="text-[36px] text-muted">
+              <span className="text-[2.25rem] text-muted">
                 {nextRound ? `Ronde ${nextRound} begint ${left > 0 ? "over" : "zo"}` : left > 0 ? "We gaan verder over" : "We gaan zo verder"}
               </span>
-              <span className="text-[210px] font-semibold leading-[0.85] tracking-[-0.05em] tabular-nums">{formatClock(left)}</span>
+              <span className="text-[13.125rem] font-semibold leading-[0.85] tracking-[-0.05em] tabular-nums">{formatClock(left)}</span>
             </>
           ) : (
-            <span className="text-[170px] font-semibold leading-[0.95] tracking-[-0.04em]">Pauze</span>
+            <span className="text-[10.625rem] font-semibold leading-[0.95] tracking-[-0.04em]">Pauze</span>
           )}
         </div>
         {heat && (
-          <div className="flex flex-none flex-col gap-4 rounded-[44px] bg-ink px-12 py-10 text-white">
-            <span className="self-start rounded-full bg-yellow px-[22px] py-1.5 text-[30px] font-bold text-ink">Als eerste</span>
-            <span className="text-balance text-[60px] font-semibold leading-[1.05] tracking-[-0.03em]">{heatNames(state, heat)}</span>
-            <span className="text-[30px] text-white/60">{heatMeta(state, heat)}</span>
+          <div className="flex flex-none flex-col gap-4 rounded-[2.75rem] bg-ink px-12 py-10 text-white">
+            <span className="self-start rounded-full bg-yellow px-[1.375rem] py-1.5 text-[1.875rem] font-bold text-ink">Als eerste</span>
+            <span className="text-balance text-[3.75rem] font-semibold leading-[1.05] tracking-[-0.03em]">{heatNames(state, heat)}</span>
+            <span className="text-[1.875rem] text-white/60">{heatMeta(state, heat)}</span>
           </div>
         )}
       </div>
       <div className="flex min-h-0 flex-col gap-5">
         <div className="flex items-baseline justify-between">
-          <span className="text-[40px] font-semibold tracking-[-0.02em]">{doneRounds > 0 ? `Voorlopige stand na ronde ${doneRounds}` : "Voorlopige stand"}</span>
-          <span className="text-[26px] text-subtle">
+          <span className="text-[2.5rem] font-semibold tracking-[-0.02em]">{doneRounds > 0 ? `Voorlopige stand na ronde ${doneRounds}` : "Voorlopige stand"}</span>
+          <span className="text-[1.625rem] text-subtle">
             {doneRounds * knockdowns} van {rounds * knockdowns} passages
           </span>
         </div>
@@ -439,14 +444,14 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
           {ranks.map((rank) => {
             const rows = standingsFor(state, rank.code).rows.filter((r) => !r.withdrawn);
             return (
-              <div key={rank.code} className="flex min-h-0 min-w-0 flex-col gap-1.5 rounded-[32px] border-[3px] border-border bg-surface px-[30px] pb-[18px] pt-5">
-                <span className="flex-none text-[26px] font-semibold text-muted">{rank.name}</span>
+              <div key={rank.code} className="flex min-h-0 min-w-0 flex-col gap-1.5 rounded-[2rem] border-[0.1875rem] border-border bg-surface px-[1.875rem] pb-[1.125rem] pt-5">
+                <span className="flex-none text-[1.625rem] font-semibold text-muted">{rank.name}</span>
                 <Marquee>
                   {rows.map((r) => (
                     <div key={r.entryId} className="flex items-baseline gap-4 leading-[1.18]">
-                      <span className={`w-10 text-[28px] font-semibold tabular-nums ${r.position === 1 ? "text-ink" : "text-subtle"}`}>{r.position ?? "–"}</span>
-                      <span className={`min-w-0 flex-1 truncate text-[30px] ${r.position === 1 ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
-                      <span className="text-[32px] font-semibold tabular-nums">{r.total}</span>
+                      <span className={`w-10 text-[1.75rem] font-semibold tabular-nums ${r.position === 1 ? "text-ink" : "text-subtle"}`}>{r.position ?? "–"}</span>
+                      <span className={`min-w-0 flex-1 truncate text-[1.875rem] ${r.position === 1 ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
+                      <span className="text-[2rem] font-semibold tabular-nums">{r.total}</span>
                     </div>
                   ))}
                 </Marquee>
@@ -494,7 +499,8 @@ function Marquee({ children }: { children: ReactNode }) {
     const step = (t: number) => {
       const dt = last === null ? 0 : Math.min(64, t - last);
       last = t;
-      const height = (tr.firstElementChild as HTMLElement).offsetHeight + 4;
+      // Measured on the page, so in px: the copy's height plus the gap to the next copy.
+      const height = (tr.firstElementChild as HTMLElement).offsetHeight + parseFloat(getComputedStyle(tr).rowGap || "0");
       hold -= dt;
       if (hold <= 0) offset = (offset + dt * 0.03) % height;
       tr.style.transform = `translateY(${-offset}px)`;
@@ -504,7 +510,7 @@ function Marquee({ children }: { children: ReactNode }) {
     return () => cancelAnimationFrame(raf);
   }, [overflow]);
 
-  const mask = overflow ? "linear-gradient(#000 0, #000 calc(100% - 32px), transparent)" : undefined;
+  const mask = overflow ? "linear-gradient(#000 0, #000 calc(100% - 2rem), transparent)" : undefined;
   return (
     <div ref={viewport} className="min-h-0 flex-1 overflow-hidden" style={{ maskImage: mask, WebkitMaskImage: mask }}>
       <div ref={track} className="flex flex-col gap-1 will-change-transform">
@@ -552,16 +558,16 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
     <>
       <div className="flex flex-none items-end justify-between gap-10">
         <div className="flex flex-col gap-5">
-          <span className="self-start rounded-full bg-yellow px-[26px] py-2 text-[34px] font-bold">Afkamping · {rankName(state, draft.rankCode)}</span>
-          <span className="text-[110px] font-semibold leading-[0.95] tracking-[-0.04em]">{lastId ? `Geroepen: ${label(lastId)}` : "Wachten op het eerste doel"}</span>
+          <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">Afkamping · {rankName(state, draft.rankCode)}</span>
+          <span className="text-[6.875rem] font-semibold leading-[0.95] tracking-[-0.04em]">{lastId ? `Geroepen: ${label(lastId)}` : "Wachten op het eerste doel"}</span>
         </div>
-        <div className="flex flex-col items-end gap-[14px]">
-          <span className="text-[30px] text-muted">
+        <div className="flex flex-col items-end gap-[0.875rem]">
+          <span className="text-[1.875rem] text-muted">
             {draft.calls.length} van {setup.targets.length} doelen geroepen
           </span>
           <div className="flex gap-2.5">
             {draft.calls.map((c, i) => (
-              <span key={c.targetId} className={`rounded-full px-[18px] py-1.5 text-[26px] font-semibold ${i === last ? "bg-yellow" : "bg-fill"}`}>
+              <span key={c.targetId} className={`rounded-full px-[1.125rem] py-1.5 text-[1.625rem] font-semibold ${i === last ? "bg-yellow" : "bg-fill"}`}>
                 {label(c.targetId)}
               </span>
             ))}
@@ -572,10 +578,10 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
         {draft.participants.map((p) => {
           const result = lastId ? draft.results[p][last] : null;
           return (
-            <section key={p} className="flex min-w-0 flex-col items-center gap-5 rounded-[44px] bg-ink px-14 py-11 text-white">
+            <section key={p} className="flex min-w-0 flex-col items-center gap-5 rounded-[2.75rem] bg-ink px-14 py-11 text-white">
               <span
                 className="max-w-full truncate font-semibold leading-[1.05] tracking-[-0.03em]"
-                style={{ fontSize: draft.participants.length > 2 ? 56 : 72 }}
+                style={{ fontSize: draft.participants.length > 2 ? "3.5rem" : "4.5rem" }}
               >
                 {tvName(state, p)}
               </span>
@@ -583,7 +589,7 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
                 <TvPlates
                   setup={setup}
                   scale={0.9}
-                  gap={18}
+                  gap="1.125rem"
                   look={(id) => {
                     const i = draft.calls.findIndex((c) => c.targetId === id);
                     const called = i >= 0;
@@ -593,30 +599,30 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
                       background: hit ? "var(--yellow)" : "transparent",
                       color: hit ? "var(--ink)" : called ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.2)",
                       borderColor: isLast || hit ? "var(--yellow)" : called ? "rgba(255,255,255,.35)" : "rgba(255,255,255,.12)",
-                      borderWidth: isLast ? "7px" : "3px",
+                      borderWidth: isLast ? "0.4375rem" : "0.1875rem",
                     };
                   }}
                 />
               </div>
               <div className="flex items-baseline gap-6">
-                <span className="text-[150px] font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums">{iterationScore(iteration, p)}</span>
-                {lastId && result !== null && <span className="text-[30px] text-white/60">{`${label(lastId)} ${result ? "raak" : "mis"}`}</span>}
+                <span className="text-[9.375rem] font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums">{iterationScore(iteration, p)}</span>
+                {lastId && result !== null && <span className="text-[1.875rem] text-white/60">{`${label(lastId)} ${result ? "raak" : "mis"}`}</span>}
               </div>
             </section>
           );
         })}
       </div>
-      <div className="flex flex-none gap-9 text-[26px] text-muted">
+      <div className="flex flex-none gap-9 text-[1.625rem] text-muted">
         <span className="flex items-center gap-3">
-          <span className="size-[22px] rounded-full bg-yellow" />
+          <span className="size-[1.375rem] rounded-full bg-yellow" />
           raak
         </span>
         <span className="flex items-center gap-3">
-          <span className="box-border size-[22px] rounded-full border-[3px] border-muted opacity-50" />
+          <span className="box-border size-[1.375rem] rounded-full border-[0.1875rem] border-muted opacity-50" />
           mis
         </span>
         <span className="flex items-center gap-3">
-          <span className="box-border size-[22px] rounded-full border-[5px] border-yellow bg-ink" />
+          <span className="box-border size-[1.375rem] rounded-full border-[0.3125rem] border-yellow bg-ink" />
           zojuist geroepen
         </span>
         <span>· nog niet geroepen doelen staan gedimd</span>
@@ -639,16 +645,16 @@ function Centered({
   return (
     <>
       <div className="flex flex-1 flex-col justify-center gap-7 px-5">
-        {kicker && <span className="self-start rounded-full bg-yellow px-[26px] py-2 text-[34px] font-bold">{kicker}</span>}
-        <span className="text-balance text-[170px] font-semibold leading-[0.95] tracking-[-0.04em]">{title}</span>
-        {sub && <span className="max-w-[1400px] text-pretty text-[40px] text-muted">{sub}</span>}
+        {kicker && <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">{kicker}</span>}
+        <span className="text-balance text-[10.625rem] font-semibold leading-[0.95] tracking-[-0.04em]">{title}</span>
+        {sub && <span className="max-w-[87.5rem] text-pretty text-[2.5rem] text-muted">{sub}</span>}
       </div>
       {bar && (
-        <div className="flex flex-none items-center gap-14 rounded-[44px] bg-ink px-16 py-11 text-white">
-          <span className="whitespace-nowrap rounded-full bg-yellow px-[26px] py-2 text-[34px] font-bold text-ink">{bar.label}</span>
+        <div className="flex flex-none items-center gap-14 rounded-[2.75rem] bg-ink px-16 py-11 text-white">
+          <span className="whitespace-nowrap rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">{bar.label}</span>
           <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <span className="text-balance text-[68px] font-semibold leading-[1.05] tracking-[-0.03em]">{bar.names}</span>
-            <span className="text-[32px] text-white/60">{bar.meta}</span>
+            <span className="text-balance text-[4.25rem] font-semibold leading-[1.05] tracking-[-0.03em]">{bar.names}</span>
+            <span className="text-[2rem] text-white/60">{bar.meta}</span>
           </div>
         </div>
       )}

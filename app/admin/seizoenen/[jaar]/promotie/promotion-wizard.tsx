@@ -76,7 +76,7 @@ export function PromotionWizard({ year, ranks, rows }: { year: number; ranks: Ra
                       <Tag tone={tone}>{tag}</Tag>
                       {changed && <span className="text-xs text-faint">aangepast</span>}
                     </span>
-                    <div role="group" aria-label={`Klasse ${year + 1} voor ${r.name}`} className="flex gap-[2px]">
+                    <div role="group" aria-label={`Klasse ${year + 1} voor ${r.name}`} className="flex gap-[0.125rem]">
                       {ranks.map((x) => (
                         <Chip key={x.code} size="sm" on={t === x.code} title={x.name} onClick={() => setDecisions((d) => ({ ...d, [r.shooterId]: x.code }))}>
                           {rankShortName(x.name)}

@@ -63,11 +63,11 @@ export function Panel({
 
 /** A keyboard key hint. */
 export function Kbd({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <span className={`rounded-[0.3125rem] border-[1.5px] border-current px-[0.4375rem] py-0.5 font-mono text-xs font-medium ${className}`}>{children}</span>;
+  return <span className={`rounded-[0.3125rem] border-[0.09375rem] border-current px-[0.4375rem] py-0.5 font-mono text-xs font-medium ${className}`}>{children}</span>;
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="rounded-[1.5rem] border-[1.5px] border-dashed border-plate bg-surface p-8 text-center text-[0.9375rem] text-muted">{children}</p>;
+  return <p className="rounded-[1.5rem] border-[0.09375rem] border-dashed border-plate bg-surface p-8 text-center text-[0.9375rem] text-muted">{children}</p>;
 }
 
 /** A choice among a few options shown side by side, e.g. a rank or a setup. */
@@ -82,7 +82,7 @@ export function Chip({
       type="button"
       aria-pressed={on}
       {...props}
-      className={`cursor-pointer whitespace-nowrap rounded-full border-[1.5px] font-semibold transition-colors disabled:cursor-default ${
+      className={`cursor-pointer whitespace-nowrap rounded-full border-[0.09375rem] font-semibold transition-colors disabled:cursor-default ${
         size === "sm" ? "px-[0.5625rem] py-[0.3125rem] text-xs" : "px-[0.6875rem] py-1.5 text-[0.8125rem]"
       } ${on ? "border-ink bg-ink text-white" : "border-border bg-surface text-ink enabled:hover:border-ink"} ${className}`}
     />
@@ -111,7 +111,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={`flex gap-[2px] self-start rounded-full border-[1.5px] border-border bg-surface p-[0.1875rem] ${disabled ? "opacity-50" : ""} ${className}`}
+      className={`flex gap-[0.125rem] self-start rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] ${disabled ? "opacity-50" : ""} ${className}`}
     >
       {options.map((o) => {
         const on = o.value === value;

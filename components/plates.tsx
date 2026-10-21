@@ -16,7 +16,7 @@ export interface PlateLook {
   background: string;
   color: string;
   borderColor: string;
-  /** CSS length, default 2px. */
+  /** CSS length, default 0.125rem. */
   borderWidth?: string;
 }
 
@@ -48,7 +48,7 @@ export function Plate({
     background: look.background,
     color: look.color,
     borderColor: look.borderColor,
-    borderWidth: look.borderWidth ?? "2px",
+    borderWidth: look.borderWidth ?? "0.125rem",
   };
   const className =
     "box-border grid shrink-0 place-items-center rounded-full border-solid font-bold tabular-nums leading-none transition-[background-color,border-color,color] duration-150";

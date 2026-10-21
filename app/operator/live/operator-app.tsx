@@ -121,7 +121,7 @@ function Shell() {
             type="button"
             onClick={() => openTvWindow(id)}
             title="TV-scherm openen"
-            className="cursor-pointer rounded-full border-[1.5px] border-ink px-[0.875rem] py-1.5 text-[0.8125rem] font-semibold hover:bg-hover"
+            className="cursor-pointer rounded-full border-[0.09375rem] border-ink px-[0.875rem] py-1.5 text-[0.8125rem] font-semibold hover:bg-hover"
           >
             TV
           </button>
@@ -240,7 +240,7 @@ function PauseTimer() {
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-full border-[1.5px] border-border py-[0.1875rem] pl-[0.875rem] pr-[0.1875rem] text-xs font-semibold ${
+      className={`flex items-center gap-2 rounded-full border-[0.09375rem] border-border py-[0.1875rem] pl-[0.875rem] pr-[0.1875rem] text-xs font-semibold ${
         done ? "bg-yellow" : "bg-surface"
       }`}
     >
@@ -263,7 +263,7 @@ function PauseTimer() {
                 pauseEndsAt: new Date(Math.max(Date.parse(current.pauseEndsAt ?? ""), Date.now()) + 5 * 60_000).toISOString(),
               }))
             }
-            className="cursor-pointer rounded-full border-[1.5px] border-border px-2.5 py-[0.3125rem]"
+            className="cursor-pointer rounded-full border-[0.09375rem] border-border px-2.5 py-[0.3125rem]"
           >
             +5 min
           </button>
@@ -309,7 +309,7 @@ function StatusControl() {
   return (
     <div className="flex items-center gap-2.5">
       <span className="text-xs text-faint">Fase</span>
-      <div role="radiogroup" aria-label="Fase" className="flex gap-0.5 rounded-full border-[1.5px] border-border bg-surface p-[0.1875rem] text-xs font-semibold">
+      <div role="radiogroup" aria-label="Fase" className="flex gap-0.5 rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] text-xs font-semibold">
         {STATUSES.map((s) => {
           const on = state.status === s.id;
           return (

@@ -176,7 +176,7 @@ function Check({
     <div className={`flex items-start gap-[0.875rem] rounded-2xl px-4 py-[0.875rem] ${ok === false ? "bg-yellow-light" : "bg-background"}`}>
       <span
         aria-hidden
-        className={`grid size-6 flex-none place-items-center rounded-full border-[1.5px] text-xs font-bold ${
+        className={`grid size-6 flex-none place-items-center rounded-full border-[0.09375rem] text-xs font-bold ${
           ok ? "border-ink bg-ink text-yellow" : ok === false ? "border-ink bg-surface" : "border-plate bg-surface"
         }`}
       >

@@ -12,7 +12,7 @@ const TYPES = [
   { value: "average", label: "Gemiddelde" },
 ] as const;
 
-const number = "w-[5.5rem] rounded-xl border-[1.5px] border-border bg-background px-3 py-[0.4375rem] text-[0.9375rem] outline-none focus:border-ink";
+const number = "w-[5.5rem] rounded-xl border-[0.09375rem] border-border bg-background px-3 py-[0.4375rem] text-[0.9375rem] outline-none focus:border-ink";
 
 export function RuleForm({ year, rule }: { year: number; rule: SeasonRule }) {
   const { state, pending, onSubmit, clear } = useSubmit(updateRule);

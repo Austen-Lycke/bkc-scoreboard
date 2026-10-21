@@ -61,7 +61,7 @@ export function ShooterList({
           onChange={(e) => setQ(e.target.value)}
           placeholder="Zoek op naam…"
           aria-label="Zoek op naam"
-          className="w-64 rounded-[0.875rem] border-[1.5px] border-border bg-surface px-[0.875rem] py-2.5 text-[0.9375rem] outline-none focus:border-ink"
+          className="w-64 rounded-[0.875rem] border-[0.09375rem] border-border bg-surface px-[0.875rem] py-2.5 text-[0.9375rem] outline-none focus:border-ink"
         />
         <div className="flex flex-wrap gap-1" role="group" aria-label="Klasse">
           {filters.map((r) => (

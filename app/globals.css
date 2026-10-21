@@ -62,7 +62,7 @@
   --color-miss: var(--subtle);
   --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
-  --radius-pill: 99px;
+  --radius-pill: 100rem;
 }
 
 body {
@@ -78,6 +78,6 @@ button {
 }
 
 :where(button, [role="button"], a):focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
+  outline: 0.125rem solid var(--ink);
+  outline-offset: 0.125rem;
 }

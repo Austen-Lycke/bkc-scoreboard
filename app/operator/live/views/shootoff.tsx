@@ -21,7 +21,7 @@ export function ShootoffView() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-8 pb-8 pt-2">
       <h2 className="px-1 text-[1.375rem] font-semibold">Afkamping</h2>
       {pending.length === 0 && (
-        <div className="rounded-[1.5rem] border-[1.5px] border-dashed border-plate bg-surface p-8 text-center text-[0.9375rem] text-muted">
+        <div className="rounded-[1.5rem] border-[0.09375rem] border-dashed border-plate bg-surface p-8 text-center text-[0.9375rem] text-muted">
           Geen gelijke standen die afgekampt moeten worden. Afkamping kan pas als een klasse alle passages geschoten heeft.
         </div>
       )}
@@ -224,12 +224,12 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
                 {row.map((t) => {
                   const isLast = last >= 0 && draft.calls[last].targetId === t.id;
                   const was = called.has(t.id) && !isLast;
-                  const d = Math.round(t.sizeMm * 0.5);
+                  const d = (t.sizeMm * 0.5) / 16;
                   return (
                     <Plate
                       key={t.id}
-                      size={`${d / 16}rem`}
-                      fontSize={`${Math.max(12, Math.round(d * 0.34)) / 16}rem`}
+                      size={`${d.toFixed(3)}rem`}
+                      fontSize={`${Math.max(0.75, d * 0.34).toFixed(3)}rem`}
                       look={{
                         background: isLast ? "var(--yellow)" : was ? "var(--fill)" : "var(--surface)",
                         color: was ? "var(--faint)" : "var(--ink)",
@@ -255,7 +255,7 @@ function ResultButton({ on, hit, onClick, children }: { on: boolean; hit?: boole
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`cursor-pointer rounded-full border-[1.5px] px-3 py-[0.4375rem] text-[0.8125rem] font-bold ${
+      className={`cursor-pointer rounded-full border-[0.09375rem] px-3 py-[0.4375rem] text-[0.8125rem] font-bold ${
         on ? `border-ink bg-ink ${hit ? "text-yellow" : "text-white"}` : "border-border bg-surface hover:border-ink"
       }`}
     >

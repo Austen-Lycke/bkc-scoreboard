@@ -78,7 +78,7 @@ export function OrderView() {
                     <button
                       type="button"
                       onClick={restore}
-                      className="cursor-pointer rounded-full border-[1.5px] border-border px-2.5 py-[0.1875rem] text-xs font-semibold hover:border-ink"
+                      className="cursor-pointer rounded-full border-[0.09375rem] border-border px-2.5 py-[0.1875rem] text-xs font-semibold hover:border-ink"
                     >
                       Automatisch herstellen
                     </button>
@@ -98,7 +98,7 @@ export function OrderView() {
                     })
                     .join(" · ");
                   return (
-                    <div key={h} className={`overflow-hidden rounded-2xl border-[1.5px] ${now ? "border-yellow bg-yellow-light" : "border-divider bg-background"}`}>
+                    <div key={h} className={`overflow-hidden rounded-2xl border-[0.09375rem] ${now ? "border-yellow bg-yellow-light" : "border-divider bg-background"}`}>
                       <div className="flex justify-between px-[0.875rem] pb-1 pt-2 text-xs font-semibold text-muted">
                         <span>Beurt {h + 1}</span>
                         <span className={now ? "text-ink" : "text-faint"}>{status}</span>
