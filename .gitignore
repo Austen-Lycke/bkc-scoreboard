@@ -49,3 +49,8 @@ skills-lock.json
 
 # database backups (scripts/backup.ts): members and password hashes, never commit
 /backups
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/

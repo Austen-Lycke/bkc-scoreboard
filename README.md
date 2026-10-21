@@ -49,6 +49,9 @@ Admins can also manage accounts in `/admin/gebruikers`.
 
 - `lib/scoring/` — pure rules engine (knockdown scoring, pair schedule, standings, afkamping,
   season ranking, promotions). Used by the offline operator app and the server alike. `npm test`.
+- `e2e/` — browser tests on the demo competition (operator → TV, undo, touch sizes), on a laptop and
+  a tablet viewport. `npx playwright install chromium` once, then `npm run test:e2e` (starts or
+  reuses `npm run dev`; needs no database or login).
 - `lib/db/` — Drizzle schema and migrations (`npm run db:generate` after schema changes).
 - `lib/auth.ts` — Better Auth (email/password, roles `admin` / `operator`, no public sign-up).
 - `lib/offline/`, `app/operator/live`, `app/tv` — the offline operator app and the venue TV (IndexedDB,
