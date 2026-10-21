@@ -33,17 +33,17 @@ export default async function AdminHome() {
   ];
 
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-3xl font-semibold tracking-tight">Beheer</h1>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <>
+      <h1 className="px-1 text-[1.375rem] font-semibold">Overzicht</h1>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,15rem),1fr))] gap-4">
         {cards.map((c) => (
-          <Link key={c.href} href={c.href} className="rounded-xl border border-border bg-surface p-5 hover:border-ink">
-            <p className="text-sm text-muted">{c.label}</p>
-            <p className="mt-1 text-3xl font-semibold tabular-nums">{c.value}</p>
-            <p className="mt-2 text-sm text-muted">{c.detail}</p>
+          <Link key={c.href} href={c.href} className="flex flex-col gap-1.5 rounded-[1.5rem] border border-border bg-surface px-6 py-[1.375rem] transition-colors hover:border-ink">
+            <span className="text-sm text-muted">{c.label}</span>
+            <span className="text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.03em] tabular-nums">{c.value}</span>
+            <span className="text-pretty text-[0.8125rem] text-muted">{c.detail}</span>
           </Link>
         ))}
       </div>
-    </div>
+    </>
   );
 }

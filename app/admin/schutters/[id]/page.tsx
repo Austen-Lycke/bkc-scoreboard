@@ -1,12 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { textLinkClass } from "@/components/styles";
 import { getDb, schema } from "@/lib/db";
-import { shooterIdsWithEntries } from "@/lib/server/admin";
 import { currentSeasonYear, rankDefs } from "@/lib/server/season";
 import { requireRole } from "@/lib/session";
+import { PageHead } from "../../kit";
 import { ShooterForm } from "../shooter-form";
 
 export const metadata: Metadata = { title: "Schutter bewerken" };
@@ -18,30 +19,24 @@ export default async function EditShooterPage({ params }: PageProps<"/admin/schu
   const db = getDb();
   const [year, ranks, shooter] = await Promise.all([currentSeasonYear(), rankDefs(), db.query.shooters.findFirst({ where: eq(schema.shooters.id, id) })]);
   if (!shooter) notFound();
-  const [seasonRank, withEntries] = await Promise.all([
+  const [seasonRank, [{ n: competitions }]] = await Promise.all([
     db.query.shooterSeasonRanks.findFirst({ where: and(eq(schema.shooterSeasonRanks.shooterId, id), eq(schema.shooterSeasonRanks.seasonYear, year)) }),
-    shooterIdsWithEntries([id]),
+    db.select({ n: count() }).from(schema.entries).where(eq(schema.entries.shooterId, id)),
   ]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/admin/schutters" className="text-sm text-muted hover:text-foreground">
-          ← Schutters
-        </Link>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          {shooter.firstName} {shooter.lastName}
-        </h1>
-        <Link href={`/schutter/${id}`} className="text-sm underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
+    <>
+      <PageHead back={{ href: "/admin/schutters", label: "Schutters" }} title={`${shooter.firstName} ${shooter.lastName}`}>
+        <Link href={`/schutter/${id}`} className={`self-start ${textLinkClass}`}>
           Publiek profiel bekijken
         </Link>
-      </div>
+      </PageHead>
       <ShooterForm
-        values={{ id, firstName: shooter.firstName, lastName: shooter.lastName, birthdate: shooter.birthdate ?? "", active: shooter.active, notes: shooter.notes ?? "", rankCode: seasonRank?.rankCode ?? "" }}
-        ranks={ranks}
+        values={{ id, firstName: shooter.firstName, lastName: shooter.lastName, active: shooter.active, notes: shooter.notes ?? "", rankCode: seasonRank?.rankCode ?? "" }}
+        ranks={ranks.map(({ code, name }) => ({ code, name }))}
         seasonYear={year}
-        canDelete={!withEntries.has(id)}
+        competitions={competitions}
       />
-    </div>
+    </>
   );
 }

@@ -19,9 +19,11 @@ export interface PromotionRow {
 export async function promotionProposal(year: number) {
   const db = getDb();
   const { ranks, standings, seasonRanks, people } = await computeSeason(year);
+  // Birthdates are no longer kept up to date, so juniors always stay junior here: the board moves
+  // whoever turns 18 by hand.
   const shooters = seasonRanks
     .filter((r) => people.get(r.shooterId)?.active)
-    .map((r) => ({ shooterId: r.shooterId, rankCode: r.rankCode, birthdate: people.get(r.shooterId)!.birthdate }));
+    .map((r) => ({ shooterId: r.shooterId, rankCode: r.rankCode, birthdate: null }));
   const proposals = proposeRanks({ ranks, shooters, standings, nextSeasonYear: year + 1 });
   const rowOf = new Map([...standings.values()].flat().map((r) => [r.shooterId, r]));
 

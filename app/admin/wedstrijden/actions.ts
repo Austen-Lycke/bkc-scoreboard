@@ -5,6 +5,7 @@ import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { setFlash } from "@/lib/server/flash";
 import { tags } from "@/lib/server/tags";
 import { requireRole } from "@/lib/session";
 
@@ -20,11 +21,6 @@ const input = z.object({
   name: z.string().trim().min(3, "Geef de wedstrijd een naam").max(120),
   date: z.iso.date("Kies een datum"),
   location: z.string().trim().max(120).optional(),
-  fee: z
-    .string()
-    .trim()
-    .transform((v) => (v === "" ? 0 : Math.round(Number(v.replace(",", ".")) * 100)))
-    .pipe(z.number().int().min(0, "Ongeldig bedrag").max(100_000, "Ongeldig bedrag")),
   countsForSeason: z.boolean(),
 });
 
@@ -40,7 +36,6 @@ export async function updateCompetition(_prev: FormState, form: FormData): Promi
     name: form.get("name"),
     date: form.get("date"),
     location: form.get("location") || undefined,
-    fee: String(form.get("fee") ?? ""),
     countsForSeason: form.get("countsForSeason") === "on",
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
@@ -70,12 +65,12 @@ export async function updateCompetition(_prev: FormState, form: FormData): Promi
   }
   await db
     .update(competitions)
-    .set({ name: data.name, date: data.date, location: data.location ?? null, feeCents: data.fee, countsForSeason: data.countsForSeason, seasonYear, setupByRank })
+    .set({ name: data.name, date: data.date, location: data.location ?? null, countsForSeason: data.countsForSeason, seasonYear, setupByRank })
     .where(eq(competitions.id, comp.id));
 
   for (const tag of [tags.competitions, tags.competition(comp.id), tags.season(comp.seasonYear), tags.season(seasonYear)]) updateTag(tag);
   refresh();
-  return { message: "Opgeslagen. Laat de wedstrijdleiding de gegevens opnieuw downloaden op de laptop (Voorbereiden)." };
+  return { message: "Opgeslagen" };
 }
 
 export async function releaseLease(id: string): Promise<FormState> {
@@ -99,5 +94,6 @@ export async function deleteCompetition(id: string, typedName?: string): Promise
   }
   await db.delete(competitions).where(eq(competitions.id, id)); // cascades to entries, passes, events…
   for (const tag of [tags.competitions, tags.competition(id), tags.season(comp.seasonYear), tags.shooters]) updateTag(tag);
+  await setFlash(`"${comp.name}" is verwijderd.`);
   redirect("/admin/wedstrijden");
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { entryAdultRank } from "@/lib/scoring";
 import { currentSeasonYear, rankDefs } from "@/lib/server/season";
 import { requireRole } from "@/lib/session";
+import { PageHead } from "../../kit";
 import { ShooterForm } from "../shooter-form";
 
 export const metadata: Metadata = { title: "Nieuwe schutter" };
@@ -9,9 +11,14 @@ export default async function NewShooterPage() {
   await requireRole("admin");
   const [year, ranks] = await Promise.all([currentSeasonYear(), rankDefs()]);
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Nieuwe schutter</h1>
-      <ShooterForm values={{ firstName: "", lastName: "", birthdate: "", active: true, notes: "", rankCode: "" }} ranks={ranks} seasonYear={year} canDelete={false} />
-    </div>
+    <>
+      <PageHead back={{ href: "/admin/schutters", label: "Schutters" }} title="Nieuwe schutter" />
+      {/* Without a birthdate there's no age to go by: a new shooter starts in the lowest adult rank. */}
+      <ShooterForm
+        values={{ firstName: "", lastName: "", active: true, notes: "", rankCode: entryAdultRank(ranks).code }}
+        ranks={ranks.map(({ code, name }) => ({ code, name }))}
+        seasonYear={year}
+      />
+    </>
   );
 }

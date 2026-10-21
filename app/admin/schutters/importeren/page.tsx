@@ -1,31 +1,29 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { shooterKey } from "@/lib/admin/import";
 import { getDb, schema } from "@/lib/db";
-import { currentSeasonYear, rankDefs } from "@/lib/server/season";
+import { entryAdultRank } from "@/lib/scoring";
+import { rankDefs } from "@/lib/server/season";
 import { requireRole } from "@/lib/session";
+import { Lead, PageHead } from "../../kit";
 import { ImportForm } from "./import-form";
 
 export const metadata: Metadata = { title: "Ledenlijst importeren" };
 
 export default async function ImportPage() {
   await requireRole("admin");
-  const [year, ranks, shooters] = await Promise.all([currentSeasonYear(), rankDefs(), getDb().select().from(schema.shooters)]);
+  const [ranks, shooters] = await Promise.all([
+    rankDefs(),
+    getDb().select({ firstName: schema.shooters.firstName, lastName: schema.shooters.lastName }).from(schema.shooters),
+  ]);
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/admin/schutters" className="text-sm text-muted hover:text-foreground">
-          ← Schutters
-        </Link>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Ledenlijst importeren</h1>
-        <p className="mt-2 max-w-2xl text-muted">
-          Gebruik een CSV-bestand (vanuit Excel: <em>Opslaan als → CSV</em>) met als eerste rij de kolommen{" "}
-          <strong>Voornaam</strong>, <strong>Achternaam</strong>, <strong>Geboortedatum</strong> en optioneel <strong>Klasse</strong>. Zonder
-          klasse wordt iemand onder 18 Junior en anders {ranks.find((r) => !r.isJunior)?.name}. Wie al bestaat (zelfde naam en
-          geboortedatum) wordt overgeslagen. De klasse geldt voor seizoen {year}.
-        </p>
-      </div>
-      <ImportForm ranks={ranks} seasonYear={year} existingKeys={shooters.map(shooterKey)} />
-    </div>
+    <>
+      <PageHead back={{ href: "/admin/schutters", label: "Schutters" }} title="Ledenlijst importeren">
+        <Lead>
+          Kolommen: Voornaam; Achternaam; Klasse. Zonder klasse komt een schutter in {entryAdultRank(ranks).name}. Wie al bestaat, wordt
+          overgeslagen.
+        </Lead>
+      </PageHead>
+      <ImportForm ranks={ranks} existingKeys={shooters.map(shooterKey)} />
+    </>
   );
 }

@@ -26,7 +26,7 @@
   --alert: #d2492a;
   --live: #e2483d;
 
-  /* Older names, still used by the admin screens. */
+  /* Older names, still used by the login, operator start page and parts of the website. */
   --foreground: var(--ink);
   --navy: var(--ink);
   --gold: var(--yellow);

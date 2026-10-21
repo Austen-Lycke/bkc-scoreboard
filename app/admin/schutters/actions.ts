@@ -1,11 +1,12 @@
 "use server";
 
-import { and, count, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { shooterKey } from "@/lib/admin/import";
 import { getDb, schema } from "@/lib/db";
+import { setFlash } from "@/lib/server/flash";
 import { currentSeasonYear } from "@/lib/server/season";
 import { tags } from "@/lib/server/tags";
 import { requireRole } from "@/lib/session";
@@ -21,7 +22,6 @@ const shooterInput = z.object({
   id: z.uuid().optional(),
   firstName: z.string().trim().min(1, "Voornaam is verplicht").max(80),
   lastName: z.string().trim().min(1, "Achternaam is verplicht").max(80),
-  birthdate: z.iso.date("Ongeldige geboortedatum").nullable(),
   active: z.boolean(),
   notes: z.string().trim().max(500).optional(),
   rankCode: z.string().optional(),
@@ -38,7 +38,6 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
     id: form.get("id") || undefined,
     firstName: form.get("firstName"),
     lastName: form.get("lastName"),
-    birthdate: form.get("birthdate") || null,
     active: form.get("active") === "on",
     notes: form.get("notes") || undefined,
     rankCode: form.get("rankCode") || undefined,
@@ -52,12 +51,13 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
     await db
       .select()
       .from(shooters)
-      .where(and(sql`lower(${shooters.firstName}) = lower(${input.firstName})`, sql`lower(${shooters.lastName}) = lower(${input.lastName})`, input.birthdate ? eq(shooters.birthdate, input.birthdate) : isNull(shooters.birthdate)))
+      .where(and(sql`lower(${shooters.firstName}) = lower(${input.firstName})`, sql`lower(${shooters.lastName}) = lower(${input.lastName})`))
   ).filter((s) => s.id !== input.id);
-  if (sameKey.length) return { error: "Er bestaat al een schutter met deze naam en geboortedatum." };
+  if (sameKey.length) return { error: "Er bestaat al een schutter met deze naam. Voeg bijvoorbeeld een initiaal toe om ze uit elkaar te houden." };
 
+  // A birthdate from an older import stays as it is; the form no longer asks for it.
   const id = input.id ?? crypto.randomUUID();
-  const values = { firstName: input.firstName, lastName: input.lastName, birthdate: input.birthdate, active: input.active, notes: input.notes ?? null };
+  const values = { firstName: input.firstName, lastName: input.lastName, active: input.active, notes: input.notes ?? null };
   if (input.id) await db.update(shooters).set(values).where(eq(shooters.id, id));
   else await db.insert(shooters).values({ id, ...values });
 
@@ -70,6 +70,11 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
     await db.delete(shooterSeasonRanks).where(and(eq(shooterSeasonRanks.shooterId, id), eq(shooterSeasonRanks.seasonYear, year)));
   }
   invalidatePublic(year);
+  if (input.id) {
+    refresh();
+    return { message: "Opgeslagen" };
+  }
+  await setFlash(`${input.firstName} ${input.lastName} is toegevoegd.`);
   redirect("/admin/schutters");
 }
 
@@ -78,8 +83,9 @@ export async function deleteShooter(id: string): Promise<FormState> {
   const db = getDb();
   const [{ n }] = await db.select({ n: count() }).from(entries).where(eq(entries.shooterId, id));
   if (n > 0) return { error: "Deze schutter heeft al wedstrijden geschoten. Zet hem of haar op inactief in plaats van te verwijderen." };
-  await db.delete(shooters).where(eq(shooters.id, id));
+  const [gone] = await db.delete(shooters).where(eq(shooters.id, id)).returning();
   invalidatePublic(await currentSeasonYear());
+  if (gone) await setFlash(`${gone.firstName} ${gone.lastName} is verwijderd.`);
   redirect("/admin/schutters");
 }
 
@@ -88,7 +94,6 @@ const importRows = z
     z.object({
       firstName: z.string().trim().min(1).max(80),
       lastName: z.string().trim().min(1).max(80),
-      birthdate: z.iso.date(),
       rankCode: z.string().min(1),
     }),
   )
@@ -117,7 +122,7 @@ export async function importShooters(rows: unknown): Promise<FormState & { creat
     for (let i = 0; i < fresh.length; i += 500) {
       const chunk = fresh.slice(i, i + 500);
       await db.batch([
-        db.insert(shooters).values(chunk.map(({ id, firstName, lastName, birthdate }) => ({ id, firstName, lastName, birthdate }))),
+        db.insert(shooters).values(chunk.map(({ id, firstName, lastName }) => ({ id, firstName, lastName }))),
         db.insert(shooterSeasonRanks).values(
           chunk.map((s) => ({ shooterId: s.id, seasonYear: year, rankCode: s.rankCode, reason: juniors.has(s.rankCode) ? ("junior" as const) : ("start" as const) })),
         ),

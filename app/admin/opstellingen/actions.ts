@@ -23,5 +23,5 @@ export async function updateSetup(id: string, input: unknown): Promise<{ error?:
   };
   await db.update(schema.setups).set({ definition }).where(eq(schema.setups.id, id));
   refresh();
-  return { message: "Opgeslagen. Geldt voor wedstrijden die je vanaf nu aanmaakt." };
+  return { message: "Opgeslagen" };
 }

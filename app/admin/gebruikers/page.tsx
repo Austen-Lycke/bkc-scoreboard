@@ -2,6 +2,7 @@ import { asc } from "drizzle-orm";
 import type { Metadata } from "next";
 import { getDb, schema } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { Lead, PageHead } from "../kit";
 import { NewUserForm, UserRow } from "./user-forms";
 
 export const metadata: Metadata = { title: "Gebruikers" };
@@ -13,20 +14,21 @@ export default async function UsersPage() {
     .from(schema.user)
     .orderBy(asc(schema.user.name));
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Gebruikers</h1>
-      <p className="max-w-2xl text-muted">
-        <strong>Beheerders</strong> kunnen alles. <strong>Wedstrijdleiding</strong> kan wedstrijden aanmaken en leiden, maar niet aan
-        schutters, seizoenen of accounts.
-      </p>
-      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-        <ul className="divide-y divide-border self-start rounded-xl border border-border bg-surface">
+    <>
+      <PageHead title="Gebruikers">
+        <Lead>
+          <strong className="font-semibold text-ink">Beheerders</strong> kunnen alles. <strong className="font-semibold text-ink">Wedstrijdleiding</strong>{" "}
+          kan wedstrijden aanmaken en leiden, maar niet aan schutters, seizoenen of accounts.
+        </Lead>
+      </PageHead>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <ul className="divide-y divide-divider rounded-[1.5rem] border border-border bg-surface px-2.5 py-1.5">
           {users.map((u) => (
             <UserRow key={u.id} user={u} isSelf={u.id === session?.user.id} />
           ))}
         </ul>
         <NewUserForm />
       </div>
-    </div>
+    </>
   );
 }

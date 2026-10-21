@@ -25,3 +25,13 @@ export const STATUS_LABEL: Record<string, string> = {
 
 /** 1980-12-31 → 31/12/1980 */
 export const formatBelgianDate = (date: string) => date.split("-").reverse().join("/");
+
+const DAYS = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+const MONTHS = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+
+/** 2026-11-14 → "za 14 nov", with the year when asked: "za 14 nov 2026". */
+export function formatCompactDate(date: string, withYear = false) {
+  const [y, m, d] = date.split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return `${DAYS[day]} ${d} ${MONTHS[m - 1]}${withYear ? ` ${y}` : ""}`;
+}

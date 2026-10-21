@@ -1,16 +1,20 @@
 import { parseCsv } from "@/lib/csv";
-import { initialRank, type RankDef } from "@/lib/scoring";
+import { entryAdultRank, type RankDef } from "@/lib/scoring";
 
-/** Member list import: validates a CSV from the club's own records before anything is written. */
+/**
+ * Member list import: validates a CSV from the club's own records before anything is written.
+ * Columns: Voornaam; Achternaam; optional Klasse. Other columns (e.g. an old Geboortedatum) are ignored.
+ */
 
 export interface ImportRow {
   line: number;
   firstName: string;
   lastName: string;
-  birthdate: string;
+  /** The rank as written in the file. */
+  rankText: string;
   rankCode: string | null;
-  /** Rank given in the file, or derived from age (Junior / entry adult rank). */
-  rankSource: "file" | "age";
+  /** Rank given in the file, or the entry adult rank when the cell is empty. */
+  rankSource: "file" | "default";
   status: "new" | "duplicate" | "error";
   message?: string;
 }
@@ -18,29 +22,10 @@ export interface ImportRow {
 const HEADERS = {
   firstName: ["voornaam", "first name", "firstname", "prénom", "prenom"],
   lastName: ["achternaam", "familienaam", "naam", "last name", "lastname", "nom"],
-  birthdate: ["geboortedatum", "geb. datum", "geboorte", "birthdate", "date of birth", "date de naissance"],
   rank: ["klasse", "rang", "categorie", "rank"],
 };
 
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim();
-
-/** Dates as Belgians type them (31/12/1980, 31-12-1980, 31.12.1980), ISO, or an Excel date number. */
-export function parseDate(input: string): string | null {
-  const s = input.trim();
-  let y: number, m: number, d: number;
-  let match: RegExpMatchArray | null;
-  if ((match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [y, m, d] = [+match[1], +match[2], +match[3]];
-  else if ((match = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/))) [d, m, y] = [+match[1], +match[2], +match[3]];
-  else if (/^\d{5}$/.test(s)) {
-    // Excel serial date (days since 1899-12-30)
-    const date = new Date(Date.UTC(1899, 11, 30) + Number(s) * 86_400_000);
-    [y, m, d] = [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()];
-  } else return null;
-  const date = new Date(Date.UTC(y, m - 1, d));
-  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null;
-  if (y < 1900 || y > 2100) return null;
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
 
 /** "3de klasse", "3de", "derde", "3", "klasse3", "Ere", "jeugd"… → rank code. */
 export function parseRank(input: string, ranks: readonly RankDef[]): string | null {
@@ -56,51 +41,40 @@ export function parseRank(input: string, ranks: readonly RankDef[]): string | nu
   return null;
 }
 
-export const shooterKey = (s: { firstName: string; lastName: string; birthdate: string | null }) =>
-  `${norm(s.firstName)}|${norm(s.lastName)}|${s.birthdate ?? ""}`;
+/** Without a birthdate, a member is recognised by name (case and accents ignored). */
+export const shooterKey = (s: { firstName: string; lastName: string }) => `${norm(s.firstName)}|${norm(s.lastName)}`;
 
 export function validateImport(
   text: string,
-  opts: { ranks: readonly RankDef[]; existingKeys: ReadonlySet<string>; seasonYear: number },
+  opts: { ranks: readonly RankDef[]; existingKeys: ReadonlySet<string> },
 ): { rows: ImportRow[]; error?: string } {
   const [header, ...lines] = parseCsv(text);
   if (!header) return { rows: [], error: "Het bestand is leeg." };
   const col = (aliases: string[]) => header.findIndex((h) => aliases.includes(norm(h)));
-  const idx = { firstName: col(HEADERS.firstName), lastName: col(HEADERS.lastName), birthdate: col(HEADERS.birthdate), rank: col(HEADERS.rank) };
-  const missing = [
-    idx.firstName < 0 && "voornaam",
-    idx.lastName < 0 && "achternaam",
-    idx.birthdate < 0 && "geboortedatum",
-  ].filter(Boolean);
+  const idx = { firstName: col(HEADERS.firstName), lastName: col(HEADERS.lastName), rank: col(HEADERS.rank) };
+  const missing = [idx.firstName < 0 && "voornaam", idx.lastName < 0 && "achternaam"].filter(Boolean);
   if (missing.length) return { rows: [], error: `Kolom(men) niet gevonden: ${missing.join(", ")}. De eerste rij moet de kolomnamen bevatten.` };
+  const defaultRank = entryAdultRank(opts.ranks).code;
 
   const seen = new Set<string>();
   const rows = lines.map((cells, i): ImportRow => {
     const firstName = cells[idx.firstName] ?? "";
     const lastName = cells[idx.lastName] ?? "";
-    const rawDate = cells[idx.birthdate] ?? "";
-    const rawRank = idx.rank >= 0 ? (cells[idx.rank] ?? "") : "";
-    const birthdate = parseDate(rawDate);
-    const base = { line: i + 2, firstName, lastName, birthdate: birthdate ?? rawDate, rankCode: null, rankSource: "age" as const };
-    if (!firstName || !lastName) return { ...base, status: "error", message: "Voornaam of achternaam ontbreekt" };
-    if (!birthdate) return { ...base, status: "error", message: `Ongeldige geboortedatum "${rawDate}"` };
-    let rankCode: string | null = null;
-    let rankSource: ImportRow["rankSource"] = "age";
-    if (rawRank) {
-      rankCode = parseRank(rawRank, opts.ranks);
-      if (!rankCode) return { ...base, status: "error", message: `Onbekende klasse "${rawRank}"` };
-      rankSource = "file";
-    } else rankCode = initialRank(birthdate, opts.seasonYear, opts.ranks).code;
-    const key = shooterKey({ firstName, lastName, birthdate });
+    const rankText = idx.rank >= 0 ? (cells[idx.rank] ?? "") : "";
+    const base = { line: i + 2, firstName, lastName, rankText, rankCode: null, rankSource: "file" as const };
+    if (!firstName) return { ...base, status: "error", message: "voornaam ontbreekt" };
+    if (!lastName) return { ...base, status: "error", message: "achternaam ontbreekt" };
+    const rankCode = rankText ? parseRank(rankText, opts.ranks) : defaultRank;
+    if (!rankCode) return { ...base, status: "error", message: "onbekende klasse" };
+    const key = shooterKey({ firstName, lastName });
     const duplicate = opts.existingKeys.has(key) || seen.has(key);
     seen.add(key);
     return {
       ...base,
-      birthdate,
       rankCode,
-      rankSource,
+      rankSource: rankText ? "file" : "default",
       status: duplicate ? "duplicate" : "new",
-      message: duplicate ? "Bestaat al" : undefined,
+      message: duplicate ? "bestaat al" : undefined,
     };
   });
   return { rows };

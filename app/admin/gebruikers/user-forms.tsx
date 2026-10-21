@@ -1,93 +1,145 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
-import { Badge, Button } from "@/components/ui";
-import { createUser, deleteUser, setPassword, setRole, type FormState } from "./actions";
+import { useState, useTransition } from "react";
+import { fieldClass } from "@/components/styles";
+import { Pill, Segmented, Tag } from "@/components/ui";
+import { useSubmit, type FormState } from "../use-submit";
+import { createUser, deleteUser, setPassword, setRole } from "./actions";
 
-const field = "rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ink";
+const MIN_PASSWORD = 10;
+type Role = "admin" | "operator";
 
 export function UserRow({ user, isSelf }: { user: { id: string; name: string; email: string; role: string }; isSelf: boolean }) {
   const [result, setResult] = useState<FormState>({});
   const [pending, start] = useTransition();
-  const [newPassword, setNewPassword] = useState<string | null>(null);
+  const [open, setOpen] = useState<"password" | "delete" | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const run = (fn: () => Promise<FormState>, then?: () => void) =>
+    start(async () => {
+      const r = await fn();
+      setResult(r);
+      if (!r.error) then?.();
+    });
 
   return (
-    <li className="flex flex-col gap-3 p-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="mr-auto min-w-0">
-          <p className="font-medium">
-            {user.name} {isSelf && <Badge>jij</Badge>}
-          </p>
-          <p className="truncate text-sm text-muted">{user.email}</p>
+    <li className="flex flex-col gap-2.5 p-[0.875rem]">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="mr-auto flex min-w-0 flex-col gap-0.5">
+          <span className="flex items-center gap-2 text-[0.9375rem] font-semibold">
+            {user.name}
+            {isSelf && (
+              <Tag tone="yellow" size="sm">
+                jij
+              </Tag>
+            )}
+          </span>
+          <span className="truncate text-[0.8125rem] text-muted">{user.email}</span>
         </div>
-        <select
-          value={user.role}
+        <Segmented<Role>
+          label={`Rol van ${user.name}`}
+          size="sm"
+          options={[
+            { value: "admin", label: "Beheerder" },
+            { value: "operator", label: "Wedstrijdleiding" },
+          ]}
+          value={user.role === "admin" ? "admin" : "operator"}
           disabled={isSelf || pending}
-          onChange={(e) => start(async () => setResult(await setRole(user.id, e.target.value)))}
-          className={field}
-          aria-label={`Rol van ${user.name}`}
+          onChange={(role) => run(() => setRole(user.id, role))}
+        />
+        <Pill
+          size="xs"
+          className="py-1.5"
+          onClick={() => {
+            setOpen(open === "password" ? null : "password");
+            setNewPassword("");
+            setResult({});
+          }}
         >
-          <option value="admin">Beheerder</option>
-          <option value="operator">Wedstrijdleiding</option>
-        </select>
-        <Button size="sm" onClick={() => setNewPassword(newPassword === null ? "" : null)}>
           Nieuw wachtwoord
-        </Button>
+        </Pill>
         {!isSelf && (
-          <Button size="sm" tone="danger" disabled={pending} onClick={() => confirm(`Account van ${user.name} verwijderen?`) && start(async () => setResult(await deleteUser(user.id)))}>
+          <Pill size="xs" tone="danger-outline" className="py-1.5" onClick={() => (setOpen("delete"), setResult({}))}>
             Verwijderen
-          </Button>
+          </Pill>
         )}
       </div>
-      {newPassword !== null && (
+      {open === "password" && (
         <form
-          className="flex flex-wrap gap-2"
+          className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            start(async () => {
-              const r = await setPassword(user.id, newPassword);
-              setResult(r);
-              if (!r.error) setNewPassword(null);
-            });
+            run(() => setPassword(user.id, newPassword), () => setOpen(null));
           }}
         >
           <input
             type="password"
             autoComplete="new-password"
+            autoFocus
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Minstens 10 tekens"
-            className={`${field} flex-1`}
+            placeholder={`Minstens ${MIN_PASSWORD} tekens`}
             aria-label={`Nieuw wachtwoord voor ${user.name}`}
+            className={`${fieldClass} flex-1 py-2 text-sm`}
           />
-          <Button type="submit" tone="primary" size="sm" disabled={pending}>
+          <Pill tone="ink" size="sm" type="submit" disabled={pending || newPassword.length < MIN_PASSWORD}>
             Instellen
-          </Button>
+          </Pill>
         </form>
       )}
-      {result.error && <p className="text-sm text-red-600">{result.error}</p>}
-      {result.message && <p className="text-sm text-[#15803d] dark:text-[#4ade80]">{result.message}</p>}
+      {open === "delete" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-error-light px-[0.875rem] py-2.5">
+          <span className="flex-1 text-[0.8125rem] font-semibold text-error">Account van {user.name} verwijderen?</span>
+          <Pill tone="danger" size="sm" disabled={pending} onClick={() => run(() => deleteUser(user.id), () => setOpen(null))}>
+            Ja, verwijderen
+          </Pill>
+          <Pill tone="ghost" size="sm" onClick={() => setOpen(null)}>
+            Annuleren
+          </Pill>
+        </div>
+      )}
+      {result.error && <p className="text-[0.8125rem] font-semibold text-error">{result.error}</p>}
+      {result.message && <p className="text-[0.8125rem] font-semibold text-good">{result.message}</p>}
     </li>
   );
 }
 
 export function NewUserForm() {
-  const [state, action, pending] = useActionState<FormState, FormData>(createUser, {});
+  const [role, setRoleValue] = useState<Role>("operator");
+  const { state, pending, onSubmit } = useSubmit(createUser, (form) => {
+    form.reset();
+    setRoleValue("operator");
+  });
+
   return (
-    <form action={action} className="flex flex-col gap-3 self-start rounded-xl border border-border bg-surface p-5">
-      <h2 className="font-semibold">Account toevoegen</h2>
-      <input name="name" required placeholder="Naam" className={field} aria-label="Naam" />
-      <input name="email" type="email" required placeholder="E-mailadres" className={field} aria-label="E-mailadres" />
-      <select name="role" defaultValue="operator" className={field} aria-label="Rol">
-        <option value="operator">Wedstrijdleiding</option>
-        <option value="admin">Beheerder</option>
-      </select>
-      <input name="password" type="password" autoComplete="new-password" required placeholder="Wachtwoord (minstens 10 tekens)" className={field} aria-label="Wachtwoord" />
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-      {state.message && <p className="text-sm text-[#15803d] dark:text-[#4ade80]">{state.message}</p>}
-      <Button tone="primary" type="submit" disabled={pending}>
+    <form onSubmit={onSubmit} className="flex flex-col gap-3 rounded-[1.5rem] border border-border bg-surface px-6 py-[1.375rem]">
+      <h2 className="text-[1.0625rem] font-semibold">Account toevoegen</h2>
+      <input type="hidden" name="role" value={role} />
+      <input name="name" required placeholder="Naam" aria-label="Naam" className={fieldClass} />
+      <input name="email" type="email" required placeholder="E-mailadres" aria-label="E-mailadres" className={fieldClass} />
+      <Segmented<Role>
+        label="Rol"
+        options={[
+          { value: "operator", label: "Wedstrijdleiding" },
+          { value: "admin", label: "Beheerder" },
+        ]}
+        value={role}
+        onChange={setRoleValue}
+      />
+      <input
+        name="password"
+        type="password"
+        autoComplete="new-password"
+        required
+        minLength={MIN_PASSWORD}
+        placeholder={`Wachtwoord · minstens ${MIN_PASSWORD} tekens`}
+        aria-label="Wachtwoord"
+        className={fieldClass}
+      />
+      {state.error && <p className="text-[0.8125rem] font-semibold text-error">{state.error}</p>}
+      {state.message && <p className="text-pretty text-[0.8125rem] font-semibold text-good">{state.message}</p>}
+      <Pill tone="yellow" size="lg" type="submit" disabled={pending}>
         {pending ? "Aanmaken…" : "Account aanmaken"}
-      </Button>
+      </Pill>
     </form>
   );
 }

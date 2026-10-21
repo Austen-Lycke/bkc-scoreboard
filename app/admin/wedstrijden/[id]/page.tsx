@@ -3,12 +3,27 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { CLUB_TIME_ZONE } from "@/components/public/format";
+import { textLinkClass } from "@/components/styles";
 import { getDb, schema } from "@/lib/db";
 import { rankDefs } from "@/lib/server/season";
 import { requireRole } from "@/lib/session";
+import { PageHead, setupShortName } from "../../kit";
 import { CompetitionForm } from "./competition-form";
 
 export const metadata: Metadata = { title: "Wedstrijd bewerken" };
+
+const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: CLUB_TIME_ZONE });
+const time = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
+const shortDay = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short", timeZone: CLUB_TIME_ZONE });
+
+/** "vandaag 14:32", "gisteren 09:10" or "14 okt. 14:32", in Belgian time. */
+function lastSeen(at: Date) {
+  const now = Date.now();
+  const day = dayKey.format(at);
+  const when = day === dayKey.format(now) ? "vandaag" : day === dayKey.format(now - 86_400_000) ? "gisteren" : shortDay.format(at);
+  return `${when} ${time.format(at)}`;
+}
 
 export default async function EditCompetitionPage({ params }: PageProps<"/admin/wedstrijden/[id]">) {
   await requireRole("admin");
@@ -24,37 +39,33 @@ export default async function EditCompetitionPage({ params }: PageProps<"/admin/
   if (!comp) notFound();
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/admin/wedstrijden" className="text-sm text-muted hover:text-foreground">
-          ← Wedstrijden
-        </Link>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">{comp.name}</h1>
-        <div className="mt-1 flex gap-4 text-sm">
-          <Link href={`/wedstrijd/${comp.slug}`} className="underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
+    <>
+      <PageHead back={{ href: "/admin/wedstrijden", label: "Wedstrijden" }} title={comp.name}>
+        <div className="flex gap-4">
+          <Link href={`/wedstrijd/${comp.slug}`} className={textLinkClass}>
             Publieke pagina
           </Link>
-          <Link href={`/operator/live?c=${comp.id}`} className="underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink">
+          <Link href={`/operator/live?c=${comp.id}`} className={textLinkClass}>
             Wedstrijdleiding
           </Link>
         </div>
-      </div>
+      </PageHead>
       <CompetitionForm
         competition={{
           id: comp.id,
           name: comp.name,
           date: comp.date,
           location: comp.location ?? "",
-          fee: comp.feeCents ? String(comp.feeCents / 100).replace(".", ",") : "",
           countsForSeason: comp.countsForSeason,
           setupIds: Object.fromEntries(Object.entries(comp.setupByRank).map(([rank, s]) => [rank, s.id])),
-          operatorDeviceId: comp.operatorDeviceId,
-          operatorLeaseAt: comp.operatorLeaseAt?.toISOString() ?? null,
+          device: comp.operatorDeviceId
+            ? { id: comp.operatorDeviceId.replace(/^dev-/, "").slice(0, 8), lastSeen: comp.operatorLeaseAt ? lastSeen(comp.operatorLeaseAt) : null }
+            : null,
         }}
-        ranks={ranks}
-        setups={setups}
+        ranks={ranks.map(({ code, name }) => ({ code, name }))}
+        setups={setups.map((s) => ({ id: s.id, name: setupShortName(s.name), title: s.name }))}
         started={events > 0}
       />
-    </div>
+    </>
   );
 }

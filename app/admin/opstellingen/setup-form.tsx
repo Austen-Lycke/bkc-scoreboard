@@ -1,68 +1,81 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Knockdown } from "@/components/knockdown";
-import { Button, Card } from "@/components/ui";
+import { Plate, plateRows, type PlateLook } from "@/components/plates";
+import { Pill } from "@/components/ui";
 import { maxPassScore, type Setup } from "@/lib/scoring";
 import { updateSetup } from "./actions";
 
-const field = "w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-ink";
+const COLS = "grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_6.5rem] items-center gap-2";
+const input = "w-full min-w-0 rounded-[0.625rem] border-[1.5px] border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-ink";
+const PLATE: PlateLook = { background: "var(--surface)", color: "var(--ink)", borderColor: "var(--ink)" };
 
 export function SetupForm({ id, setup }: { id: string; setup: Setup }) {
-  const [targets, setTargets] = useState(setup.targets);
+  // Points stay text while typing, so the field can be emptied and retyped.
+  const [targets, setTargets] = useState(() => setup.targets.map((t) => ({ ...t, points: String(t.points) })));
   const [result, setResult] = useState<{ error?: string; message?: string }>({});
   const [pending, start] = useTransition();
-  const edit = (i: number, patch: Partial<Setup["targets"][number]>) => setTargets((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
-  const preview = { ...setup, targets };
+  const edit = (i: number, patch: Partial<(typeof targets)[number]>) => {
+    setTargets((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+    setResult({});
+  };
+  const preview: Setup = { ...setup, targets: targets.map((t) => ({ ...t, points: Number(t.points) || 0 })) };
+
+  function save() {
+    if (targets.some((t) => t.points.trim() === "")) return setResult({ error: "Elk doel heeft punten nodig." });
+    start(async () => setResult(await updateSetup(id, preview.targets.map(({ id, label, points }) => ({ id, label, points })))));
+  }
 
   return (
-    <Card className="p-5">
+    <section className="flex flex-col gap-[0.875rem] rounded-[1.5rem] border border-border bg-surface px-[1.375rem] py-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-semibold">{setup.name}</h2>
-        <span className="text-sm text-muted">max {maxPassScore(preview)} per beurt</span>
+        <h2 className="text-[1.0625rem] font-semibold">{setup.name}</h2>
+        <span className="whitespace-nowrap text-[0.8125rem] text-muted">max {maxPassScore(preview)} per beurt</span>
       </div>
-      <Knockdown setup={preview} hits={[]} className="mt-3 h-40 w-full" />
-      <table className="mt-4 w-full text-sm">
-        <thead className="text-left text-xs uppercase tracking-wide text-muted">
-          <tr>
-            <th className="py-1.5">#</th>
-            <th className="py-1.5">Naam</th>
-            <th className="w-20 py-1.5">Punten</th>
-            <th className="py-1.5 text-right">Plaat</th>
-          </tr>
-        </thead>
-        <tbody>
-          {targets.map((t, i) => (
-            <tr key={t.id} className="border-t border-border">
-              <td className="py-1.5 pr-2 text-muted">{i + 1}</td>
-              <td className="py-1.5 pr-2">
-                <input value={t.label} onChange={(e) => edit(i, { label: e.target.value })} className={field} aria-label={`Naam doel ${i + 1}`} />
-              </td>
-              <td className="py-1.5 pr-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={t.points}
-                  onChange={(e) => edit(i, { points: Number(e.target.value) })}
-                  className={field}
-                  aria-label={`Punten doel ${i + 1}`}
-                />
-              </td>
-              <td className="py-1.5 text-right text-muted">
-                rij {t.row} · {t.sizeMm} mm
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button tone="primary" disabled={pending} onClick={() => start(async () => setResult(await updateSetup(id, targets.map(({ id, label, points }) => ({ id, label, points })))))}>
+      <div className="flex h-36 flex-col justify-center gap-3 rounded-2xl bg-hover" aria-hidden>
+        {plateRows(preview).map((row, r) => (
+          <div key={r} className="flex items-end justify-center gap-2.5">
+            {row.map((t) => (
+              <Plate key={t.id} size={`${((t.sizeMm / 125) * 3.25).toFixed(3)}rem`} fontSize="0.75rem" look={PLATE}>
+                {t.points}
+              </Plate>
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col">
+        <div className={`${COLS} pb-1.5 text-xs font-semibold text-faint`}>
+          <span>#</span>
+          <span>Naam</span>
+          <span>Punten</span>
+          <span className="text-right">Plaat</span>
+        </div>
+        {targets.map((t, i) => (
+          <div key={t.id} className={`${COLS} border-t border-divider py-[0.3125rem]`}>
+            <span className="font-mono text-xs text-faint">{i + 1}</span>
+            <input value={t.label} onChange={(e) => edit(i, { label: e.target.value })} className={input} aria-label={`Naam doel ${i + 1}`} />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={t.points}
+              onChange={(e) => edit(i, { points: e.target.value === "" ? "" : String(Math.max(0, Math.min(100, Math.round(Number(e.target.value))))) })}
+              className={input}
+              aria-label={`Punten doel ${i + 1}`}
+            />
+            <span className="whitespace-nowrap text-right text-xs text-muted">
+              rij {t.row} · {t.sizeMm} mm
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-divider pt-[0.875rem]">
+        <Pill tone="yellow" disabled={pending} onClick={save}>
           {pending ? "Opslaan…" : "Opslaan"}
-        </Button>
-        {result.error && <span className="text-sm text-red-600">{result.error}</span>}
-        {result.message && <span className="text-sm text-[#15803d] dark:text-[#4ade80]">{result.message}</span>}
+        </Pill>
+        {result.error && <span className="text-[0.8125rem] font-semibold text-error">{result.error}</span>}
+        {result.message && <span className="text-[0.8125rem] font-semibold text-good">{result.message}</span>}
       </div>
-    </Card>
+    </section>
   );
 }

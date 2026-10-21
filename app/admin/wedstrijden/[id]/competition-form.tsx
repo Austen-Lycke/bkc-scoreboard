@@ -1,13 +1,12 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
-import { Button, Card } from "@/components/ui";
-import type { RankDef } from "@/lib/scoring";
+import { useState, useTransition } from "react";
+import { fieldClass } from "@/components/styles";
+import { Chip, Panel, Pill, Switch } from "@/components/ui";
+import { useSubmit } from "../../use-submit";
 import { deleteCompetition, releaseLease, updateCompetition, type FormState } from "../actions";
-import { CLUB_TIME_ZONE } from "@/components/public/format";
 
-const field = "rounded-lg border border-border bg-background px-3 py-2 outline-none focus:border-ink disabled:opacity-60";
-const when = new Intl.DateTimeFormat("nl-BE", { dateStyle: "medium", timeStyle: "short", timeZone: CLUB_TIME_ZONE });
+const label = "flex min-w-0 flex-col gap-[0.3125rem] text-[0.8125rem] font-semibold";
 
 export function CompetitionForm({
   competition: c,
@@ -20,116 +19,148 @@ export function CompetitionForm({
     name: string;
     date: string;
     location: string;
-    fee: string;
     countsForSeason: boolean;
     setupIds: Record<string, string>;
-    operatorDeviceId: string | null;
-    operatorLeaseAt: string | null;
+    /** The operator laptop holding this competition: short id and last sync. */
+    device: { id: string; lastSeen: string | null } | null;
   };
-  ranks: RankDef[];
-  setups: { id: string; name: string }[];
+  ranks: { code: string; name: string }[];
+  setups: { id: string; name: string; title: string }[];
+  /** Something was synced already (check-ins, scores): the setup is fixed and deleting needs the name. */
   started: boolean;
 }) {
-  const [state, action, pending] = useActionState<FormState, FormData>(updateCompetition, {});
+  const { state, pending, onSubmit, clear } = useSubmit(updateCompetition);
+  const [counts, setCounts] = useState(c.countsForSeason);
+  const [setupIds, setSetupIds] = useState(c.setupIds);
   const [side, setSide] = useState<FormState>({});
-  const [busy, start] = useTransition();
+  const [typed, setTyped] = useState("");
+  const [releasing, startRelease] = useTransition();
+  const [deleting, startDelete] = useTransition();
+  const canDelete = !started || typed.trim() === c.name;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-      <form action={action} className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-6">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <form
+        onSubmit={onSubmit}
+        onChange={clear}
+        className="flex flex-col gap-[1.125rem] rounded-[1.5rem] border border-border bg-surface px-[1.625rem] py-6"
+      >
         <input type="hidden" name="id" value={c.id} />
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        {counts && <input type="hidden" name="countsForSeason" value="on" />}
+        {Object.entries(setupIds).map(([rank, id]) => (
+          <input key={rank} type="hidden" name={`setup:${rank}`} value={id} />
+        ))}
+        <label className={label}>
           Naam
-          <input name="name" required defaultValue={c.name} className={field} />
+          <input name="name" required defaultValue={c.name} className={fieldClass} />
         </label>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <div className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-3">
+          <label className={label}>
             Datum
-            <input name="date" type="date" required defaultValue={c.date} className={field} />
+            <input name="date" type="date" required defaultValue={c.date} className={`${fieldClass} py-[0.5625rem]`} />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">
-            Inschrijvingsgeld (€)
-            <input name="fee" inputMode="decimal" defaultValue={c.fee} className={field} />
+          <label className={label}>
+            Locatie
+            <input name="location" defaultValue={c.location} className={fieldClass} />
           </label>
         </div>
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Locatie
-          <input name="location" defaultValue={c.location} className={field} />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input name="countsForSeason" type="checkbox" defaultChecked={c.countsForSeason} className="size-4 accent-[var(--ink)]" />
+        <Switch on={counts} onChange={(on) => (setCounts(on), clear())} className="font-semibold">
           Telt mee voor het seizoensklassement
-        </label>
+        </Switch>
 
-        <fieldset className="flex flex-col gap-3 rounded-lg border border-border p-4">
-          <legend className="px-1 text-sm font-medium">Opstelling per klasse</legend>
-          {started && <p className="text-sm text-muted">Er zijn al scores: de opstelling ligt vast.</p>}
+        <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
+          <div className="flex items-baseline justify-between gap-4">
+            <span className="text-[0.9375rem] font-semibold">Opstelling per klasse</span>
+            {started && <span className="text-[0.8125rem] text-muted">Er zijn al scores: de opstelling ligt vast.</span>}
+          </div>
           {ranks.map((r) => (
-            <label key={r.code} className="grid grid-cols-[8rem_1fr] items-center gap-3 text-sm">
-              {r.name}
-              <select name={`setup:${r.code}`} defaultValue={c.setupIds[r.code]} disabled={started} className={field}>
+            <div key={r.code} className={`grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3 ${started ? "opacity-55" : ""}`}>
+              <span className="text-sm font-semibold">{r.name}</span>
+              <div role="group" aria-label={`Opstelling ${r.name}`} className="flex flex-wrap gap-1">
                 {setups.map((s) => (
-                  <option key={s.id} value={s.id}>
+                  <Chip
+                    key={s.id}
+                    on={setupIds[r.code] === s.id}
+                    disabled={started}
+                    title={s.title}
+                    onClick={() => (setSetupIds((ids) => ({ ...ids, [r.code]: s.id })), clear())}
+                  >
                     {s.name}
-                  </option>
+                  </Chip>
                 ))}
-              </select>
-            </label>
+              </div>
+            </div>
           ))}
-        </fieldset>
+        </div>
 
-        {state.error && <p role="alert" className="text-sm text-red-600">{state.error}</p>}
-        {state.message && <p className="text-sm text-[#15803d] dark:text-[#4ade80]">{state.message}</p>}
-        <Button tone="primary" type="submit" disabled={pending} className="self-start">
-          {pending ? "Opslaan…" : "Opslaan"}
-        </Button>
+        {state.error && (
+          <p role="alert" className="text-[0.8125rem] font-semibold text-error">
+            {state.error}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2.5 border-t border-divider pt-4">
+          <Pill tone="yellow" size="lg" type="submit" disabled={pending}>
+            {pending ? "Opslaan…" : "Opslaan"}
+          </Pill>
+          {state.message && (
+            <span className="text-[0.8125rem] text-muted">
+              <span className="font-semibold text-good">{state.message}</span>
+              {c.device && " · download de gegevens opnieuw op de laptop (Voorbereiden)"}
+            </span>
+          )}
+        </div>
       </form>
 
       <aside className="flex flex-col gap-4">
-        <Card className="p-5">
-          <h2 className="font-semibold">Laptop van de wedstrijdleiding</h2>
-          {c.operatorDeviceId ? (
+        <Panel size="md" className="flex flex-col gap-2.5 px-5 py-[1.125rem]">
+          <h2 className="text-[0.9375rem] font-semibold">Laptop van de wedstrijdleiding</h2>
+          {c.device ? (
             <>
-              <p className="mt-2 text-sm text-muted">
-                Toestel <span className="font-mono">{c.operatorDeviceId.slice(0, 12)}…</span> synchroniseert deze wedstrijd
-                {c.operatorLeaseAt ? ` (laatst ${when.format(new Date(c.operatorLeaseAt))})` : ""}.
+              <p className="text-pretty text-[0.8125rem] text-muted">
+                Toestel <span className="font-mono text-xs text-ink">{c.device.id}</span> synchroniseert deze wedstrijd
+                {c.device.lastSeen && ` · laatst ${c.device.lastSeen}`}.
               </p>
-              <p className="mt-2 text-sm text-muted">Laptop kwijt of kapot? Geef de wedstrijd vrij zodat een ander toestel kan overnemen.</p>
-              <Button size="sm" className="mt-3" disabled={busy} onClick={() => start(async () => setSide(await releaseLease(c.id)))}>
+              <p className="text-pretty text-[0.8125rem] text-muted">Laptop kwijt of kapot? Geef de wedstrijd vrij zodat een ander toestel kan overnemen.</p>
+              <Pill tone="outline-ink" size="sm" className="self-start" disabled={releasing} onClick={() => startRelease(async () => setSide(await releaseLease(c.id)))}>
                 Vrijgeven
-              </Button>
+              </Pill>
             </>
           ) : (
-            <p className="mt-2 text-sm text-muted">Nog geen toestel gekoppeld.</p>
+            <p className="text-pretty text-[0.8125rem] text-muted">{side.message ?? "Nog geen toestel gekoppeld."}</p>
           )}
-        </Card>
-        <Card className="p-5">
-          <h2 className="font-semibold">Verwijderen</h2>
-          <p className="mt-2 text-sm text-muted">
+        </Panel>
+
+        <Panel size="md" className="flex flex-col gap-2.5 px-5 py-[1.125rem]">
+          <h2 className="text-[0.9375rem] font-semibold">Verwijderen</h2>
+          <p className="text-pretty text-[0.8125rem] text-muted">
             {started
               ? "Er zijn al inschrijvingen of scores. Verwijderen wist alles van deze wedstrijd, ook op de website en in het klassement."
               : "Er is nog niets ingeschreven of gescoord."}
           </p>
-          <Button
-            size="sm"
-            tone="danger"
-            className="mt-3"
-            disabled={busy}
-            onClick={() => {
-              if (started) {
-                const typed = prompt(`Typ de naam van de wedstrijd om te bevestigen:\n${c.name}`);
-                if (typed === null) return;
-                start(async () => setSide(await deleteCompetition(c.id, typed)));
-              } else if (confirm(`"${c.name}" definitief verwijderen?`)) {
-                start(async () => setSide(await deleteCompetition(c.id)));
-              }
-            }}
+          {started && (
+            <label className="flex flex-col gap-[0.3125rem] text-xs font-semibold text-muted">
+              Typ de naam van de wedstrijd om te bevestigen
+              <input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder={c.name}
+                autoComplete="off"
+                className={`${fieldClass} py-2 text-sm text-ink`}
+              />
+            </label>
+          )}
+          <button
+            type="button"
+            disabled={!canDelete || deleting}
+            onClick={() => startDelete(async () => setSide(await deleteCompetition(c.id, typed)))}
+            className={`self-start rounded-full px-[0.875rem] py-[0.4375rem] text-[0.8125rem] font-semibold transition ${
+              canDelete ? "cursor-pointer bg-error text-white hover:brightness-110" : "cursor-not-allowed bg-error-light text-error"
+            }`}
           >
-            Wedstrijd verwijderen
-          </Button>
-        </Card>
-        {side.error && <p className="text-sm text-red-600">{side.error}</p>}
-        {side.message && <p className="text-sm text-[#15803d] dark:text-[#4ade80]">{side.message}</p>}
+            {deleting ? "Verwijderen…" : "Wedstrijd verwijderen"}
+          </button>
+          {side.error && <p className="text-[0.8125rem] font-semibold text-error">{side.error}</p>}
+        </Panel>
       </aside>
     </div>
   );

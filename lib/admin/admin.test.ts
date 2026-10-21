@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseCsv, toCsv } from "@/lib/csv";
 import { DEFAULT_RANKS, type RankProposal } from "@/lib/scoring";
-import { parseDate, parseRank, shooterKey, validateImport } from "./import";
+import { parseRank, shooterKey, validateImport } from "./import";
 import { finalizeProposal } from "./promotion";
 
 describe("csv", () => {
@@ -29,17 +29,6 @@ describe("csv", () => {
 });
 
 describe("member import", () => {
-  it("parses the date formats Belgians use", () => {
-    expect(parseDate("31/12/1980")).toBe("1980-12-31");
-    expect(parseDate("1-2-2011")).toBe("2011-02-01");
-    expect(parseDate("05.06.1975")).toBe("1975-06-05");
-    expect(parseDate("1980-12-31")).toBe("1980-12-31");
-    expect(parseDate("29436")).toBe("1980-08-03"); // Excel serial
-    expect(parseDate("31/02/1980")).toBeNull();
-    expect(parseDate("12/31/1980")).toBeNull();
-    expect(parseDate("gisteren")).toBeNull();
-  });
-
   it("understands how people write ranks", () => {
     const r = (s: string) => parseRank(s, DEFAULT_RANKS);
     expect([r("3de klasse"), r("3de"), r("derde"), r("3"), r("klasse3")]).toEqual(["klasse3", "klasse3", "klasse3", "klasse3", "klasse3"]);
@@ -55,33 +44,39 @@ describe("member import", () => {
     expect(r("vierde")).toBeNull();
   });
 
-  it("validates rows, derives missing ranks from age and flags duplicates", () => {
-    const existing = new Set([shooterKey({ firstName: "Jens", lastName: "Vermeulen", birthdate: "1988-05-19" })]);
+  it("validates rows, defaults a missing rank to 3de klasse and flags duplicates by name", () => {
+    const existing = new Set([shooterKey({ firstName: "Jens", lastName: "Vermeulen" })]);
     const csv = [
       "Voornaam;Achternaam;Geboortedatum;Klasse",
-      "Jens;Vermeulen;19/05/1988;3de",
-      "Lotte;De Smet;12/04/2014;",
-      "Ward;Lambrecht;05/10/1969;ere",
-      "Ward;Lambrecht;05/10/1969;ere",
-      "Elien;Maes;31/02/1995;",
-      ";Leeg;01/01/1990;",
-      "Tom;Janssens;11/06/1975;vierde",
+      "jens;VERMEULEN;19/05/1988;3de",
+      "Lotte;De Smet;;Junior",
+      "Ward;Lambrecht;;ere",
+      "Ward;Lambrecht;;ere",
+      "Elien;Maes;;",
+      ";Leeg;;",
+      "Tom;;;",
+      "Tom;Janssens;;vierde",
     ].join("\n");
-    const { rows, error } = validateImport(csv, { ranks: DEFAULT_RANKS, existingKeys: existing, seasonYear: 2026 });
+    const { rows, error } = validateImport(csv, { ranks: DEFAULT_RANKS, existingKeys: existing });
     expect(error).toBeUndefined();
-    expect(rows.map((r) => [r.line, r.status, r.rankCode, r.rankSource])).toEqual([
-      [2, "duplicate", "klasse3", "file"],
-      [3, "new", "junior", "age"],
-      [4, "new", "ereklasse", "file"],
-      [5, "duplicate", "ereklasse", "file"],
-      [6, "error", null, "age"],
-      [7, "error", null, "age"],
-      [8, "error", null, "age"],
+    expect(rows.map((r) => [r.line, r.status, r.rankCode, r.rankSource, r.message])).toEqual([
+      [2, "duplicate", "klasse3", "file", "bestaat al"],
+      [3, "new", "junior", "file", undefined],
+      [4, "new", "ereklasse", "file", undefined],
+      [5, "duplicate", "ereklasse", "file", "bestaat al"],
+      [6, "new", "klasse3", "default", undefined],
+      [7, "error", null, "file", "voornaam ontbreekt"],
+      [8, "error", null, "file", "achternaam ontbreekt"],
+      [9, "error", null, "file", "onbekende klasse"],
     ]);
   });
 
-  it("explains a missing header", () => {
-    expect(validateImport("naam;datum\nJan;1/1/1990", { ranks: DEFAULT_RANKS, existingKeys: new Set(), seasonYear: 2026 }).error).toMatch(/voornaam/);
+  it("needs only the name columns", () => {
+    expect(validateImport("Voornaam,Achternaam\nJan,Peeters", { ranks: DEFAULT_RANKS, existingKeys: new Set() }).rows[0]).toMatchObject({
+      status: "new",
+      rankCode: "klasse3",
+    });
+    expect(validateImport("naam;datum\nJan;1/1/1990", { ranks: DEFAULT_RANKS, existingKeys: new Set() }).error).toMatch(/voornaam/);
   });
 });
 

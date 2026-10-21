@@ -2,10 +2,13 @@
 
 import { eq, sql } from "drizzle-orm";
 import { refresh, updateTag } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { finalizeProposal } from "@/lib/admin/promotion";
 import { getDb, schema } from "@/lib/db";
+import { setFlash } from "@/lib/server/flash";
 import { promotionProposal } from "@/lib/server/promotion";
+import { RULE_LABEL } from "@/lib/server/season";
 import { tags } from "@/lib/server/tags";
 import { requireRole } from "@/lib/session";
 
@@ -31,7 +34,8 @@ export async function updateRule(_prev: FormState, form: FormData): Promise<Form
   await getDb().update(schema.seasons).set({ rankingRule: parsed.data }).where(eq(schema.seasons.year, year));
   updateTag(tags.season(year));
   refresh();
-  return { message: "Opgeslagen: het klassement is herberekend." };
+  const label = RULE_LABEL(parsed.data);
+  return { message: `Opgeslagen · nu: ${label.charAt(0).toLowerCase()}${label.slice(1)}` };
 }
 
 /**
@@ -65,7 +69,6 @@ export async function savePromotion(year: number, decisions: Record<string, stri
   await db.update(schema.seasons).set({ status: "closed" }).where(eq(schema.seasons.year, year));
 
   for (const tag of [tags.season(year), tags.season(year + 1), tags.shooters, tags.competitions]) updateTag(tag);
-  refresh();
-  const up = result.ranks.filter((r) => r.reason === "promotion").length;
-  return { message: `Seizoen ${year + 1} klaargezet: ${result.ranks.length} schutters ingedeeld, ${up} stijgen een klasse. Seizoen ${year} is afgesloten.` };
+  await setFlash(`Klassen ${year + 1} opgeslagen. Seizoen ${year} is afgesloten.`);
+  redirect("/admin/seizoenen");
 }
