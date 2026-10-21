@@ -73,6 +73,9 @@ test("undo survives a reload and works with the keyboard", async ({ page, isMobi
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("1");
   await expect(knockdown(page, 1).getByRole("button", { name: "Links 3 (3 ptn), geraakt" })).toBeVisible();
+  // Knockdown 2 hit nothing: "0" is Niets, otherwise saving asks first.
+  await page.keyboard.press("w");
+  await page.keyboard.press("0");
   await page.keyboard.press("Enter");
   await expect(page.getByText("Fase 2 van 2")).toBeVisible();
 
@@ -82,6 +85,33 @@ test("undo survives a reload and works with the keyboard", async ({ page, isMobi
   await page.keyboard.press("ControlOrMeta+z");
   await expect(page.getByText("Fase 1 van 2")).toBeVisible();
   await expect(knockdown(page, 1).getByRole("button", { name: "Links 3 (3 ptn), geraakt" })).toBeVisible();
+});
+
+test("a knockdown nobody filled in is only saved as 0 after asking", async ({ page }) => {
+  await openDemoInRound1(page);
+  const save = page.getByRole("button", { name: "Opslaan & wisselen" });
+  const question = page.getByRole("alert").filter({ hasText: "Nog niets ingevuld" });
+
+  // A double tap on Opslaan with nothing filled in: asks, saves nothing.
+  await save.click();
+  await save.click();
+  await expect(question).toContainText("Lotte D. & Noor W.");
+  await expect(page.getByText("Fase 1 van 2")).toBeVisible();
+
+  // Niets counts as filled in; the question then only names the other knockdown.
+  await knockdown(page, 1).getByRole("button", { name: "Niets" }).click();
+  await expect(question).toContainText("Noor W.");
+  await expect(question).not.toContainText("Lotte D.");
+  await question.getByRole("button", { name: "0 opslaan" }).click();
+  await expect(page.getByText("Fase 2 van 2")).toBeVisible();
+  await expect(question).toHaveCount(0);
+
+  // A plate tapped on both sides saves straight away.
+  await knockdown(page, 1).getByRole("button", { name: "Links 3 (3 ptn)" }).click();
+  await knockdown(page, 2).getByRole("button", { name: "Rechts 2 (2 ptn)" }).click();
+  await page.getByRole("button", { name: "Opslaan & volgende" }).click();
+  await expect(page.getByText("Junior · ronde 1 · beurt 2")).toBeVisible();
+  await expect(question).toHaveCount(0);
 });
 
 test("on a touchscreen every operator control is at least 44px", async ({ page, isMobile }) => {

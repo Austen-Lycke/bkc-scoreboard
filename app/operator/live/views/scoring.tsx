@@ -72,18 +72,43 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     [finished, heat, id, phase, setActiveKd, state],
   );
 
-  const setAll = (kd: number, all: boolean) => {
-    const a = phase?.find((s) => s.knockdown === kd);
-    if (!a || !heat || !setup || finished) return;
-    setActiveKd(kd);
-    const key = passKey(a.entryId, heat.round, kd);
-    void updateLive(id, (current) => ({ drafts: { ...current.drafts, [key]: all ? setup.targets.map((t) => t.id) : [] } }));
-  };
+  const setAll = useCallback(
+    (kd: number, all: boolean) => {
+      const a = phase?.find((s) => s.knockdown === kd);
+      if (!a || !heat || !setup || finished) return;
+      setActiveKd(kd);
+      const key = passKey(a.entryId, heat.round, kd);
+      void updateLive(id, (current) => ({ drafts: { ...current.drafts, [key]: all ? setup.targets.map((t) => t.id) : [] } }));
+    },
+    [finished, heat, id, phase, setActiveKd, setup],
+  );
 
-  const save = useCallback(async () => {
+  /**
+   * Knockdowns of this phase nobody filled in: no plate tapped, no "Niets", nothing saved before.
+   * Saving those as 0 needs a confirmation, so a double tap on Opslaan can't record the next pair.
+   */
+  const untouchedIn = useCallback(
+    (drafts: Record<string, string[]>) =>
+      heat && phase
+        ? phase.filter((a) => drafts[passKey(a.entryId, heat.round, a.knockdown)] === undefined && !passOf(state, a.entryId, heat.round, a.knockdown))
+        : [],
+    [heat, phase, state],
+  );
+  const phaseKey = heat && phaseIndex !== null ? `${heatKey(heat)}:${phaseIndex}` : null;
+  // The phase whose 0 is being confirmed; a later phase never inherits the question.
+  const [confirmingFor, setConfirmingFor] = useState<string | null>(null);
+  const untouched = untouchedIn(drafts);
+  const confirming = confirmingFor !== null && confirmingFor === phaseKey && untouched.length > 0;
+
+  const save = useCallback(async ({ allowEmpty = false } = {}) => {
     if (!heat || !phase || phaseIndex === null || finished) return;
     // Read the drafts from storage, not from render state: the last tap may be milliseconds old.
     const storedDrafts = (await offlineDb().live.get(id))?.drafts ?? {};
+    if (!allowEmpty && untouchedIn(storedDrafts).length > 0) {
+      setConfirmingFor(phaseKey);
+      return;
+    }
+    setConfirmingFor(null);
     const passes: SavedPass[] = phase.map((a) => {
       const existing = passOf(state, a.entryId, heat.round, a.knockdown);
       const hits = storedDrafts[passKey(a.entryId, heat.round, a.knockdown)] ?? existing?.hits ?? [];
@@ -106,7 +131,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     setJustSaved(true);
     clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setJustSaved(false), 1600);
-  }, [finished, focusIndex, heat, id, phase, phaseIndex, setActiveKd, state]);
+  }, [finished, focusIndex, heat, id, phase, phaseIndex, phaseKey, setActiveKd, state, untouchedIn]);
 
   useEffect(() => () => clearTimeout(savedTimer.current), []);
 
@@ -135,7 +160,8 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     setJustSaved(false);
   }, [finished, id, setActiveKd, state]);
 
-  // Keyboard: 1–n toggles plates on the active knockdown, W switches knockdown, Enter saves, Cmd/Ctrl+Z undoes.
+  // Keyboard: 1–n toggles plates on the active knockdown, 0 is "Niets", W switches knockdown, Enter saves,
+  // Esc drops the "0 opslaan?" question, Cmd/Ctrl+Z undoes. Enter never answers that question.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = e.target instanceof Element ? e.target : null;
@@ -153,6 +179,10 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
       } else if (e.key === "Enter" && !el?.closest("button")) {
         e.preventDefault();
         void save();
+      } else if (e.key === "Escape") {
+        setConfirmingFor(null);
+      } else if (e.key === "0") {
+        setAll(activeKd, false);
       } else if (/^[1-9]$/.test(e.key)) {
         const target = setup.targets[Number(e.key) - 1];
         if (target) toggle(activeKd, target.id);
@@ -160,7 +190,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeKd, finished, heat, knockdowns, save, setActiveKd, setup, toggle, undo]);
+  }, [activeKd, finished, heat, knockdowns, save, setActiveKd, setAll, setup, toggle, undo]);
 
   if (state.entries.size === 0) {
     return (
@@ -232,6 +262,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
                     place={placeOf(a.entryId, total)}
                     active={activeKd === kd}
                     locked={finished}
+                    nudge={confirming && untouched.some((u) => u.knockdown === kd)}
                     onActivate={() => setActiveKd(kd)}
                     onToggle={(t) => toggle(kd, t)}
                     onAll={(all) => setAll(kd, all)}
@@ -297,9 +328,32 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
               </span>
             </button>
           )}
+          {confirming && (
+            // Above the save button, so a second tap on Opslaan never lands on "0 opslaan".
+            <div role="alert" className="flex flex-col gap-2.5 rounded-[1.125rem] border-[0.09375rem] border-yellow bg-yellow-light px-[1.125rem] py-3">
+              <span className="text-[0.9375rem] font-bold">
+                Nog niets ingevuld voor{" "}
+                {untouched.map((a, i) => (
+                  <Fragment key={a.entryId}>
+                    {i > 0 && " & "}
+                    <span className="whitespace-nowrap">{entryShortName(state, a.entryId)}</span>
+                  </Fragment>
+                ))}
+              </span>
+              <span className="text-[0.8125rem] text-muted">Alles mis? Kies Niets, of sla 0 op.</span>
+              <div className="flex flex-wrap gap-1.5">
+                <Pill tone="ink" size="sm" onClick={() => save({ allowEmpty: true })}>
+                  0 opslaan
+                </Pill>
+                <Pill tone="ghost" size="sm" onClick={() => setConfirmingFor(null)}>
+                  Annuleren
+                </Pill>
+              </div>
+            </div>
+          )}
           <button
             type="button"
-            onClick={save}
+            onClick={() => save()}
             disabled={finished || !phase}
             className="flex cursor-pointer items-center justify-between rounded-[1.125rem] bg-yellow px-[1.375rem] py-5 text-lg font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
           >
@@ -308,7 +362,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
           </button>
         </div>
         <div className="text-center text-xs text-faint touch:hidden">
-          1–{setup?.targets.length ?? 7} plaat · W andere kant · Enter opslaan · ⌘/Ctrl Z ongedaan
+          1–{setup?.targets.length ?? 7} plaat · 0 niets · W andere kant · Enter opslaan · ⌘/Ctrl Z ongedaan
         </div>
       </aside>
     </div>
@@ -340,6 +394,8 @@ function KnockdownPanel(props: {
   place: number;
   active: boolean;
   locked: boolean;
+  /** Saving asked about this knockdown: point at "Niets". */
+  nudge: boolean;
   onActivate: () => void;
   onToggle: (targetId: string) => void;
   onAll: (all: boolean) => void;
@@ -403,7 +459,13 @@ function KnockdownPanel(props: {
           <Pill size="sm" disabled={locked} onClick={(e) => (e.stopPropagation(), props.onAll(true))}>
             Alles raak
           </Pill>
-          <Pill size="sm" disabled={locked} onClick={(e) => (e.stopPropagation(), props.onAll(false))}>
+          <Pill
+            size="sm"
+            tone={props.nudge ? "outline-ink" : "outline"}
+            className={props.nudge ? "bg-yellow" : ""}
+            disabled={locked}
+            onClick={(e) => (e.stopPropagation(), props.onAll(false))}
+          >
             Niets
           </Pill>
         </div>
