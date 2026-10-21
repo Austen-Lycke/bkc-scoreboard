@@ -20,7 +20,7 @@ export function ScreenError({ error, reset, autoRetrySeconds }: { error: unknown
   }, [autoRetrySeconds, reset]);
 
   return (
-    <main className="mx-auto flex max-w-lg flex-1 flex-col justify-center gap-3 px-6 py-24">
+    <main className="touch-targets mx-auto flex max-w-lg flex-1 flex-col justify-center gap-3 px-6 py-24">
       <span className="text-[0.8125rem] font-bold tracking-[0.2em]">BKC</span>
       <h1 className="text-[1.75rem] font-semibold tracking-tight">Er ging iets mis op dit scherm</h1>
       <p className="text-muted">

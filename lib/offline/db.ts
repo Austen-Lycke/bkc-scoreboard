@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { CompetitionEvent, CompetitionSnapshot, CompetitionStatus } from "@/lib/competition";
+import type { CompetitionEvent, CompetitionSnapshot, CompetitionStatus, LastSave } from "@/lib/competition";
 
 /**
  * Local storage on the operator laptop (IndexedDB). It is the source of truth during a competition;
@@ -24,6 +24,8 @@ export interface LiveRecord {
   pauseEndsAt?: string | null;
   /** Actions the server refused as invalid: they stay on this device but never reach the website. */
   refused?: { count: number; reason: string } | null;
+  /** The last save on the scoring screen, for "Ongedaan maken". */
+  lastSave?: LastSave | null;
   updatedAt: string;
 }
 

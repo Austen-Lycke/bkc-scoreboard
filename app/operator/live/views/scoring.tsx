@@ -10,9 +10,14 @@ import {
   heatKey,
   passOf,
   rankName,
+  sameHits,
   setupForRank,
   standingsFor,
+  undoActions,
+  undoDrafts,
+  type SavedPass,
 } from "@/lib/competition";
+import { buzz } from "@/lib/haptics";
 import { offlineDb } from "@/lib/offline/db";
 import { emit, emitMany, updateLive } from "@/lib/offline/store";
 import { passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
@@ -79,14 +84,14 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     if (!heat || !phase || phaseIndex === null || finished) return;
     // Read the drafts from storage, not from render state: the last tap may be milliseconds old.
     const storedDrafts = (await offlineDb().live.get(id))?.drafts ?? {};
-    const actions = phase
-      .map((a) => {
-        const existing = passOf(state, a.entryId, heat.round, a.knockdown);
-        const hits = storedDrafts[passKey(a.entryId, heat.round, a.knockdown)] ?? existing?.hits ?? [];
-        const unchanged = existing && existing.hits.length === hits.length && hits.every((h) => existing.hits.includes(h));
-        return unchanged ? null : { type: "pass.recorded" as const, payload: { entryId: a.entryId, round: heat.round, knockdown: a.knockdown, hits } };
-      })
-      .filter((a) => a !== null);
+    const passes: SavedPass[] = phase.map((a) => {
+      const existing = passOf(state, a.entryId, heat.round, a.knockdown);
+      const hits = storedDrafts[passKey(a.entryId, heat.round, a.knockdown)] ?? existing?.hits ?? [];
+      return { entryId: a.entryId, round: heat.round, knockdown: a.knockdown, hits, previous: existing?.hits ?? null };
+    });
+    const actions = passes
+      .filter((p) => !(p.previous && sameHits(p.previous, p.hits)))
+      .map(({ entryId, round, knockdown, hits }) => ({ type: "pass.recorded" as const, payload: { entryId, round, knockdown, hits } }));
     if (actions.length) await emitMany(id, actions);
     // Stay on a heat the operator jumped to until its phases are done; otherwise follow the schedule.
     const nextPhase = phaseIndex + 1 < heat.phases.length ? phaseIndex + 1 : null;
@@ -94,7 +99,9 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     await updateLive(id, (current) => ({
       drafts: Object.fromEntries(Object.entries(current.drafts).filter(([k]) => !keys.includes(k))),
       focus: focusIndex >= 0 && nextPhase !== null ? { heatKey: heatKey(heat), phaseIndex: nextPhase } : null,
+      lastSave: { heatKey: heatKey(heat), phaseIndex, focused: focusIndex >= 0, passes, at: new Date().toISOString() },
     }));
+    buzz();
     setActiveKd(1);
     setJustSaved(true);
     clearTimeout(savedTimer.current);
@@ -103,11 +110,42 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
 
   useEffect(() => () => clearTimeout(savedTimer.current), []);
 
-  // Keyboard: 1–n toggles plates on the active knockdown, W switches knockdown, Enter saves.
+  // Only while nothing changed those passes since (a correction in Stand, a takeover).
+  const lastSave = live?.lastSave ?? null;
+  const canUndo = !finished && !!lastSave && undoActions(state, lastSave) !== null;
+
+  /** Takes the last save back: its passes return to how they were, its taps return as drafts. */
+  const undo = useCallback(async () => {
+    const save = (await offlineDb().live.get(id))?.lastSave;
+    if (!save || finished) return;
+    const actions = undoActions(state, save);
+    if (actions?.length) await emitMany(id, actions);
+    await updateLive(id, (current) =>
+      actions
+        ? {
+            lastSave: null,
+            drafts: { ...current.drafts, ...undoDrafts(save) },
+            // New passes are cleared, so the schedule returns there by itself; otherwise go back to it.
+            focus: save.focused || save.passes.some((p) => p.previous) ? { heatKey: save.heatKey, phaseIndex: save.phaseIndex } : null,
+          }
+        : { lastSave: null },
+    );
+    if (actions) buzz([20, 60, 20]);
+    setActiveKd(1);
+    setJustSaved(false);
+  }, [finished, id, setActiveKd, state]);
+
+  // Keyboard: 1–n toggles plates on the active knockdown, W switches knockdown, Enter saves, Cmd/Ctrl+Z undoes.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = e.target instanceof Element ? e.target : null;
-      if (el?.closest("input, select, textarea, [contenteditable], [role=dialog]") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (el?.closest("input, select, textarea, [contenteditable], [role=dialog]")) return;
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        void undo();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (!heat || !setup || finished) return;
       if (e.key === "w" || e.key === "W") {
         e.preventDefault();
@@ -122,7 +160,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeKd, finished, heat, knockdowns, save, setActiveKd, setup, toggle]);
+  }, [activeKd, finished, heat, knockdowns, save, setActiveKd, setup, toggle, undo]);
 
   if (state.entries.size === 0) {
     return (
@@ -151,8 +189,9 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
   const saveLabel = finished ? "Op slot" : justSaved ? "Opgeslagen ✓" : lastPhase ? "Opslaan & volgende" : "Opslaan & wisselen";
 
   return (
-    <div className="flex min-h-0 flex-1 gap-5 px-8 pb-7 pt-2">
-      <div className="flex min-w-0 flex-1 flex-col gap-[0.875rem]">
+    // Portrait (tablet upright): the side column goes under the knockdowns, so their plates keep their size.
+    <div className="flex min-h-0 flex-1 gap-5 px-8 pb-7 pt-2 portrait:flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[0.875rem]">
         {heat && phase && phaseIndex !== null && setup ? (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
@@ -217,37 +256,59 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
           </>
         )}
       </div>
-      <aside className="flex w-[clamp(14.375rem,22vw,18.75rem)] flex-none flex-col gap-4 pt-11">
-        {heat && phaseIndex !== null && heat.phases.length > 1 && <SwapSchedule heat={heat} phaseIndex={phaseIndex} />}
-        <Panel size="md" className="flex flex-col gap-3 px-5 py-[1.125rem]">
-          <div className="text-[0.9375rem] font-semibold">Daarna</div>
-          {next.length === 0 ? (
-            <span className="text-sm text-muted">Niemand meer.</span>
-          ) : (
-            next.map((h, j) => (
-              <div key={heatKey(h)} className="flex items-center gap-3">
-                <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[0.09375rem] border-border text-xs font-semibold">{j + 1}</span>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</div>
-                  <div className="text-xs text-muted">
-                    Ronde {h.round} · {rankName(state, h.rankCode)} · beurt {h.index + 1}
+      <aside className="flex min-h-0 w-[clamp(14.375rem,22vw,18.75rem)] flex-none flex-col gap-4 pt-11 portrait:w-auto portrait:flex-row portrait:items-end portrait:pt-0">
+        {/* On a short screen (tablet in landscape) these scroll, so undo and save always stay in view. */}
+        <div className="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-1 portrait:flex-row portrait:items-start portrait:*:min-w-0 portrait:*:flex-1">
+          {heat && phaseIndex !== null && heat.phases.length > 1 && <SwapSchedule heat={heat} phaseIndex={phaseIndex} />}
+          <Panel size="md" className="flex flex-col gap-3 px-5 py-[1.125rem]">
+            <div className="text-[0.9375rem] font-semibold">Daarna</div>
+            {next.length === 0 ? (
+              <span className="text-sm text-muted">Niemand meer.</span>
+            ) : (
+              next.map((h, j) => (
+                <div key={heatKey(h)} className="flex items-center gap-3">
+                  <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[0.09375rem] border-border text-xs font-semibold">{j + 1}</span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</div>
+                    <div className="text-xs text-muted">
+                      Ronde {h.round} · {rankName(state, h.rankCode)} · beurt {h.index + 1}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              ))
+            )}
+          </Panel>
+        </div>
+        <div className="flex flex-none flex-col gap-2.5 portrait:w-[clamp(14.375rem,30vw,18.75rem)]">
+          {canUndo && (
+            <button
+              type="button"
+              onClick={undo}
+              className="flex cursor-pointer items-center gap-3 rounded-[1.125rem] border-[0.09375rem] border-ink bg-surface px-[1.125rem] py-3 text-left transition hover:bg-hover"
+            >
+              <span aria-hidden className="text-xl leading-none">
+                ↶
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[0.9375rem] font-bold">Ongedaan maken</span>
+                <span className="block truncate text-xs text-muted">
+                  {lastSave!.passes.map((p) => entryShortName(state, p.entryId)).join(" & ")} terug naar vóór opslaan
+                </span>
+              </span>
+            </button>
           )}
-        </Panel>
-        <button
-          type="button"
-          onClick={save}
-          disabled={finished || !phase}
-          className="mt-auto flex cursor-pointer items-center justify-between rounded-[1.125rem] bg-yellow px-[1.375rem] py-5 text-lg font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          <span>{saveLabel}</span>
-          <Kbd>Enter</Kbd>
-        </button>
-        <div className="text-center text-xs text-faint">
-          1–{setup?.targets.length ?? 7} plaat · W andere kant · Enter opslaan
+          <button
+            type="button"
+            onClick={save}
+            disabled={finished || !phase}
+            className="flex cursor-pointer items-center justify-between rounded-[1.125rem] bg-yellow px-[1.375rem] py-5 text-lg font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <span>{saveLabel}</span>
+            <Kbd className="touch:hidden">Enter</Kbd>
+          </button>
+        </div>
+        <div className="text-center text-xs text-faint touch:hidden">
+          1–{setup?.targets.length ?? 7} plaat · W andere kant · Enter opslaan · ⌘/Ctrl Z ongedaan
         </div>
       </aside>
     </div>
@@ -290,13 +351,22 @@ function KnockdownPanel(props: {
       role="group"
       aria-label={`Knockdown ${kd}: ${name}`}
       onClick={props.onActivate}
-      className={`flex min-h-0 min-w-0 cursor-pointer flex-col overflow-hidden rounded-[1.5rem] border-2 bg-surface px-6 py-[1.375rem] transition-colors ${
+      className={`flex min-h-0 min-w-0 cursor-pointer select-none flex-col overflow-hidden rounded-[1.5rem] border-2 bg-surface px-6 py-[1.375rem] transition-colors ${
         active ? "border-ink" : "border-border"
       } ${locked ? "opacity-45" : ""}`}
     >
       <div className="flex items-center justify-between">
         <span className={`rounded-full px-[0.6875rem] py-1 text-[0.8125rem] font-semibold ${active ? "bg-yellow" : "bg-fill"}`}>KD {kd}</span>
-        <span className="text-[0.8125rem] text-faint">{active ? "actief" : "klik om te scoren"}</span>
+        <span className="text-[0.8125rem] text-faint">
+          {active ? (
+            "actief"
+          ) : (
+            <>
+              <span className="touch:hidden">klik om te scoren</span>
+              <span className="hidden touch:inline">tik een plaat</span>
+            </>
+          )}
+        </span>
       </div>
       <div className="mt-2.5 truncate text-[clamp(1.375rem,2.3vw,2rem)] font-semibold tracking-[-0.02em]">{name}</div>
       <div className="@container flex min-h-0 flex-1 flex-col justify-center gap-5 py-3">

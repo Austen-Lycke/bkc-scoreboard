@@ -76,7 +76,10 @@ export function StandingsView() {
             </button>
           );
         })}
-        <span className="ml-auto text-[0.8125rem] text-faint">Klik op een score om ze aan te passen</span>
+        <span className="ml-auto text-[0.8125rem] text-faint">
+          <span className="touch:hidden">Klik</span>
+          <span className="hidden touch:inline">Tik</span> op een score om ze aan te passen
+        </span>
       </div>
       <div className="overflow-x-auto rounded-[1.5rem] border border-border bg-surface px-2.5 py-2">
         <div style={{ minWidth: `${47.5 + (cols.length - 4) * 5.75}rem` }}>

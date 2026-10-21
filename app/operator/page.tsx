@@ -26,7 +26,7 @@ const dateFormat = new Intl.DateTimeFormat("nl-BE", { weekday: "short", day: "nu
 
 export default function OperatorHome() {
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-10">
+    <main className="touch-targets mx-auto w-full max-w-5xl px-6 py-10">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-muted">BKC Wedstrijden</p>

@@ -101,7 +101,7 @@ function Shell() {
 
   return (
     <NavContext.Provider value={nav}>
-      <div className="flex h-screen min-h-[48.75rem] flex-col bg-background">
+      <div className="touch-targets flex h-dvh min-h-[40rem] flex-col bg-background">
         <header className="flex flex-none items-center gap-6 px-8 pb-3 pt-[1.125rem]">
           <Link href="/operator" title="Naar de wedstrijdleiding" className="text-[0.8125rem] font-bold tracking-[0.2em]">
             BKC
@@ -116,7 +116,7 @@ function Shell() {
             current={progress.heatIndex}
             className="mx-auto max-w-[35rem] flex-1"
           />
-          <SyncBadge sync={sync} unsynced={unsynced} demo={demo} />
+          <SyncBadge sync={sync} unsynced={unsynced} demo={demo} onSync={() => syncNow(id)} />
           <button
             type="button"
             onClick={() => openTvWindow(id)}
@@ -332,8 +332,11 @@ function StatusControl() {
 
 const timeOnly = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
 
-/** Connection and sharing state, based on the last sync attempt (more reliable than navigator.onLine). */
-function SyncBadge({ sync, unsynced, demo }: { sync: SyncStatus; unsynced: number; demo: boolean }) {
+/**
+ * Connection and sharing state, based on the last sync attempt (more reliable than navigator.onLine).
+ * Tapping it syncs right away instead of waiting for the next heartbeat.
+ */
+function SyncBadge({ sync, unsynced, demo, onSync }: { sync: SyncStatus; unsynced: number; demo: boolean; onSync: () => void }) {
   const label: Record<SyncStatus["state"], string> = {
     idle: "Verbinden…",
     syncing: "Synchroniseren…",
@@ -350,18 +353,33 @@ function SyncBadge({ sync, unsynced, demo }: { sync: SyncStatus; unsynced: numbe
       : sync.state === "offline"
         ? "Alles wordt lokaal bewaard en gedeeld zodra er verbinding is."
         : undefined;
-  return (
-    <span className="flex shrink-0 items-center gap-1.5 text-[0.8125rem] text-muted" aria-live="polite" title={title}>
-      <span className="size-[0.4375rem] rounded-full" style={{ background: dot }} />
+  const content = (
+    <>
+      <span className="size-[0.4375rem] flex-none rounded-full" style={{ background: dot }} />
       {demo ? "Demo · niet gedeeld" : label[sync.state]}
       {!demo && unsynced > 0 && <span className="text-faint">· {unsynced} nog te delen</span>}
-    </span>
+    </>
+  );
+  if (demo) {
+    return <span className="flex shrink-0 items-center gap-1.5 text-[0.8125rem] text-muted">{content}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onSync}
+      disabled={sync.state === "syncing"}
+      aria-live="polite"
+      title={title ? `${title} Tik om nu te synchroniseren.` : "Tik om nu te synchroniseren."}
+      className="-mx-2.5 flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.8125rem] text-muted hover:bg-hover hover:text-ink disabled:cursor-progress"
+    >
+      {content}
+    </button>
   );
 }
 
 function Message({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
-    <main className="mx-auto flex max-w-lg flex-1 flex-col justify-center gap-3 px-6 py-24">
+    <main className="touch-targets mx-auto flex max-w-lg flex-1 flex-col justify-center gap-3 px-6 py-24">
       <span className="text-[0.8125rem] font-bold tracking-[0.2em]">BKC</span>
       <h1 className="text-[1.75rem] font-semibold tracking-tight">{title}</h1>
       {children && <p className="text-muted">{children}</p>}

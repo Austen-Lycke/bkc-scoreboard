@@ -116,10 +116,14 @@ export function useSyncLoop(competitionId: string, enabled: boolean, unsynced: n
     void syncNow(competitionId);
     const timer = setInterval(() => void syncNow(competitionId), HEARTBEAT_MS);
     const onOnline = () => void syncNow(competitionId);
+    // Losing the network is certain, so show it right away; "online" only means "try again".
+    const onOffline = () => setStatus(competitionId, { state: "offline", message: undefined });
     window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
     return () => {
       clearInterval(timer);
       window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
     };
   }, [competitionId, enabled]);
 

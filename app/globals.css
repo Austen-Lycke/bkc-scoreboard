@@ -3,6 +3,9 @@
 /* Light only: the screens are designed for a bright club room. `dark:` only applies under a .dark class. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* `touch:` = the main pointer is a finger (tablet): keyboard hints are hidden, wording says "tik". */
+@custom-variant touch (@media (pointer: coarse));
+
 /* BKC palette: ink and paper with one yellow accent (see the design handoff). */
 :root {
   --ink: #141414;
@@ -80,4 +83,24 @@ button {
 :where(button, [role="button"], a):focus-visible {
   outline: 0.125rem solid var(--ink);
   outline-offset: 0.125rem;
+}
+
+/*
+ * Operator screens with a touchscreen (tablet, or a laptop with one): every control is at least
+ * 2.75rem (44px) to tap, and a quick second tap never zooms the page. Unlayered, so it wins over the
+ * Tailwind sizes; elements that set their own width/height inline (the plates) keep them.
+ */
+@media (any-pointer: coarse) {
+  /* Links in running text are inline, and min-height doesn't apply to those. */
+  .touch-targets :where(button, select, input:not([type="checkbox"], [type="radio"]), a[href], [role="button"], [role="radio"], [role="switch"]) {
+    min-height: 2.75rem;
+  }
+  .touch-targets :where(button, a[href], [role="button"], [role="radio"]) {
+    min-width: 2.75rem;
+  }
+}
+
+.touch-targets :where(button, a, [role="button"], [role="radio"]) {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }

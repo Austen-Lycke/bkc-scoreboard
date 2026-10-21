@@ -155,6 +155,8 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
             ))}
             {remaining.length === 0 && <span className="text-sm text-muted">Alle doelen zijn geroepen.</span>}
           </div>
+          {/* Also as text: a tooltip never shows on a tablet. */}
+          {blocked && remaining.length > 0 && <span className="-mt-2 text-xs text-muted">Vul eerst raak of mis in voor het vorige doel.</span>}
           <div className="overflow-x-auto border-t border-divider pt-1.5">
             <div className="flex items-center py-2 text-xs font-semibold text-faint">
               <span className="min-w-[9.375rem] flex-1">Schutter</span>
