@@ -24,10 +24,19 @@ function functions(source: string) {
 }
 
 describe("access checks", () => {
-  it("every admin page requires the admin role", () => {
+  it("every admin page requires the admin role, accounts the owner role", () => {
     const pages = files("app/admin/**/page.tsx");
     expect(pages.length).toBeGreaterThan(5);
-    for (const page of pages) expect(read(page), page).toMatch(/await requireRole\("admin"\)/);
+    for (const page of pages) {
+      const role = page.startsWith("app/admin/gebruikers/") ? "owner" : "admin";
+      expect(read(page), page).toMatch(new RegExp(`await requireRole\\("${role}"\\)`));
+    }
+  });
+
+  it("only the owner manages accounts", () => {
+    const source = read("app/admin/gebruikers/actions.ts");
+    expect(source).not.toMatch(/requireRole\("admin"/);
+    expect(source.match(/requireRole\(/g)?.length).toBe(2); // createUser and guard()
   });
 
   it("every operator page requires a role, except the offline shells", () => {

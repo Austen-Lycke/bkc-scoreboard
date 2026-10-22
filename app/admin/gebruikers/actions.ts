@@ -1,6 +1,6 @@
 "use server";
 
-import { and, count, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
@@ -12,11 +12,12 @@ export interface FormState {
   message?: string;
 }
 
+/** The roles you can hand out here; "owner" is set from the command line only. */
 const role = z.enum(["admin", "operator"]);
 const password = z.string().min(MIN_PASSWORD, `Het wachtwoord moet minstens ${MIN_PASSWORD} tekens hebben`).max(200);
 
 export async function createUser(_prev: FormState, form: FormData): Promise<FormState> {
-  await requireRole("admin");
+  await requireRole("owner");
   const parsed = z
     .object({ name: z.string().trim().min(2, "Geef een naam").max(80), email: z.email("Ongeldig e-mailadres"), role, password })
     .safeParse({ name: form.get("name"), email: form.get("email"), role: form.get("role"), password: form.get("password") });
@@ -28,19 +29,19 @@ export async function createUser(_prev: FormState, form: FormData): Promise<Form
   return { message: `Account aangemaakt voor ${parsed.data.email}. Geef het wachtwoord persoonlijk door.` };
 }
 
-/** Guards against locking the club out: you can't demote or delete yourself, and one admin must remain. */
-async function guard(userId: string) {
-  const session = await requireRole("admin");
-  if (session.user.id === userId) return "Dat kan je niet voor je eigen account.";
+/**
+ * Accounts are the hoofdbeheerder's alone, so a beheerder can't take over or lock out anyone. Nobody
+ * changes their own role or deletes themselves, and owner accounts are only changed from the command
+ * line (scripts/create-admin.ts): there is always a hoofdbeheerder left.
+ */
+async function guard(userId: string, { allowSelf = false } = {}) {
+  const session = await requireRole("owner");
+  const self = session.user.id === userId;
+  if (self && !allowSelf) return "Dat kan je niet voor je eigen account.";
+  const target = await getDb().query.user.findFirst({ where: eq(schema.user.id, userId), columns: { role: true } });
+  if (!target) return "Account niet gevonden.";
+  if (target.role === "owner" && !self) return "Een hoofdbeheerder kan je hier niet aanpassen.";
   return null;
-}
-
-async function otherAdmins(userId: string) {
-  const [{ n }] = await getDb()
-    .select({ n: count() })
-    .from(schema.user)
-    .where(and(eq(schema.user.role, "admin"), ne(schema.user.id, userId)));
-  return n;
 }
 
 export async function setRole(userId: string, newRole: string): Promise<FormState> {
@@ -48,14 +49,14 @@ export async function setRole(userId: string, newRole: string): Promise<FormStat
   if (blocked) return { error: blocked };
   const parsed = role.safeParse(newRole);
   if (!parsed.success) return { error: "Ongeldige rol" };
-  if (parsed.data !== "admin" && (await otherAdmins(userId)) === 0) return { error: "Er moet minstens één beheerder overblijven." };
   await getDb().update(schema.user).set({ role: parsed.data }).where(eq(schema.user.id, userId));
   refresh();
   return { message: "Rol aangepast." };
 }
 
 export async function setPassword(userId: string, newPassword: string): Promise<FormState> {
-  await requireRole("admin");
+  const blocked = await guard(userId, { allowSelf: true });
+  if (blocked) return { error: blocked };
   const parsed = password.safeParse(newPassword);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   await resetPassword(userId, parsed.data);
@@ -65,7 +66,6 @@ export async function setPassword(userId: string, newPassword: string): Promise<
 export async function deleteUser(userId: string): Promise<FormState> {
   const blocked = await guard(userId);
   if (blocked) return { error: blocked };
-  if ((await otherAdmins(userId)) === 0) return { error: "Er moet minstens één beheerder overblijven." };
   await getDb().delete(schema.user).where(eq(schema.user.id, userId));
   refresh();
   return { message: "Account verwijderd." };

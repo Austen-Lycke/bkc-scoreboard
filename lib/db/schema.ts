@@ -241,7 +241,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
-  /** "admin" manages everything; "operator" runs competitions. */
+  /** "owner" manages everything incl. accounts; "admin" everything else; "operator" runs competitions. */
   role: text("role").notNull().default("operator"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")

@@ -43,7 +43,13 @@ npm run db:migrate:prod     # live database: run after adding a migration, befor
 on its own) and stops if that fails. The file holds members and password hashes: it stays on your
 machine, out of git. Neon's restore window (project settings) is the second safety net.
 
-Admins can also manage accounts in `/admin/gebruikers`.
+The hoofdbeheerder (`owner`) manages accounts in `/admin/gebruikers`; beheerders (`admin`) can do
+everything else but not see or change accounts. Making someone hoofdbeheerder, or changing one,
+only happens from the command line (leave out the password to change only the role):
+
+```bash
+npm run create-user:prod -- you@example.com "Your Name" owner
+```
 
 ## Layout
 
@@ -53,7 +59,7 @@ Admins can also manage accounts in `/admin/gebruikers`.
   a tablet viewport. `npx playwright install chromium` once, then `npm run test:e2e` (starts or
   reuses `npm run dev`; needs no database or login).
 - `lib/db/` — Drizzle schema and migrations (`npm run db:generate` after schema changes).
-- `lib/auth.ts` — Better Auth (email/password, roles `admin` / `operator`, no public sign-up).
+- `lib/auth.ts` — Better Auth (email/password, roles `owner` / `admin` / `operator`, no public sign-up).
 - `lib/offline/`, `app/operator/live`, `app/tv` — the offline operator app and the venue TV (IndexedDB,
   service worker in `public/sw.js`, sync to the server).
 - `app/(public)` — the public website; `app/admin` — the admin area.

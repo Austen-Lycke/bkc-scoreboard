@@ -1,5 +1,6 @@
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
+import { hasRole } from "@/lib/auth";
 import { sessionWithRole } from "@/lib/server/auth-guard";
 import { applySync } from "@/lib/server/sync";
 
@@ -24,7 +25,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/operator/co
     deviceId: parsed.data.deviceId,
     takeover: parsed.data.takeover ?? false,
     events: parsed.data.events,
-    mayEditClosedSeason: auth.session.user.role === "admin",
+    mayEditClosedSeason: hasRole(auth.session.user.role, "admin"),
   });
   if (result.kind === "not_found") return Response.json({ error: "Wedstrijd niet gevonden" }, { status: 404 });
   if (result.kind === "lease") {

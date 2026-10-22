@@ -14,6 +14,9 @@ export function UserRow({ user, isSelf }: { user: { id: string; name: string; em
   const [pending, start] = useTransition();
   const [open, setOpen] = useState<"password" | "delete" | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  // Another hoofdbeheerder is read-only here (the server refuses it too).
+  const owner = user.role === "owner";
+  const locked = owner && !isSelf;
   const run = (fn: () => Promise<FormState>, then?: () => void) =>
     start(async () => {
       const r = await fn();
@@ -32,32 +35,41 @@ export function UserRow({ user, isSelf }: { user: { id: string; name: string; em
                 jij
               </Tag>
             )}
+            {owner && (
+              <Tag tone="ink" size="sm">
+                hoofdbeheerder
+              </Tag>
+            )}
           </span>
           <span className="truncate text-[0.8125rem] text-muted">{user.email}</span>
         </div>
-        <Segmented<Role>
-          label={`Rol van ${user.name}`}
-          size="sm"
-          options={[
-            { value: "admin", label: "Beheerder" },
-            { value: "operator", label: "Wedstrijdleiding" },
-          ]}
-          value={user.role === "admin" ? "admin" : "operator"}
-          disabled={isSelf || pending}
-          onChange={(role) => run(() => setRole(user.id, role))}
-        />
-        <Pill
-          size="xs"
-          className="py-1.5"
-          onClick={() => {
-            setOpen(open === "password" ? null : "password");
-            setNewPassword("");
-            setResult({});
-          }}
-        >
-          Nieuw wachtwoord
-        </Pill>
-        {!isSelf && (
+        {!owner && (
+          <Segmented<Role>
+            label={`Rol van ${user.name}`}
+            size="sm"
+            options={[
+              { value: "admin", label: "Beheerder" },
+              { value: "operator", label: "Wedstrijdleiding" },
+            ]}
+            value={user.role === "admin" ? "admin" : "operator"}
+            disabled={isSelf || pending}
+            onChange={(role) => run(() => setRole(user.id, role))}
+          />
+        )}
+        {!locked && (
+          <Pill
+            size="xs"
+            className="py-1.5"
+            onClick={() => {
+              setOpen(open === "password" ? null : "password");
+              setNewPassword("");
+              setResult({});
+            }}
+          >
+            Nieuw wachtwoord
+          </Pill>
+        )}
+        {!isSelf && !owner && (
           <Pill size="xs" tone="danger-outline" className="py-1.5" onClick={() => (setOpen("delete"), setResult({}))}>
             Verwijderen
           </Pill>

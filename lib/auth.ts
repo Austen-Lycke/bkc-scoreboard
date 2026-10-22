@@ -47,4 +47,13 @@ export function getAuth(): Auth {
   return instance;
 }
 
-export type Role = "admin" | "operator";
+/**
+ * "owner" (hoofdbeheerder) can do everything, including managing accounts; "admin" (beheerder)
+ * everything except accounts; "operator" (wedstrijdleiding) runs competitions.
+ */
+export type Role = "owner" | "admin" | "operator";
+
+/** Whether a user's role is one of `roles`. An owner passes every check an admin passes. */
+export function hasRole(role: string | null | undefined, ...roles: Role[]) {
+  return roles.includes(role as Role) || (role === "owner" && roles.includes("admin"));
+}

@@ -1,7 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { forbidden, redirect } from "next/navigation";
-import { getAuth, type Role } from "@/lib/auth";
+import { getAuth, hasRole, type Role } from "@/lib/auth";
 
 export async function getSession() {
   return getAuth().api.getSession({ headers: await headers() });
@@ -15,6 +15,6 @@ export async function getSession() {
 export async function requireRole(...roles: Role[]) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (!roles.includes(session.user.role as Role)) forbidden();
+  if (!hasRole(session.user.role, ...roles)) forbidden();
   return session;
 }

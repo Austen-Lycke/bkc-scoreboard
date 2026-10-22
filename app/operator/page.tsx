@@ -2,6 +2,7 @@ import { desc } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { hasRole } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { NewCompetitionForm } from "./new-competition-form";
@@ -106,7 +107,7 @@ async function Competitions() {
         )}
         <p className="mt-6 text-sm text-muted">
           Aangemeld als {session.user.name}
-          {session.user.role === "admin" && (
+          {hasRole(session.user.role, "admin") && (
             <>
               {" · "}
               <Link href="/admin" className="underline underline-offset-4 hover:text-foreground">

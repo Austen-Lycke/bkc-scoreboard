@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { pillClass } from "@/components/styles";
+import { hasRole } from "@/lib/auth";
 import { readFlash } from "@/lib/server/flash";
-import { requireRole } from "@/lib/session";
+import { getSession, requireRole } from "@/lib/session";
 import { AdminNav, AdminNavFallback } from "./admin-nav";
 import { FlashBar } from "./flash-bar";
 
@@ -29,7 +30,7 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
           </div>
         </header>
         <Suspense fallback={<AdminNavFallback />}>
-          <AdminNav />
+          <Nav />
         </Suspense>
       </div>
       <main className="w-full flex-1 px-4 pb-8 pt-2 sm:px-8 print:p-0">
@@ -44,6 +45,12 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
       </main>
     </div>
   );
+}
+
+/** Gebruikers only shows for the hoofdbeheerder; the page itself checks that too. */
+async function Nav() {
+  const session = await getSession();
+  return <AdminNav owner={hasRole(session?.user.role, "owner")} />;
 }
 
 async function AdminOnly({ children }: { children: React.ReactNode }) {

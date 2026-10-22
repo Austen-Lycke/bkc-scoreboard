@@ -1,11 +1,12 @@
 import { count, eq, sql } from "drizzle-orm";
 import Link from "next/link";
+import { hasRole } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { currentSeasonYear, RULE_LABEL } from "@/lib/server/season";
 import { requireRole } from "@/lib/session";
 
 export default async function AdminHome() {
-  await requireRole("admin");
+  const session = await requireRole("admin");
   const db = getDb();
   const year = await currentSeasonYear();
   const [season, [shooters], comps, [users]] = await Promise.all([
@@ -29,7 +30,9 @@ export default async function AdminHome() {
       value: byStatus(["prepared", "draft", "warmup", "round1", "break", "round2", "semifinal", "final", "shootoff", "finished", "published"]),
       detail: `${byStatus(["finished", "published"])} afgewerkt · ${byStatus(["prepared", "draft"])} gepland`,
     },
-    { href: "/admin/gebruikers", label: "Gebruikers", value: users.n, detail: "Beheerders en wedstrijdleiding" },
+    ...(hasRole(session.user.role, "owner")
+      ? [{ href: "/admin/gebruikers", label: "Gebruikers", value: users.n, detail: "Beheerders en wedstrijdleiding" }]
+      : []),
   ];
 
   return (
