@@ -6,6 +6,7 @@ import {
   buildDemoSnapshot,
   buildState,
   DEMO_COMPETITION_ID,
+  WSA_DEMO_ID,
   type CompetitionSnapshot,
   type CompetitionState,
   type EventPayload,
@@ -58,13 +59,13 @@ export async function saveSnapshot(snapshot: CompetitionSnapshot): Promise<void>
   });
 }
 
-/** Creates the demo competition on this device (again), wiping earlier demo scores. */
-export async function resetDemo(): Promise<void> {
+/** Creates a demo competition on this device (again), wiping earlier demo scores. */
+export async function resetDemo(id: string = DEMO_COMPETITION_ID): Promise<void> {
   const db = offlineDb();
   await db.transaction("rw", [db.snapshots, db.events, db.live, db.meta], async () => {
-    await db.events.where("competitionId").equals(DEMO_COMPETITION_ID).delete();
-    await db.live.delete(DEMO_COMPETITION_ID);
-    await saveSnapshot(buildDemoSnapshot());
+    await db.events.where("competitionId").equals(id).delete();
+    await db.live.delete(id);
+    await saveSnapshot(buildDemoSnapshot(new Date(), id === WSA_DEMO_ID ? "wsa" : "spanish"));
   });
 }
 

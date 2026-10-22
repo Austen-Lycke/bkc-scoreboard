@@ -58,6 +58,15 @@ export default async function EditCompetitionPage({ params }: PageProps<"/admin/
           location: comp.location ?? "",
           countsForSeason: comp.countsForSeason,
           setupIds: Object.fromEntries(Object.entries(comp.setupByRank).map(([rank, s]) => [rank, s.id])),
+          wsa: comp.format
+            ? {
+                lanes: comp.format.lanes,
+                round1: comp.format.setupByRound?.["1"]?.id ?? "wsa_v1",
+                round2: comp.format.setupByRound?.["2"]?.id ?? "wsa_v2",
+                semifinal: comp.format.knockout?.semifinal ?? false,
+                final: comp.format.knockout?.final ?? false,
+              }
+            : null,
           device: comp.operatorDeviceId
             ? { id: comp.operatorDeviceId.replace(/^dev-/, "").slice(0, 8), lastSeen: comp.operatorLeaseAt ? lastSeen(comp.operatorLeaseAt) : null }
             : null,

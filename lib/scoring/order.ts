@@ -23,40 +23,86 @@ export function reverseRankingOrder(
   });
 }
 
+/** One shooter on the line in one phase of a heat. */
+export interface LineSpot {
+  entryId: string;
+  /**
+   * Which pass of the round this is: the knockdown shot on (Spanish, swapping) or the series number
+   * (WSA, own frame). The third part of `passKey`; stored as "knockdown".
+   */
+  knockdown: number;
+  /** The knockdown (frame) the shooter stands at, from 1. */
+  lane: number;
+}
+
 export interface Heat {
   round: number;
-  rankCode: string;
-  /** Position of this heat within its rank and round, starting at 0. */
+  /** The group shooting: a rank, or several ranks together (WSA: Junior / Volwassenen). */
+  groupCode: string;
+  /** Position of this heat within its group and round, starting at 0. */
   index: number;
-  /** Entry ids shooting together, one per knockdown (the last heat may be short). */
+  /** Entry ids on the line together, one per lane (the last heat may be short). */
   shooters: string[];
-  /** Per phase: who shoots which knockdown. Shooters rotate over the knockdowns between phases. */
-  phases: { entryId: string; knockdown: number }[][];
+  /** Per phase (one series each): who stands where and which pass they shoot. */
+  phases: LineSpot[][];
+}
+
+export interface LineFormat {
+  lanes: number;
+  seriesPerRound: number;
+  rotate: boolean;
 }
 
 /**
- * The full shooting schedule of a competition: per round, ranks in the given order (Junior first),
- * each rank split into heats of `knockdowns` shooters. In every phase each shooter has their own
- * knockdown; after the phase they rotate ("wissel"), until everyone has shot every knockdown.
+ * The heats of one group in one round: `lanes` shooters at a time, in the given order. With `rotate`
+ * every shooter moves on a knockdown after each phase ("wissel") until everyone has shot every
+ * knockdown; otherwise they keep their frame and shoot `series` series on it.
  */
-export function buildSchedule(opts: {
-  rankOrder: readonly string[];
-  ordersByRank: Readonly<Record<string, readonly string[]>>;
-  rounds: number;
-  knockdowns: number;
+export function groupHeats(opts: {
+  round: number;
+  groupCode: string;
+  order: readonly string[];
+  lanes: number;
+  series: number;
+  rotate: boolean;
 }): Heat[] {
-  const { rankOrder, ordersByRank, rounds, knockdowns } = opts;
+  const { round, groupCode, order, lanes, series, rotate } = opts;
+  const heats: Heat[] = [];
+  for (let i = 0, index = 0; i < order.length; i += lanes, index++) {
+    const shooters = order.slice(i, i + lanes);
+    const phases = Array.from({ length: series }, (_, p) =>
+      shooters.map((entryId, s) => {
+        if (!rotate) return { entryId, knockdown: p + 1, lane: s + 1 };
+        const kd = ((s + p) % lanes) + 1;
+        return { entryId, knockdown: kd, lane: kd };
+      }),
+    );
+    heats.push({ round, groupCode, index, shooters, phases });
+  }
+  return heats;
+}
+
+/** The qualification schedule: per round, every group in the given order (Junior first). */
+export function buildSchedule(opts: {
+  groupOrder: readonly string[];
+  ordersByGroup: Readonly<Record<string, readonly string[]>>;
+  rounds: number;
+  format: LineFormat;
+}): Heat[] {
+  const { groupOrder, ordersByGroup, rounds, format } = opts;
   const heats: Heat[] = [];
   for (let round = 1; round <= rounds; round++) {
-    for (const rankCode of rankOrder) {
-      const order = ordersByRank[rankCode] ?? [];
-      for (let i = 0, index = 0; i < order.length; i += knockdowns, index++) {
-        const shooters = order.slice(i, i + knockdowns);
-        const phases = Array.from({ length: knockdowns }, (_, p) =>
-          shooters.map((entryId, s) => ({ entryId, knockdown: ((s + p) % knockdowns) + 1 })),
-        );
-        heats.push({ round, rankCode, index, shooters, phases });
-      }
+    for (const groupCode of groupOrder) {
+      heats.push(
+        ...groupHeats({
+          round,
+          groupCode,
+          order: ordersByGroup[groupCode] ?? [],
+          lanes: format.lanes,
+          series: format.seriesPerRound,
+          rotate: format.rotate,
+        }),
+      );
     }
   }
   return heats;

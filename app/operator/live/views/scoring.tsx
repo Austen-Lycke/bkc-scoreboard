@@ -7,14 +7,17 @@ import {
   entryName,
   entryShortName,
   entryTotal,
+  groupName,
   heatKey,
   passOf,
-  rankName,
+  pendingShootoffs,
+  roundName,
   sameHits,
-  setupForRank,
+  setupFor,
   standingsFor,
   undoActions,
   undoDrafts,
+  type CompetitionState,
   type SavedPass,
 } from "@/lib/competition";
 import { buzz } from "@/lib/haptics";
@@ -22,31 +25,52 @@ import { offlineDb } from "@/lib/offline/db";
 import { emit, emitMany, updateLive } from "@/lib/offline/store";
 import { passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
 import { useComp, useNav } from "../context";
+import { LineScoring } from "./line-scoring";
 import { OPERATOR_HIT, OPERATOR_OPEN, Plate, plateRows } from "@/components/plates";
 import { Empty, Kbd, Panel, Pill } from "@/components/ui";
 
-/**
- * Scoring the heat that's shooting: one panel per knockdown, the shooter assigned to it in this
- * phase, and their plates. Taps are drafts (shown live on the TV); "Opslaan" records the passes.
- */
-export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setActiveKd: (kd: number) => void }) {
-  const { id, state, live } = useComp();
-  const { goTo } = useNav();
+/** The heat on the line: the next one in the schedule, or the one the operator jumped to. */
+export function useLineup() {
+  const { state, live } = useComp();
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);
-  const [justSaved, setJustSaved] = useState(false);
-  const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const finished = state.status === "finished";
-
   const focusIndex = live?.focus ? schedule.findIndex((h) => heatKey(h) === live.focus!.heatKey) : -1;
   const heatIndex = focusIndex >= 0 ? focusIndex : progress.heatIndex;
   const rawPhase = focusIndex >= 0 ? live!.focus!.phaseIndex : progress.phaseIndex;
   const heat = heatIndex === null ? null : schedule[heatIndex];
   const phaseIndex = heat && rawPhase !== null ? Math.min(rawPhase, heat.phases.length - 1) : null;
+  return { schedule, focusIndex, heatIndex, heat, phaseIndex };
+}
+
+/** "Volwassenen · ronde 1 · beurt 2". */
+export const heatTitle = (state: CompetitionState, heat: Heat) => `${groupName(state, heat.groupCode)} · ${roundName(state, heat.round)} · beurt ${heat.index + 1}`;
+
+/**
+ * Scoring the heat that's shooting. Plates (Spanish): one panel per knockdown to tap. Points (WSA):
+ * one table for the whole line, typed from the scorecards.
+ */
+export function ScoringView(props: { activeKd: number; setActiveKd: (kd: number) => void }) {
+  const { state } = useComp();
+  const { heat } = useLineup();
+  if (heat && setupFor(state, heat.groupCode, heat.round).entry === "points") return <LineScoring />;
+  return <PlateScoring {...props} />;
+}
+
+/**
+ * One panel per knockdown, the shooter assigned to it in this phase, and their plates. Taps are
+ * drafts (shown live on the TV); "Opslaan" records the passes.
+ */
+function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd: (kd: number) => void }) {
+  const { id, state, live } = useComp();
+  const { schedule, focusIndex, heatIndex, heat, phaseIndex } = useLineup();
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const finished = state.status === "finished";
+
   const phase = heat && phaseIndex !== null ? heat.phases[phaseIndex] : null;
-  const knockdowns = state.snapshot.competition.knockdowns;
+  const knockdowns = state.format.lanes;
   const drafts = useMemo(() => live?.drafts ?? {}, [live]);
-  const setup = heat ? setupForRank(state.snapshot, heat.rankCode) : null;
+  const setup = heat ? setupFor(state, heat.groupCode, heat.round) : null;
 
   const hitsOf = useCallback(
     (entryId: string, kd: number) => {
@@ -206,7 +230,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
     return entryTotal(state, entryId) - (saved?.score ?? 0) + scorePass(setup!, hitsOf(entryId, kd));
   };
   const placeOf = (entryId: string, total: number) => {
-    const rows = standingsFor(state, heat!.rankCode).rows.filter((r) => !r.withdrawn && r.entryId !== entryId);
+    const rows = standingsFor(state, heat!.groupCode).rows.filter((r) => !r.withdrawn && r.entryId !== entryId);
     const totals = rows.map((r) => {
       const onLine = phase!.find((s) => s.entryId === r.entryId);
       return onLine ? liveTotal(r.entryId, onLine.knockdown) : r.total;
@@ -227,9 +251,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
         {heat && phase && phaseIndex !== null && setup ? (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
-              <span className="text-[1.375rem] font-semibold">
-                {rankName(state, heat.rankCode)} · ronde {heat.round} · beurt {heat.index + 1}
-              </span>
+              <span className="text-[1.375rem] font-semibold">{heatTitle(state, heat)}</span>
               <span className="flex items-baseline gap-3 text-sm text-muted">
                 {focusIndex >= 0 && (
                   <button type="button" onClick={() => updateLive(id, { focus: null })} className="cursor-pointer font-semibold text-ink underline underline-offset-2">
@@ -280,16 +302,7 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
         ) : (
           <>
             {finished && <FinishedBanner />}
-            <Panel className="flex flex-col items-start gap-3 px-7 py-6">
-              <span className="text-[1.375rem] font-semibold">Alle beurten zijn geschoten</span>
-              <span className="text-[0.9375rem] text-muted">Kijk de stand na en los eventuele gelijke standen op via Afkamping.</span>
-              <div className="flex flex-wrap gap-2">
-                <Pill tone="ink" onClick={() => goTo("standings")}>
-                  Naar de stand
-                </Pill>
-                <Pill onClick={() => goTo("shootoff")}>Naar afkamping</Pill>
-              </div>
-            </Panel>
+            <AllShot />
           </>
         )}
       </div>
@@ -297,25 +310,8 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
       <aside className="flex min-h-0 flex-none flex-col gap-4 max-md:contents md:portrait:flex-row md:portrait:items-end md:landscape:w-[clamp(14.375rem,22vw,18.75rem)] md:landscape:pt-11">
         {/* On a short screen (tablet in landscape) these scroll, so undo and save always stay in view. */}
         <div className="-m-1 flex min-h-0 flex-1 flex-col gap-4 p-1 sm:max-md:flex-row sm:max-md:items-start sm:max-md:*:min-w-0 sm:max-md:*:flex-1 md:overflow-y-auto md:overscroll-contain md:portrait:flex-row md:portrait:items-start md:portrait:*:min-w-0 md:portrait:*:flex-1">
-          {heat && phaseIndex !== null && heat.phases.length > 1 && <SwapSchedule heat={heat} phaseIndex={phaseIndex} />}
-          <Panel size="md" className="flex flex-col gap-3 px-5 py-[1.125rem]">
-            <div className="text-[0.9375rem] font-semibold">Daarna</div>
-            {next.length === 0 ? (
-              <span className="text-sm text-muted">Niemand meer.</span>
-            ) : (
-              next.map((h, j) => (
-                <div key={heatKey(h)} className="flex items-center gap-3">
-                  <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[0.09375rem] border-border text-xs font-semibold">{j + 1}</span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</div>
-                    <div className="text-xs text-muted">
-                      Ronde {h.round} · {rankName(state, h.rankCode)} · beurt {h.index + 1}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </Panel>
+          {heat && phaseIndex !== null && heat.phases.length > 1 && state.format.rotate && <SwapSchedule heat={heat} phaseIndex={phaseIndex} />}
+          <NextUp next={next} />
         </div>
         <div className="flex flex-none flex-col gap-2.5 max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mb-4 max-md:bg-background max-md:pb-4 max-md:pt-2 md:portrait:w-[clamp(14.375rem,30vw,18.75rem)]">
           {canUndo && (
@@ -376,7 +372,64 @@ export function ScoringView({ activeKd, setActiveKd }: { activeKd: number; setAc
   );
 }
 
-function FinishedBanner() {
+/** The next heats in line. A heat of more than two (WSA) lists its names under the count. */
+export function NextUp({ next }: { next: Heat[] }) {
+  const { state } = useComp();
+  return (
+    <Panel size="md" className="flex flex-col gap-3 px-5 py-[1.125rem]">
+      <div className="text-[0.9375rem] font-semibold">Daarna</div>
+      {next.length === 0 ? (
+        <span className="text-sm text-muted">Niemand meer.</span>
+      ) : (
+        next.map((h, j) => (
+          <div key={heatKey(h)} className="flex items-center gap-3">
+            <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[0.09375rem] border-border text-xs font-semibold">{j + 1}</span>
+            <div className="min-w-0">
+              {h.shooters.length > 2 ? (
+                <>
+                  <div className="text-sm font-semibold">{h.shooters.length} schutters</div>
+                  <div className="line-clamp-2 text-xs text-muted">{h.shooters.map((e) => entryShortName(state, e)).join(", ")}</div>
+                </>
+              ) : (
+                <div className="truncate text-sm font-semibold">{h.shooters.map((e) => entryName(state, e)).join(" & ")}</div>
+              )}
+              <div className="text-xs text-muted first-letter:uppercase">
+                {roundName(state, h.round)} · {groupName(state, h.groupCode)} · beurt {h.index + 1}
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </Panel>
+  );
+}
+
+/** Nothing left on the line: on to the standings, or first an afkamping (a tie on a cut line holds up the knockout). */
+export function AllShot() {
+  const { state } = useComp();
+  const { goTo } = useNav();
+  const cut = pendingShootoffs(state).find((p) => p.stage);
+  return (
+    <Panel className="flex flex-col items-start gap-3 px-7 py-6">
+      <span className="text-[1.375rem] font-semibold">{cut ? "Eerst afkampen" : "Alle beurten zijn geschoten"}</span>
+      <span className="text-[0.9375rem] text-muted">
+        {cut
+          ? `Gelijke stand op de grens bij ${groupName(state, cut.groupCode)}: de afkamping beslist wie verder mag.`
+          : "Kijk de stand na en los eventuele gelijke standen op via Afkamping."}
+      </span>
+      <div className="flex flex-wrap gap-2">
+        <Pill tone={cut ? "outline" : "ink"} onClick={() => goTo("standings")}>
+          Naar de stand
+        </Pill>
+        <Pill tone={cut ? "ink" : "outline"} onClick={() => goTo("shootoff")}>
+          Naar afkamping
+        </Pill>
+      </div>
+    </Panel>
+  );
+}
+
+export function FinishedBanner() {
   const { id, state } = useComp();
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-ink px-[1.125rem] py-3 text-[0.9375rem] font-semibold text-white">
@@ -484,7 +537,7 @@ function KnockdownPanel(props: {
 /** Who shoots which knockdown in every phase of this heat. */
 function SwapSchedule({ heat, phaseIndex }: { heat: Heat; phaseIndex: number }) {
   const { state } = useComp();
-  const kds = Array.from({ length: state.snapshot.competition.knockdowns }, (_, i) => i + 1);
+  const kds = Array.from({ length: state.format.lanes }, (_, i) => i + 1);
   return (
     <Panel size="md" className="px-5 py-[1.125rem]">
       <div className="mb-3 text-[0.9375rem] font-semibold">Wisselschema · beurt {heat.index + 1}</div>

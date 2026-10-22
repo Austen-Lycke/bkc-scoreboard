@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useOffline } from "next/offline";
 import { useEffect, useState, type ReactNode } from "react";
-import { rankName } from "@/lib/competition";
+import { groupsInShootingOrder, rankName } from "@/lib/competition";
 import { downloadSnapshot } from "@/lib/offline/api";
 import { deviceId } from "@/lib/offline/db";
-import { removeFromDevice, resetDemo, saveSnapshot } from "@/lib/offline/store";
+import { emit, removeFromDevice, resetDemo, saveSnapshot } from "@/lib/offline/store";
 import { serviceWorkerState, warmOfflineCache, type OfflineReadiness } from "@/lib/offline/sw";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useComp } from "../context";
-import { Panel, Pill } from "@/components/ui";
+import { Panel, Pill, Switch } from "@/components/ui";
 import { CLUB_TIME_ZONE, formatLongDate } from "@/components/public/format";
 
 const timeFormat = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
@@ -70,12 +70,27 @@ export function PrepareView() {
     router.push("/operator");
   }
 
+  const { format } = state;
   const setups = [...new Map(Object.values(comp.setupByRank).map((s) => [s.id, s])).values()];
   const ranksIn = [...new Set([...state.entries.values()].filter((e) => !e.withdrawn).map((e) => rankName(state, e.rankCode)))].join(", ");
   const facts: [string, string][] = [
     ["Datum", formatLongDate(comp.date)],
-    ["Opstelling", setups.map((s) => `${s.name} · ${s.targets.length} platen`).join(", ")],
-    ["Formaat", `${comp.rounds} rondes × ${comp.knockdowns} knockdowns`],
+    [
+      "Opstelling",
+      format.setupByRound
+        ? Object.entries(format.setupByRound)
+            .map(([round, s]) => `Ronde ${round}: ${s.name}`)
+            .join(" · ")
+        : setups.map((s) => `${s.name} · ${s.targets.length} platen`).join(", "),
+    ],
+    [
+      "Formaat",
+      format.rotate
+        ? `${comp.rounds} rondes × ${format.lanes} knockdowns`
+        : `${comp.rounds} rondes × ${format.seriesPerRound} reeksen · ${format.lanes} tegelijk · ${groupsInShootingOrder(state)
+            .map((g) => g.name)
+            .join(" / ")}`,
+    ],
     ["Gekende schutters", String(state.shooters.size)],
     ["Gedownload", timeFormat.format(new Date(state.snapshot.fetchedAt))],
     ["Lokale acties", demo ? `${unsynced} · demo, niet gedeeld` : unsynced ? `${unsynced} nog niet gedeeld` : "0 · alles gedeeld"],
@@ -99,7 +114,7 @@ export function PrepareView() {
           </dl>
           <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-4">
             {demo ? (
-              <Pill tone="outline-ink" onClick={async () => (await resetDemo(), setMessage("Demo opnieuw begonnen."))}>
+              <Pill tone="outline-ink" onClick={async () => (await resetDemo(id), setMessage("Demo opnieuw begonnen."))}>
                 Demo opnieuw beginnen
               </Pill>
             ) : (
@@ -130,6 +145,8 @@ export function PrepareView() {
           </div>
         </Panel>
 
+        {format.knockout && <KnockoutSwitches />}
+
         <Panel className="flex flex-col gap-[1.125rem] px-5 py-6 sm:px-[1.625rem]">
           <h3 className="text-[1.0625rem] font-semibold">Klaar voor een wedstrijd zonder internet</h3>
           <div className="flex flex-col gap-3">
@@ -158,6 +175,30 @@ export function PrepareView() {
         </Panel>
       </div>
     </div>
+  );
+}
+
+/** Semi-final and final on or off, decided on the day (also offline), until the knockout has a score. */
+function KnockoutSwitches() {
+  const { id, state } = useComp();
+  const ko = state.format.knockout!;
+  const started = [...state.passes.values()].some((p) => p.round > state.snapshot.competition.rounds);
+  const set = (change: { semifinal?: boolean; final?: boolean }) => emit(id, "knockout.set", { semifinal: ko.semifinal, final: ko.final, ...change });
+  return (
+    <Panel className="flex flex-col gap-3.5 px-5 py-6 sm:px-[1.625rem]">
+      <h3 className="text-[1.0625rem] font-semibold">Na de kwalificatie</h3>
+      <p className="text-pretty text-[0.8125rem] text-muted">
+        De beste helft (afgerond naar beneden, minstens 3) gaat telkens door. In de finale vallen na elke reeks de laatste {ko.dropPerStep} af, tot er{" "}
+        {ko.podium} over zijn voor het podium.
+      </p>
+      <Switch on={ko.semifinal} onChange={(on) => !started && void set({ semifinal: on })} className="font-semibold">
+        Halve finale · 1 ronde van {ko.semiSeries} reeksen
+      </Switch>
+      <Switch on={ko.final} onChange={(on) => !started && void set({ final: on })} className="font-semibold">
+        Finale · telkens 1 reeks
+      </Switch>
+      {started && <span className="text-[0.8125rem] text-muted">De halve finale of finale is begonnen: dit ligt nu vast.</span>}
+    </Panel>
   );
 }
 

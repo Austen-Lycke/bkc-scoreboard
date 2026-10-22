@@ -1,6 +1,7 @@
 "use client";
 
-import { entryName, expectedPasses, ranksInShootingOrder, resultsCsv, standingsFor } from "@/lib/competition";
+import { competitionSchedule, entryName, groupsInShootingOrder, pendingShootoffs, resultsCsv, standingsFor } from "@/lib/competition";
+import { passKey } from "@/lib/scoring";
 import { emit, eventsForExport } from "@/lib/offline/store";
 import { useComp } from "../context";
 import { Panel, Pill, Tag } from "@/components/ui";
@@ -20,12 +21,19 @@ export function CloseView({ asking, setAsking }: { asking: boolean; setAsking: (
   const { id, state } = useComp();
   const comp = state.snapshot.competition;
   const finished = state.status === "finished";
-  const ranks = ranksInShootingOrder(state)
+  const ranks = groupsInShootingOrder(state)
     .map((r) => ({ rank: r, standings: standingsFor(state, r.code) }))
     .filter((r) => r.standings.rows.length > 0);
   const ready = ranks.every((r) => r.standings.complete && r.standings.pendingTies.length === 0);
+  // Places on the line still without a score (on a knockout day: as far as the stages are known).
+  const schedule = competitionSchedule(state);
   const missing = (r: (typeof ranks)[number]) =>
-    r.standings.rows.filter((x) => !x.withdrawn).reduce((n, x) => n + Math.max(0, expectedPasses(state) - x.passCount), 0);
+    schedule
+      .filter((h) => h.groupCode === r.rank.code)
+      .flatMap((h) => h.phases.flat().map((a) => passKey(a.entryId, h.round, a.knockdown)))
+      .filter((key) => !state.passes.has(key)).length;
+  const cutTie = (r: (typeof ranks)[number]) => pendingShootoffs(state).some((p) => p.groupCode === r.rank.code && p.stage);
+  const unit = state.format.rotate ? "passages" : "reeksen";
 
   async function backup() {
     const events = await eventsForExport(id);
@@ -45,7 +53,9 @@ export function CloseView({ asking, setAsking }: { asking: boolean; setAsking: (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18.75rem),1fr))] items-start gap-[0.875rem]">
         {ranks.map((r) => {
           const status = !r.standings.complete
-            ? ({ label: `nog ${missing(r)} passages`, tone: "fill" } as const)
+            ? cutTie(r)
+              ? ({ label: "afkamping nodig", tone: "error" } as const)
+              : ({ label: `nog ${missing(r)} ${unit}`, tone: "fill" } as const)
             : r.standings.pendingTies.length
               ? ({ label: "afkamping nodig", tone: "error" } as const)
               : ({ label: "volledig", tone: "good" } as const);

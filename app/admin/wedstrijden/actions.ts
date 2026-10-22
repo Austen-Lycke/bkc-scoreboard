@@ -5,6 +5,7 @@ import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { readWsaForm, wsaCompetitionFormat } from "@/lib/server/competition-format";
 import { setFlash } from "@/lib/server/flash";
 import { tags } from "@/lib/server/tags";
 import { requireRole } from "@/lib/session";
@@ -47,9 +48,14 @@ export async function updateCompetition(_prev: FormState, form: FormData): Promi
   const seasonYear = Number(data.date.slice(0, 4));
   if (started && seasonYear !== comp.seasonYear) return { error: "Er zijn al scores: de wedstrijd kan niet meer naar een ander seizoen verhuizen." };
 
-  // Setup per rank: only before the first score, since scores depend on the plates.
+  // Setup per rank (or the WSA format): only before the first score, since scores depend on the plates.
   let setupByRank = comp.setupByRank;
-  if (!started) {
+  let format = comp.format;
+  if (!started && comp.format) {
+    const wsa = readWsaForm(form);
+    if (!wsa.success) return { error: wsa.error.issues[0]?.message };
+    ({ setupByRank, format } = await wsaCompetitionFormat(wsa.data));
+  } else if (!started) {
     const all = await db.select().from(setups);
     setupByRank = Object.fromEntries(
       Object.keys(comp.setupByRank).map((rank) => {
@@ -65,7 +71,7 @@ export async function updateCompetition(_prev: FormState, form: FormData): Promi
   }
   await db
     .update(competitions)
-    .set({ name: data.name, date: data.date, location: data.location ?? null, countsForSeason: data.countsForSeason, seasonYear, setupByRank })
+    .set({ name: data.name, date: data.date, location: data.location ?? null, countsForSeason: data.countsForSeason, seasonYear, setupByRank, format })
     .where(eq(competitions.id, comp.id));
 
   for (const tag of [tags.competitions, tags.competition(comp.id), tags.season(comp.seasonYear), tags.season(seasonYear)]) updateTag(tag);

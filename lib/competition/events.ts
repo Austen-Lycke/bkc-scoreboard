@@ -6,8 +6,11 @@ import { z } from "zod";
  * Payloads are validated with zod where they cross a trust boundary (the sync API).
  */
 
-export const competitionStatus = z.enum(["prepared", "warmup", "round1", "break", "round2", "shootoff", "finished"]);
+export const competitionStatus = z.enum(["prepared", "warmup", "round1", "break", "round2", "semifinal", "final", "shootoff", "finished"]);
 export type CompetitionStatus = z.infer<typeof competitionStatus>;
+
+/** The phases in which shooters are on the line (and the TV shows the heat). */
+export const isShootingStatus = (status: string) => status === "round1" || status === "round2" || status === "semifinal" || status === "final";
 
 const shooterInfo = z.object({
   id: z.uuid(),
@@ -17,7 +20,8 @@ const shooterInfo = z.object({
   birthdate: z.iso.date().nullable(),
 });
 
-const round = z.number().int().min(1).max(10);
+/** Up to 50: after qualification come the semi-final and the final's one-series steps. */
+const round = z.number().int().min(1).max(50);
 const knockdown = z.number().int().min(1).max(10);
 const rankCode = z.string().min(1).max(40);
 const feeCents = z.number().int().min(0).max(100_000);
@@ -44,23 +48,31 @@ export const eventPayloads = {
   }),
   /** Checked in by mistake; only allowed before they shot. */
   "entry.removed": z.object({ entryId: z.uuid() }),
+  /** The shooting order of a group (a rank, unless the format groups ranks). */
   "order.set": z.object({
     rankCode,
     entryIds: z.array(z.uuid()).max(500),
     source: z.enum(["reverse_ranking", "random", "manual"]),
     seed: z.string().max(200).optional(),
   }),
-  /** One pass (7 shots on one knockdown). Recording the same pass again is a correction. */
+  /**
+   * One pass: 7 shots on one knockdown (Spanish) or one series (WSA). Recording the same pass again is
+   * a correction. `knockdown` is the pass number within the round. A setup scored in points (WSA,
+   * from the scorecard) sends `score` and no hits.
+   */
   "pass.recorded": z.object({
     entryId: z.uuid(),
     round,
     knockdown,
     hits: z.array(z.string().max(40)).max(20),
+    score: z.number().int().min(0).max(1000).optional(),
   }),
   "pass.cleared": z.object({ entryId: z.uuid(), round, knockdown }),
+  /** `rankCode` is the group the tie is in. `stage` "cut:N": the tie decides who goes on after round N. */
   "shootoff.recorded": z.object({
     iterationId: z.uuid(),
     rankCode,
+    stage: z.string().max(40).optional(),
     participants: z
       .array(z.uuid())
       .min(2)
@@ -71,6 +83,8 @@ export const eventPayloads = {
   }),
   "shootoff.cleared": z.object({ iterationId: z.uuid() }),
   "status.set": z.object({ status: competitionStatus }),
+  /** Semi-final and final on or off, decided on the day; only before either has a score. */
+  "knockout.set": z.object({ semifinal: z.boolean(), final: z.boolean() }),
 } as const;
 
 export type EventType = keyof typeof eventPayloads;

@@ -1,4 +1,13 @@
-import { passKey, scorePass, type ShootoffIteration } from "@/lib/scoring";
+import {
+  achievableScores,
+  passKey,
+  scorePass,
+  sortRanks,
+  type CompetitionFormat,
+  type GroupDef,
+  type Setup,
+  type ShootoffIteration,
+} from "@/lib/scoring";
 import { sortEvents, type CompetitionEvent, type CompetitionStatus } from "./events";
 import type { CompetitionSnapshot, SnapshotShooter } from "./snapshot";
 
@@ -25,12 +34,17 @@ export interface PassRecord {
 
 export interface ShootoffRecord extends ShootoffIteration {
   id: string;
+  /** The group the tie is in (a rank code, unless the format groups ranks). */
   rankCode: string;
+  /** "cut:N": settles who goes on after round N. Missing: the final standings. */
+  stage?: string;
   at: string;
 }
 
 export interface CompetitionState {
   snapshot: CompetitionSnapshot;
+  /** How the day is shot, with the operator's semi-final/final switches applied. */
+  format: CompetitionFormat;
   /** Club shooters from the snapshot plus walk-ins created during the competition. */
   shooters: Map<string, SnapshotShooter>;
   entries: Map<string, Entry>;
@@ -53,10 +67,69 @@ export function setupForRank(snapshot: CompetitionSnapshot, rankCode: string) {
   return setup;
 }
 
+/** The stored format, or the Spanish day for competitions made before formats existed. */
+export function formatOf(snapshot: CompetitionSnapshot): CompetitionFormat {
+  const { format, knockdowns } = snapshot.competition;
+  return format ?? { lanes: knockdowns, seriesPerRound: knockdowns, rotate: true };
+}
+
+/**
+ * The groups that shoot and are ranked apart, in shooting order. Without groups in the format every
+ * rank is a group (code = rank code). A rank the format doesn't list shoots as its own group.
+ */
+export function groupsOf(state: Pick<CompetitionState, "snapshot" | "format">): GroupDef[] {
+  const ranks = sortRanks(state.snapshot.ranks);
+  const groups = state.format.groups ?? [];
+  const listed = new Set(groups.flatMap((g) => g.rankCodes));
+  return [...groups, ...ranks.filter((r) => !listed.has(r.code)).map((r) => ({ code: r.code, name: r.name, rankCodes: [r.code] }))];
+}
+
+export function groupOfRank(state: Pick<CompetitionState, "snapshot" | "format">, rankCode: string): string {
+  return groupsOf(state).find((g) => g.rankCodes.includes(rankCode))?.code ?? rankCode;
+}
+
+export type Stage = "qualification" | "semifinal" | "final";
+
+/** The rounds after qualification: the semi-final round, and where the final's one-series steps start. */
+export function knockoutRounds(state: Pick<CompetitionState, "snapshot" | "format">) {
+  const ko = state.format.knockout;
+  const last = state.snapshot.competition.rounds;
+  const semi = ko?.semifinal ? last + 1 : null;
+  const finalStart = ko?.final ? last + (semi ? 2 : 1) : null;
+  return { semi, finalStart };
+}
+
+export function stageOfRound(state: Pick<CompetitionState, "snapshot" | "format">, round: number): Stage | null {
+  if (round >= 1 && round <= state.snapshot.competition.rounds) return "qualification";
+  const { semi, finalStart } = knockoutRounds(state);
+  if (round === semi) return "semifinal";
+  if (finalStart !== null && round >= finalStart) return "final";
+  return null;
+}
+
+/** Series per shooter in a round: the format's, the semi-final's, or 1 for a final step. */
+export function seriesIn(state: Pick<CompetitionState, "snapshot" | "format">, round: number): number {
+  const stage = stageOfRound(state, round);
+  if (stage === "semifinal") return state.format.knockout!.semiSeries;
+  if (stage === "final") return 1;
+  return state.format.seriesPerRound;
+}
+
+/** The setup a group shoots in a round. */
+export function setupFor(state: Pick<CompetitionState, "snapshot" | "format">, groupCode: string, round: number): Setup {
+  const stage = stageOfRound(state, round);
+  const ko = state.format.knockout;
+  if (ko && stage === "semifinal") return ko.semiSetup;
+  if (ko && stage === "final") return ko.finalSetup;
+  return state.format.setupByRound?.[String(round)] ?? setupForRank(state.snapshot, groupCode);
+}
+
 /** Rebuilds the competition from the snapshot plus local events (merged by id, in log order). */
 export function buildState(snapshot: CompetitionSnapshot, localEvents: readonly CompetitionEvent[] = []): CompetitionState {
+  const format = formatOf(snapshot);
   const state: CompetitionState = {
     snapshot,
+    format: { ...format, knockout: format.knockout && { ...format.knockout } },
     shooters: new Map(snapshot.shooters.map((s) => [s.id, s])),
     entries: new Map(),
     orders: new Map(),
@@ -79,8 +152,9 @@ export function buildState(snapshot: CompetitionSnapshot, localEvents: readonly 
 
 /** Applies one event in place. Returns a reason when the event is rejected. */
 function applyEvent(state: CompetitionState, event: CompetitionEvent): string | undefined {
-  const { competition, ranks } = state.snapshot;
+  const { ranks } = state.snapshot;
   const rankExists = (code: string) => ranks.some((r) => r.code === code);
+  const groupExists = (code: string) => groupsOf(state).some((g) => g.code === code);
 
   switch (event.type) {
     case "entry.checked_in": {
@@ -131,7 +205,7 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
     }
     case "order.set": {
       const p = event.payload;
-      if (!rankExists(p.rankCode)) return `Onbekende klasse ${p.rankCode}`;
+      if (!groupExists(p.rankCode)) return `Onbekende klasse ${p.rankCode}`;
       state.orders.set(p.rankCode, { entryIds: [...p.entryIds], source: p.source, seed: p.seed });
       return;
     }
@@ -139,19 +213,27 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
       const p = event.payload;
       const entry = state.entries.get(p.entryId);
       if (!entry) return "Onbekende inschrijving";
-      if (p.round > competition.rounds || p.knockdown > competition.knockdowns) return "Ronde of knockdown bestaat niet";
+      if (!stageOfRound(state, p.round) || p.knockdown > seriesIn(state, p.round)) return "Ronde of knockdown bestaat niet";
+      const setup = setupFor(state, groupOfRank(state, entry.rankCode), p.round);
       let score: number;
-      try {
-        score = scorePass(setupForRank(state.snapshot, entry.rankCode), p.hits);
-      } catch (err) {
-        return (err as Error).message;
+      if (setup.entry === "points") {
+        // Typed from the scorecard: only a score the plates can make.
+        if (p.score === undefined) return "Score ontbreekt";
+        if (!achievableScores(setup).has(p.score)) return `${p.score} punten kan niet op ${setup.name}`;
+        score = p.score;
+      } else {
+        try {
+          score = scorePass(setup, p.hits);
+        } catch (err) {
+          return (err as Error).message;
+        }
       }
       const key = passKey(p.entryId, p.round, p.knockdown);
       state.passes.set(key, {
         entryId: p.entryId,
         round: p.round,
         knockdown: p.knockdown,
-        hits: [...new Set(p.hits)],
+        hits: setup.entry === "points" ? [] : [...new Set(p.hits)],
         score,
         at: event.at,
         edited: state.passes.has(key),
@@ -165,12 +247,12 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
     }
     case "shootoff.recorded": {
       const p = event.payload;
-      if (!rankExists(p.rankCode)) return `Onbekende klasse ${p.rankCode}`;
+      if (!groupExists(p.rankCode)) return `Onbekende klasse ${p.rankCode}`;
       if (p.participants.some((id) => !state.entries.has(id))) return "Onbekende schutter in afkamping";
       if (p.participants.some((id) => (p.results[id]?.length ?? -1) !== p.calls.length)) {
         return "Afkamping onvolledig: niet elke schutter heeft een resultaat per geroepen doel";
       }
-      const record = { id: p.iterationId, rankCode: p.rankCode, participants: p.participants, calls: p.calls, results: p.results, at: event.at };
+      const record = { id: p.iterationId, rankCode: p.rankCode, stage: p.stage, participants: p.participants, calls: p.calls, results: p.results, at: event.at };
       // A correction keeps its place: iterations settle a tie in the order they were shot.
       const i = state.shootoffs.findIndex((s) => s.id === p.iterationId);
       state.shootoffs = i === -1 ? [...state.shootoffs, record] : state.shootoffs.map((s, j) => (j === i ? record : s));
@@ -178,6 +260,16 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
     }
     case "shootoff.cleared": {
       state.shootoffs = state.shootoffs.filter((s) => s.id !== event.payload.iterationId);
+      return;
+    }
+    case "knockout.set": {
+      const ko = state.format.knockout;
+      if (!ko) return "Deze wedstrijd heeft geen halve finale of finale";
+      const last = state.snapshot.competition.rounds;
+      // Switching changes which round is which, so never once a knockout round has a score.
+      if ([...state.passes.values()].some((x) => x.round > last)) return "De halve finale of finale is al begonnen";
+      ko.semifinal = event.payload.semifinal;
+      ko.final = event.payload.final;
       return;
     }
     case "status.set": {

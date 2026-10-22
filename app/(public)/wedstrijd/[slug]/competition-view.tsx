@@ -56,7 +56,18 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
           {isLive ? (
             <span className="flex items-center gap-2 self-start rounded-full bg-yellow px-3 py-1 text-sm font-bold">
               <span className="size-2 rounded-full bg-ink" />
-              Live{comp.status === "break" ? " · pauze" : comp.status === "warmup" ? " · opwarming" : comp.status === "shootoff" ? " · afkamping" : ""}
+              Live
+              {comp.status === "break"
+                ? " · pauze"
+                : comp.status === "warmup"
+                  ? " · opwarming"
+                  : comp.status === "shootoff"
+                    ? " · afkamping"
+                    : comp.status === "semifinal"
+                      ? " · halve finale"
+                      : comp.status === "final"
+                        ? " · finale"
+                        : ""}
             </span>
           ) : (
             <span className="self-start rounded-full bg-fill px-3 py-1 text-sm font-bold">{STATUS_LABEL[comp.status] ?? comp.status}</span>
@@ -66,7 +77,7 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
         </div>
         {(isLive || view.progress.done > 0) && !!view.progress.heatRounds?.length && (
           <div className="flex max-w-[27.5rem] flex-[1_1_17.5rem] flex-col gap-2">
-            <HeatProgress variant="web" rounds={view.progress.heatRounds} current={view.progress.heatIndex ?? null} />
+            <HeatProgress variant="web" rounds={view.progress.heatRounds} current={view.progress.heatIndex ?? null} endLabel={view.progress.endLabel} />
             {polling && view.updatedAt && (
               <span className="text-right text-[0.8125rem] text-subtle">
                 {stale ? "Verbinding verloren, opnieuw proberen…" : `Bijgewerkt om ${clock.format(new Date(view.updatedAt))}`}
@@ -91,24 +102,37 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
                   {comp.status === "break" ? "Na de pauze" : comp.status === "warmup" ? "Als eerste" : "Nu aan de lijn"}
                 </span>
                 <span className="text-sm text-white/60">
-                  Ronde {current.round} · {current.rankName} · beurt {current.heatNumber}/{current.heatsInRank}
+                  {current.roundLabel ?? `Ronde ${current.round}`} · {current.rankName} · beurt {current.heatNumber}/{current.heatsInRank}
                   {current.swapped ? " · gewisseld" : ""}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-8">
-                {current.shooters.map((s) => (
-                  <div key={s.shooterId} className="flex min-w-0 flex-col gap-3.5">
-                    <div className="min-w-0">
-                      <div className="text-sm text-white/50">Knockdown {s.knockdown}</div>
-                      <div className="truncate text-lg font-semibold leading-[1.1] tracking-[-0.02em] sm:text-[1.75rem]">{s.name}</div>
+              {current.shooters.length <= 2 ? (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-8">
+                  {current.shooters.map((s) => (
+                    <div key={s.shooterId} className="flex min-w-0 flex-col gap-3.5">
+                      <div className="min-w-0">
+                        <div className="text-sm text-white/50">Knockdown {s.lane}</div>
+                        <div className="truncate text-lg font-semibold leading-[1.1] tracking-[-0.02em] sm:text-[1.75rem]">{s.name}</div>
+                      </div>
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="text-[2.5rem] font-semibold leading-[0.9] tracking-[-0.04em] text-yellow tabular-nums sm:text-[3.5rem]">{s.total}</span>
+                        <span className="whitespace-nowrap text-[0.9375rem] text-white/60">totaal{s.position ? ` · plaats ${s.position}` : ""}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="text-[2.5rem] font-semibold leading-[0.9] tracking-[-0.04em] text-yellow tabular-nums sm:text-[3.5rem]">{s.total}</span>
-                      <span className="whitespace-nowrap text-[0.9375rem] text-white/60">totaal{s.position ? ` · plaats ${s.position}` : ""}</span>
+                  ))}
+                </div>
+              ) : (
+                // A WSA line: up to 15 shooters, one compact line each.
+                <div className="grid grid-cols-1 gap-x-8 gap-y-2.5 sm:grid-cols-2">
+                  {current.shooters.map((s) => (
+                    <div key={s.shooterId} className="flex min-w-0 items-baseline gap-3">
+                      <span className="w-9 flex-none text-sm text-white/50 tabular-nums">KD {s.lane}</span>
+                      <span className="min-w-0 flex-1 truncate text-[1.0625rem] font-semibold">{s.name}</span>
+                      <span className="text-xl font-semibold text-yellow tabular-nums">{s.total}</span>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
             <section className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface px-5 py-[1.375rem] sm:px-7">
               <span className="text-[0.9375rem] font-semibold text-muted">Hierna</span>
@@ -120,7 +144,7 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
                 >
                   <span className={`font-semibold tracking-[-0.01em] ${i === 0 ? "text-2xl" : "text-[1.0625rem]"}`}>{h.names.join(" & ")}</span>
                   <span className="text-sm text-muted">
-                    Ronde {h.round} · {h.rankName} · beurt {h.heatNumber}
+                    {h.roundLabel ?? `Ronde ${h.round}`} · {h.rankName} · beurt {h.heatNumber}
                   </span>
                 </div>
               ))}
@@ -132,7 +156,7 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
           <section className="flex min-w-0 flex-col gap-4 rounded-3xl border border-border bg-surface px-5 pb-6 pt-[1.375rem] sm:px-7">
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
               <h2 className="text-[1.375rem] font-semibold tracking-[-0.01em]">{isLive ? "Voorlopige stand" : "Uitslag"}</h2>
-              <span className="text-[0.8125rem] text-subtle">{view.passLabels.length} passages per schutter</span>
+              <span className="text-[0.8125rem] text-subtle">{view.passNote}</span>
             </div>
             <div
               className="sticky top-0 z-[2] -mx-5 flex flex-nowrap gap-1.5 overflow-x-auto bg-surface px-5 py-2.5 [scrollbar-width:none] sm:static sm:mx-0 sm:flex-wrap sm:px-0 sm:py-0"
@@ -170,8 +194,7 @@ function RankList({ rank, view, isLive }: { rank: PublicRank; view: PublicView; 
   const current = isLive ? view.current : null;
   const nextIds = isLive ? (view.next[0]?.shooterIds ?? []) : [];
   const livePass = (shooterId: string) => {
-    const s = current?.shooters.find((x) => x.shooterId === shooterId);
-    return s ? view.passLabels.indexOf(`R${current!.round} KD${s.knockdown}`) : -1;
+    return current?.shooters.find((x) => x.shooterId === shooterId)?.col ?? -1;
   };
   const scrollable = rank.rows.length > 9;
   const fade = scrollable ? "sm:[mask-image:linear-gradient(#000_0,#000_calc(100%-2.5rem),transparent)]" : "";

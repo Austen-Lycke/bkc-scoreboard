@@ -6,3 +6,4 @@ export * from "./demo";
 export * from "./export";
 export * from "./public";
 export * from "./undo";
+export * from "./timer";

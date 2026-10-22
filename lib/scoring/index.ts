@@ -8,4 +8,5 @@ export * from "./shootoff";
 export * from "./ranking";
 export * from "./season";
 export * from "./promotion";
+export * from "./knockout";
 export * from "./presets";

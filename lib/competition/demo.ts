@@ -1,8 +1,11 @@
-import { DEFAULT_RANKS, SPANISH_KNOCKDOWN } from "@/lib/scoring";
+import { DEFAULT_RANKS, SPANISH_KNOCKDOWN, WSA_V1, wsaFormat } from "@/lib/scoring";
 import type { CompetitionEvent } from "./events";
 import type { CompetitionSnapshot, SnapshotShooter } from "./snapshot";
 
 export const DEMO_COMPETITION_ID = "demo";
+/** The same demo shooters on a WSA day: Junior and Volwassenen, everyone on their own frame. */
+export const WSA_DEMO_ID = "demo-wsa";
+export const isDemoId = (id: string) => id === DEMO_COMPETITION_ID || id === WSA_DEMO_ID;
 
 /** Fictional shooters, per rank, for practising and demos. Never synced to the server. */
 const DEMO_SHOOTERS: [string, string, string, string][] = [
@@ -27,7 +30,9 @@ const DEMO_SHOOTERS: [string, string, string, string][] = [
 ];
 
 /** A ready-to-run competition: 17 of the 18 demo shooters are already checked in. */
-export function buildDemoSnapshot(now = new Date()): CompetitionSnapshot {
+export function buildDemoSnapshot(now = new Date(), kind: "spanish" | "wsa" = "spanish"): CompetitionSnapshot {
+  const wsa = kind === "wsa";
+  const id = wsa ? WSA_DEMO_ID : DEMO_COMPETITION_ID;
   const at = now.toISOString();
   const shooters: SnapshotShooter[] = DEMO_SHOOTERS.map(([firstName, lastName, birthdate, rankCode]) => ({
     id: crypto.randomUUID(),
@@ -40,7 +45,7 @@ export function buildDemoSnapshot(now = new Date()): CompetitionSnapshot {
   const seasonPoints = Object.fromEntries(shooters.slice(0, 12).map((s, i) => [s.id, 60 + ((i * 37) % 50)]));
   const events: CompetitionEvent[] = shooters.slice(0, -1).map((s, i) => ({
     id: crypto.randomUUID(),
-    competitionId: DEMO_COMPETITION_ID,
+    competitionId: id,
     deviceId: "demo",
     at: new Date(now.getTime() - (shooters.length - i) * 60_000).toISOString(),
     type: "entry.checked_in",
@@ -56,16 +61,17 @@ export function buildDemoSnapshot(now = new Date()): CompetitionSnapshot {
 
   return {
     competition: {
-      id: DEMO_COMPETITION_ID,
-      slug: "demo",
-      name: "Demowedstrijd",
+      id,
+      slug: id,
+      name: wsa ? "Demowedstrijd WSA" : "Demowedstrijd",
       date: at.slice(0, 10),
       location: "Clublokaal BKC",
       seasonYear: now.getFullYear(),
       rounds: 2,
       knockdowns: 2,
       feeCents: 500,
-      setupByRank: Object.fromEntries(DEFAULT_RANKS.map((r) => [r.code, SPANISH_KNOCKDOWN])),
+      setupByRank: Object.fromEntries(DEFAULT_RANKS.map((r) => [r.code, wsa ? WSA_V1 : SPANISH_KNOCKDOWN])),
+      format: wsa ? wsaFormat(DEFAULT_RANKS) : null,
       status: "prepared",
     },
     ranks: DEFAULT_RANKS,

@@ -10,6 +10,7 @@ export function HeatProgress({
   rounds,
   current,
   variant,
+  endLabel,
   className = "",
 }: {
   /** The round of every heat, in shooting order. */
@@ -17,6 +18,8 @@ export function HeatProgress({
   /** Index of the heat shooting now; null when all heats are shot. */
   current: number | null;
   variant: keyof typeof SIZES;
+  /** Under the end of the bar: "Ronde 2" by default, or the last stage of a knockout day. */
+  endLabel?: string;
   className?: string;
 }) {
   const s = SIZES[variant];
@@ -26,7 +29,7 @@ export function HeatProgress({
       <div className="flex justify-between text-muted" style={{ fontSize: s.label }}>
         <span>Ronde 1</span>
         <span className="font-semibold text-ink">{current === null ? "Alle beurten geschoten" : `Beurt ${current + 1} van ${rounds.length}`}</span>
-        <span>{lastRound > 1 ? `Ronde ${lastRound}` : ""}</span>
+        <span>{endLabel ?? (lastRound > 1 ? `Ronde ${lastRound}` : "")}</span>
       </div>
       <div className="flex" style={{ gap: s.between }}>
         {rounds.map((round, i) => (

@@ -8,7 +8,7 @@ const shortDate = new Intl.DateTimeFormat("nl-BE", { day: "numeric", month: "sho
 export const formatLongDate = (date: string) => longDate.format(new Date(`${date}T12:00:00Z`));
 export const formatShortDate = (date: string) => shortDate.format(new Date(`${date}T12:00:00Z`));
 
-export const LIVE = new Set(["warmup", "round1", "break", "round2", "shootoff"]);
+export const LIVE = new Set(["warmup", "round1", "break", "round2", "semifinal", "final", "shootoff"]);
 export const FINISHED = new Set(["finished", "published"]);
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -18,6 +18,8 @@ export const STATUS_LABEL: Record<string, string> = {
   round1: "Ronde 1",
   break: "Pauze",
   round2: "Ronde 2",
+  semifinal: "Halve finale",
+  final: "Finale",
   shootoff: "Afkamping",
   finished: "Uitslag",
   published: "Uitslag",

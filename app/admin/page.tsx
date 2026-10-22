@@ -26,7 +26,7 @@ export default async function AdminHome() {
     {
       href: "/admin/wedstrijden",
       label: "Wedstrijden dit seizoen",
-      value: byStatus(["prepared", "draft", "warmup", "round1", "break", "round2", "shootoff", "finished", "published"]),
+      value: byStatus(["prepared", "draft", "warmup", "round1", "break", "round2", "semifinal", "final", "shootoff", "finished", "published"]),
       detail: `${byStatus(["finished", "published"])} afgewerkt · ${byStatus(["prepared", "draft"])} gepland`,
     },
     { href: "/admin/gebruikers", label: "Gebruikers", value: users.n, detail: "Beheerders en wedstrijdleiding" },

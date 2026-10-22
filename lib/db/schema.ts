@@ -12,7 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { SeasonRule, Setup } from "@/lib/scoring";
+import type { CompetitionFormat, SeasonRule, Setup } from "@/lib/scoring";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -98,6 +98,9 @@ export const competitionStatus = pgEnum("competition_status", [
   "shootoff",
   "finished",
   "published",
+  // WSA days: the optional knockout after qualification.
+  "semifinal",
+  "final",
 ]);
 
 export const competitions = pgTable(
@@ -118,6 +121,8 @@ export const competitions = pgTable(
     countsForSeason: boolean("counts_for_season").notNull().default(true),
     /** Setup snapshot per rank code (same setup for all ranks unless overridden). */
     setupByRank: jsonb("setup_by_rank").$type<Record<string, Setup>>().notNull(),
+    /** How the day is shot (lanes, series, groups, timer, knockout). Null: the Spanish day of `knockdowns`. */
+    format: jsonb("format").$type<CompetitionFormat>(),
     /** The single device allowed to write scores; another laptop must explicitly take over. */
     operatorDeviceId: text("operator_device_id"),
     operatorLeaseAt: timestamp("operator_lease_at", { withTimezone: true }),
@@ -158,9 +163,8 @@ export const startOrders = pgTable(
     competitionId: uuid("competition_id")
       .notNull()
       .references(() => competitions.id, { onDelete: "cascade" }),
-    rankCode: text("rank_code")
-      .notNull()
-      .references(() => ranks.code),
+    /** The group: a rank code, or a group of ranks on a WSA day ("volwassenen"), so no foreign key. */
+    rankCode: text("rank_code").notNull(),
     entryIds: jsonb("entry_ids").$type<string[]>().notNull(),
     source: orderSource("source").notNull(),
     seed: text("seed"),
@@ -201,9 +205,8 @@ export const shootoffIterations = pgTable(
     competitionId: uuid("competition_id")
       .notNull()
       .references(() => competitions.id, { onDelete: "cascade" }),
-    rankCode: text("rank_code")
-      .notNull()
-      .references(() => ranks.code),
+    /** The group the tie is in, like `start_orders.rank_code`. */
+    rankCode: text("rank_code").notNull(),
     seq: integer("seq").notNull(),
     participants: jsonb("participants").$type<string[]>().notNull(),
     calls: jsonb("calls").$type<{ targetId: string; points: number }[]>().notNull(),

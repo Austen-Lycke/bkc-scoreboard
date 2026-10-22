@@ -36,3 +36,13 @@ export function scorePass(setup: Setup, hitTargetIds: readonly string[]): number
 export function maxPassScore(setup: Setup): number {
   return DISCIPLINES[setup.disciplineType].maxPassScore(setup);
 }
+
+/**
+ * Every score one pass can have on this setup: the sums of every set of plates. A typed score
+ * outside this set is a typo (25 on 2·4·6·8·10, 35 on five plates of 10).
+ */
+export function achievableScores(setup: Setup): Set<number> {
+  let sums = new Set([0]);
+  for (const t of setup.targets) sums = new Set([...sums, ...[...sums].map((s) => s + t.points)]);
+  return sums;
+}

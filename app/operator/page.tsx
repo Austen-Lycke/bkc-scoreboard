@@ -17,6 +17,8 @@ const STATUS_LABEL: Record<string, string> = {
   round1: "Ronde 1",
   break: "Pauze",
   round2: "Ronde 2",
+  semifinal: "Halve finale",
+  final: "Finale",
   shootoff: "Afkamping",
   finished: "Afgelopen",
   published: "Gepubliceerd",
@@ -32,12 +34,14 @@ export default function OperatorHome() {
           <p className="text-sm font-semibold uppercase tracking-widest text-muted">BKC Wedstrijden</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Wedstrijdleiding</h1>
         </div>
-        <Link
-          href="/operator/live?c=demo"
-          className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink"
-        >
-          Demowedstrijd openen (oefenen)
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/operator/live?c=demo" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink">
+            Demowedstrijd openen (oefenen)
+          </Link>
+          <Link href="/operator/live?c=demo-wsa" className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-ink">
+            Demo WSA
+          </Link>
+        </div>
       </header>
       <Suspense fallback={<p className="mt-10 text-muted">Wedstrijden laden…</p>}>
         <Competitions />
@@ -63,6 +67,12 @@ async function Competitions() {
         fee: last.feeCents ? (last.feeCents / 100).toLocaleString("nl-BE", { useGrouping: false }) : "",
         setupId: setups.some((s) => s.id === lastSetupId) ? lastSetupId! : undefined,
         countsForSeason: last.countsForSeason,
+        ...(last.format && {
+          kind: "wsa" as const,
+          lanes: last.format.lanes,
+          semifinal: last.format.knockout?.semifinal ?? false,
+          final: last.format.knockout?.final ?? false,
+        }),
       }
     : undefined;
 

@@ -21,6 +21,8 @@ export function CompetitionForm({
     location: string;
     countsForSeason: boolean;
     setupIds: Record<string, string>;
+    /** A WSA day: its line, its two round variants and the optional knockout. Null: the Spanish day. */
+    wsa: { lanes: number; round1: string; round2: string; semifinal: boolean; final: boolean } | null;
     /** The operator laptop holding this competition: short id and last sync. */
     device: { id: string; lastSeen: string | null } | null;
   };
@@ -32,6 +34,7 @@ export function CompetitionForm({
   const { state, pending, onSubmit, clear } = useSubmit(updateCompetition);
   const [counts, setCounts] = useState(c.countsForSeason);
   const [setupIds, setSetupIds] = useState(c.setupIds);
+  const [wsa, setWsa] = useState(c.wsa);
   const [side, setSide] = useState<FormState>({});
   const [typed, setTyped] = useState("");
   const [releasing, startRelease] = useTransition();
@@ -50,6 +53,14 @@ export function CompetitionForm({
         {Object.entries(setupIds).map(([rank, id]) => (
           <input key={rank} type="hidden" name={`setup:${rank}`} value={id} />
         ))}
+        {wsa && (
+          <>
+            <input type="hidden" name="setup:round1" value={wsa.round1} />
+            <input type="hidden" name="setup:round2" value={wsa.round2} />
+            {wsa.semifinal && <input type="hidden" name="semifinal" value="on" />}
+            {wsa.final && <input type="hidden" name="final" value="on" />}
+          </>
+        )}
         <label className={label}>
           Naam
           <input name="name" required defaultValue={c.name} className={fieldClass} />
@@ -68,30 +79,64 @@ export function CompetitionForm({
           Telt mee voor het seizoensklassement
         </Switch>
 
-        <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
-          <div className="flex items-baseline justify-between gap-4">
-            <span className="text-[0.9375rem] font-semibold">Opstelling per klasse</span>
-            {started && <span className="text-[0.8125rem] text-muted">Er zijn al scores: de opstelling ligt vast.</span>}
-          </div>
-          {ranks.map((r) => (
-            <div key={r.code} className={`grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3 ${started ? "opacity-55" : ""}`}>
-              <span className="text-sm font-semibold">{r.name}</span>
-              <div role="group" aria-label={`Opstelling ${r.name}`} className="flex flex-wrap gap-1">
-                {setups.map((s) => (
-                  <Chip
-                    key={s.id}
-                    on={setupIds[r.code] === s.id}
-                    disabled={started}
-                    title={s.title}
-                    onClick={() => (setSetupIds((ids) => ({ ...ids, [r.code]: s.id })), clear())}
-                  >
-                    {s.name}
-                  </Chip>
-                ))}
-              </div>
+        {wsa ? (
+          <div className={`flex flex-col gap-3 border-t border-divider pt-4 ${started ? "opacity-55" : ""}`}>
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-[0.9375rem] font-semibold">WSA knockdown</span>
+              {started && <span className="text-[0.8125rem] text-muted">Er zijn al scores: het formaat ligt vast.</span>}
             </div>
-          ))}
-        </div>
+            <label className={`${label} max-w-[12rem]`}>
+              Schutters tegelijk
+              <input name="lanes" type="number" min={1} max={30} inputMode="numeric" disabled={started} defaultValue={wsa.lanes} className={fieldClass} />
+            </label>
+            {(["round1", "round2"] as const).map((round, i) => (
+              <div key={round} className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3">
+                <span className="text-sm font-semibold">Ronde {i + 1}</span>
+                <div role="group" aria-label={`Opstelling ronde ${i + 1}`} className="flex flex-wrap gap-1">
+                  {setups
+                    .filter((s) => s.id.startsWith("wsa_"))
+                    .map((s) => (
+                      <Chip key={s.id} on={wsa[round] === s.id} disabled={started} title={s.title} onClick={() => (setWsa({ ...wsa, [round]: s.id }), clear())}>
+                        {s.name}
+                      </Chip>
+                    ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-[0.8125rem] text-muted">Halve finale en finale schieten op de opstelling van ronde 2. De wedstrijdleiding kan ze op de dag nog aan- of uitzetten.</p>
+            <Switch on={wsa.semifinal} onChange={(on) => !started && (setWsa({ ...wsa, semifinal: on }), clear())} className="font-semibold">
+              Halve finale
+            </Switch>
+            <Switch on={wsa.final} onChange={(on) => !started && (setWsa({ ...wsa, final: on }), clear())} className="font-semibold">
+              Finale
+            </Switch>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="text-[0.9375rem] font-semibold">Opstelling per klasse</span>
+              {started && <span className="text-[0.8125rem] text-muted">Er zijn al scores: de opstelling ligt vast.</span>}
+            </div>
+            {ranks.map((r) => (
+              <div key={r.code} className={`grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3 ${started ? "opacity-55" : ""}`}>
+                <span className="text-sm font-semibold">{r.name}</span>
+                <div role="group" aria-label={`Opstelling ${r.name}`} className="flex flex-wrap gap-1">
+                  {setups.map((s) => (
+                    <Chip
+                      key={s.id}
+                      on={setupIds[r.code] === s.id}
+                      disabled={started}
+                      title={s.title}
+                      onClick={() => (setSetupIds((ids) => ({ ...ids, [r.code]: s.id })), clear())}
+                    >
+                      {s.name}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {state.error && (
           <p role="alert" className="text-[0.8125rem] font-semibold text-error">

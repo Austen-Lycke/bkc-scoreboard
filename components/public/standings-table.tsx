@@ -37,7 +37,7 @@ export function StandingsTable({ rank, passLabels, highlight }: { rank: PublicRa
                   <span className="mt-0.5 block text-xs tabular-nums text-muted sm:hidden">{row.passes.map((p) => p ?? "·").join("  ")}</span>
                 </td>
                 {row.passes.map((p, i) => (
-                  <td key={i} className={`hidden px-2 py-2.5 text-center tabular-nums sm:table-cell ${p === rank.maxPass ? "font-bold underline decoration-yellow decoration-[0.1875rem] underline-offset-4" : ""}`}>
+                  <td key={i} className={`hidden px-2 py-2.5 text-center tabular-nums sm:table-cell ${p !== null && p === rank.maxPasses[i] ? "font-bold underline decoration-yellow decoration-[0.1875rem] underline-offset-4" : ""}`}>
                     {p ?? <span className="text-muted">·</span>}
                   </td>
                 ))}

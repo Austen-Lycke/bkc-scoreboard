@@ -4,6 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { readWsaForm, wsaCompetitionFormat } from "@/lib/server/competition-format";
 import { requireRole } from "@/lib/session";
 
 const newCompetition = z.object({
@@ -15,7 +16,8 @@ const newCompetition = z.object({
     .trim()
     .transform((v) => (v === "" ? 0 : Math.round(Number(v.replace(",", ".")) * 100)))
     .pipe(z.number().int().min(0, "Ongeldig bedrag").max(100_000, "Ongeldig bedrag")),
-  setupId: z.string().min(1),
+  kind: z.enum(["spanish", "wsa"]).default("spanish"),
+  setupId: z.string().min(1).optional(),
   countsForSeason: z.boolean(),
 });
 
@@ -39,16 +41,26 @@ export async function createCompetition(_prev: CreateCompetitionState, form: For
     date: form.get("date"),
     location: form.get("location") || undefined,
     fee: String(form.get("fee") ?? ""),
-    setupId: form.get("setupId"),
+    kind: form.get("kind") || undefined,
+    setupId: form.get("setupId") || undefined,
     countsForSeason: form.get("countsForSeason") === "on",
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Controleer de gegevens" };
   const input = parsed.data;
 
   const db = getDb();
-  const setup = await db.query.setups.findFirst({ where: eq(schema.setups.id, input.setupId) });
-  if (!setup) return { error: "Onbekende opstelling" };
-  const rankRows = await db.select().from(schema.ranks);
+  // A WSA day: its own format (lanes, series, groups, timer, knockout). A Spanish day: one setup for every rank.
+  let shape: Pick<typeof schema.competitions.$inferInsert, "setupByRank" | "format">;
+  if (input.kind === "wsa") {
+    const wsa = readWsaForm(form);
+    if (!wsa.success) return { error: wsa.error.issues[0]?.message ?? "Controleer de gegevens" };
+    shape = await wsaCompetitionFormat(wsa.data);
+  } else {
+    const setup = input.setupId ? await db.query.setups.findFirst({ where: eq(schema.setups.id, input.setupId) }) : undefined;
+    if (!setup) return { error: "Onbekende opstelling" };
+    const rankRows = await db.select().from(schema.ranks);
+    shape = { setupByRank: Object.fromEntries(rankRows.map((r) => [r.code, setup.definition])), format: null };
+  }
 
   // A new season inherits the ranking rule of the latest one.
   const seasonYear = Number(input.date.slice(0, 4));
@@ -73,7 +85,7 @@ export async function createCompetition(_prev: CreateCompetitionState, form: For
       feeCents: input.fee,
       countsForSeason: input.countsForSeason,
       status: "prepared",
-      setupByRank: Object.fromEntries(rankRows.map((r) => [r.code, setup.definition])),
+      ...shape,
     })
     .returning({ id: schema.competitions.id });
 

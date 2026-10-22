@@ -1,15 +1,17 @@
-import { ageOn, JUNIOR_AGE_LIMIT, maxPassScore, publicDisplayName, sortRanks, type Setup, type TieState } from "@/lib/scoring";
+import { ageOn, JUNIOR_AGE_LIMIT, maxPassScore, passKey, publicDisplayName, type Setup, type TieState } from "@/lib/scoring";
 import {
   competitionProgress,
   competitionSchedule,
-  entriesOfRank,
   expectedPasses,
+  groupName,
+  groupsInShootingOrder,
+  passColumns,
+  passLabel,
   passOf,
-  rankName,
-  ranksInShootingOrder,
+  roundTitle,
   standingsFor,
 } from "./derive";
-import { setupForRank, type CompetitionState } from "./state";
+import { groupOfRank, setupFor, type CompetitionState } from "./state";
 
 /**
  * What the public may see of a competition. Built on the server from the same state as the
@@ -28,12 +30,13 @@ export interface PublicRow {
   withdrawn: boolean;
 }
 
+/** One ranking of the competition: a rank, or a group of ranks on a WSA day (Junior / Volwassenen). */
 export interface PublicRank {
   code: string;
   name: string;
   complete: boolean;
-  /** Maximum score of one pass on this rank's setup (a "perfect" pass). */
-  maxPass: number;
+  /** Maximum score of each pass (aligned with `passLabels`): a "perfect" pass. */
+  maxPasses: number[];
   rows: PublicRow[];
 }
 
@@ -48,16 +51,21 @@ export interface PublicView {
   };
   updatedAt: string | null;
   passLabels: string[];
+  /** "4 passages per schutter", or how a WSA day goes on after qualification. */
+  passNote: string;
   /** The heat on the line now (from saved passes; taps before saving stay on the venue TV). */
   current: {
     round: number;
+    /** "Ronde 2", "Halve finale", "Finale · reeks 3". */
+    roundLabel: string;
     rankName: string;
     heatNumber: number;
     heatsInRank: number;
     swapped: boolean;
-    shooters: { shooterId: string; name: string; knockdown: number; total: number; position: number | null }[];
+    /** `lane`: the knockdown (frame) they stand at; `col`: their pass in `passLabels`. */
+    shooters: { shooterId: string; name: string; knockdown: number; lane: number; col: number; total: number; position: number | null }[];
   } | null;
-  next: { round: number; rankName: string; heatNumber: number; shooterIds: string[]; names: string[] }[];
+  next: { round: number; roundLabel: string; rankName: string; heatNumber: number; shooterIds: string[]; names: string[] }[];
   lastPasses: { name: string; rankName: string; round: number; knockdown: number; score: number; hits: string[]; setup: Setup; at: string }[];
   ranks: PublicRank[];
   progress: {
@@ -66,6 +74,8 @@ export interface PublicView {
     /** The round of every heat in shooting order, and the heat on the line (null when all are shot). */
     heatRounds: number[];
     heatIndex: number | null;
+    /** Under the end of the progress bar: "Ronde 2", or "Finale · reeks 3" on a knockout day. */
+    endLabel?: string;
   };
 }
 
@@ -98,23 +108,22 @@ export function publicView(state: CompetitionState): PublicView {
   };
   const shooterIdOf = (entryId: string) => state.entries.get(entryId)?.shooterId ?? "";
 
-  const passCols: [number, number][] = [];
-  for (let r = 1; r <= comp.rounds; r++) for (let k = 1; k <= comp.knockdowns; k++) passCols.push([r, k]);
+  const passCols = passColumns(state);
 
-  const ranks: PublicRank[] = ranksInShootingOrder(state)
-    .map((rank) => {
-      const standings = standingsFor(state, rank.code);
+  const ranks: PublicRank[] = groupsInShootingOrder(state)
+    .map((group) => {
+      const standings = standingsFor(state, group.code);
       return {
-        code: rank.code,
-        name: rank.name,
+        code: group.code,
+        name: group.name,
         complete: standings.complete,
-        maxPass: maxPassScore(setupForRank(state.snapshot, rank.code)),
+        maxPasses: passCols.map((c) => maxPassScore(setupFor(state, group.code, c.round))),
         rows: standings.rows.map((row) => ({
           position: row.position,
           shooterId: shooterIdOf(row.entryId),
           name: nameOf(row.entryId),
           total: row.total,
-          passes: passCols.map(([r, k]) => passOf(state, row.entryId, r, k)?.score ?? null),
+          passes: passCols.map((c) => passOf(state, row.entryId, c.round, c.knockdown)?.score ?? null),
           tie: row.tie,
           withdrawn: row.withdrawn,
         })),
@@ -127,18 +136,21 @@ export function publicView(state: CompetitionState): PublicView {
   const heat = progress.heatIndex === null ? null : schedule[progress.heatIndex];
   let current: PublicView["current"] = null;
   if (heat) {
-    const standings = standingsFor(state, heat.rankCode);
+    const standings = standingsFor(state, heat.groupCode);
     const phase = heat.phases[progress.phaseIndex ?? 0];
     current = {
       round: heat.round,
-      rankName: rankName(state, heat.rankCode),
+      roundLabel: roundTitle(state, heat.round),
+      rankName: groupName(state, heat.groupCode),
       heatNumber: heat.index + 1,
-      heatsInRank: schedule.filter((h) => h.round === heat.round && h.rankCode === heat.rankCode).length,
-      swapped: (progress.phaseIndex ?? 0) > 0,
+      heatsInRank: schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length,
+      swapped: state.format.rotate && (progress.phaseIndex ?? 0) > 0,
       shooters: phase.map((s) => ({
         shooterId: shooterIdOf(s.entryId),
         name: nameOf(s.entryId),
         knockdown: s.knockdown,
+        lane: s.lane,
+        col: passCols.findIndex((c) => c.round === heat.round && c.knockdown === s.knockdown),
         total: standings.rows.find((r) => r.entryId === s.entryId)?.total ?? 0,
         position: standings.rows.find((r) => r.entryId === s.entryId)?.position ?? null,
       })),
@@ -149,20 +161,25 @@ export function publicView(state: CompetitionState): PublicView {
     .sort((a, b) => (a.at < b.at ? 1 : -1))
     .slice(0, 4)
     .map((p) => {
-      const rankCode = state.entries.get(p.entryId)!.rankCode;
+      const groupCode = groupOfRank(state, state.entries.get(p.entryId)!.rankCode);
       return {
         name: nameOf(p.entryId),
-        rankName: rankName(state, rankCode),
+        rankName: groupName(state, groupCode),
         round: p.round,
         knockdown: p.knockdown,
         score: p.score,
         hits: p.hits,
-        setup: setupForRank(state.snapshot, rankCode),
+        setup: setupFor(state, groupCode, p.round),
         at: p.at,
       };
     });
 
-  const activeShooters = sortRanks(state.snapshot.ranks).reduce((n, r) => n + entriesOfRank(state, r.code).length, 0);
+  // Every place on the line known so far: on a knockout day the semi-final and final grow as they're decided.
+  const spots = schedule.flatMap((h) => h.phases.flat().map((s) => passKey(s.entryId, h.round, s.knockdown)));
+  const ko = state.format.knockout;
+  const stages = [ko?.semifinal && "halve finale", ko?.final && "finale"].filter(Boolean).join(" en ");
+  const unit = state.format.rotate ? "passages" : "reeksen";
+  const passNote = stages ? `${expectedPasses(state)} ${unit} per schutter, dan ${stages}` : `${expectedPasses(state)} ${unit} per schutter`;
 
   return {
     competition: {
@@ -174,11 +191,13 @@ export function publicView(state: CompetitionState): PublicView {
       seasonYear: comp.seasonYear,
     },
     updatedAt: state.lastEventAt,
-    passLabels: passCols.map(([r, k]) => `R${r} KD${k}`),
+    passLabels: passCols.map((c) => passLabel(c)),
+    passNote,
     current,
     next: (progress.heatIndex === null ? [] : schedule.slice(progress.heatIndex + 1, progress.heatIndex + 4)).map((h) => ({
       round: h.round,
-      rankName: rankName(state, h.rankCode),
+      roundLabel: roundTitle(state, h.round),
+      rankName: groupName(state, h.groupCode),
       heatNumber: h.index + 1,
       shooterIds: h.shooters.map(shooterIdOf),
       names: h.shooters.map(nameOf),
@@ -186,10 +205,11 @@ export function publicView(state: CompetitionState): PublicView {
     lastPasses,
     ranks,
     progress: {
-      done: state.passes.size,
-      total: activeShooters * expectedPasses(state),
+      done: spots.filter((key) => state.passes.has(key)).length,
+      total: spots.length,
       heatRounds: schedule.map((h) => h.round),
       heatIndex: progress.heatIndex,
+      endLabel: schedule.length ? roundTitle(state, schedule.at(-1)!.round) : undefined,
     },
   };
 }

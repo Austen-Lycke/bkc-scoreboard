@@ -5,10 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import {
   competitionProgress,
   competitionSchedule,
-  DEMO_COMPETITION_ID,
+  isDemoId,
   effectiveOrder,
+  groupsInShootingOrder,
   pendingShootoffs,
-  ranksInShootingOrder,
+  roundTitle,
+  type CompetitionState,
   type CompetitionStatus,
 } from "@/lib/competition";
 import { downloadSnapshot } from "@/lib/offline/api";
@@ -39,8 +41,8 @@ export function OperatorApp() {
   // First visit on this device: create the demo, or download the competition.
   useEffect(() => {
     if (!competitionId || local !== null) return;
-    if (competitionId === DEMO_COMPETITION_ID) {
-      void resetDemo();
+    if (isDemoId(competitionId)) {
+      void resetDemo(competitionId);
       return;
     }
     downloadSnapshot(competitionId).then(
@@ -89,7 +91,7 @@ function Shell() {
   const [activeKd, setActiveKd] = useState(1);
   // Afronden's "beëindigen?" question; it closes again when the operator leaves that tab.
   const [askingFinish, setAskingFinish] = useState(false);
-  const showTimer = state.status === "break" || !!live?.pauseEndsAt;
+  const showTimer = state.status === "break" || state.status === "warmup" || !!live?.pauseEndsAt;
   const nav = useMemo(
     () => ({
       goTo: (t: Tab, kd?: number) => {
@@ -127,6 +129,7 @@ function Shell() {
             variant="operator"
             rounds={schedule.map((h) => h.round)}
             current={progress.heatIndex}
+            endLabel={schedule.length ? roundTitle(state, schedule.at(-1)!.round) : undefined}
             className="order-last basis-full md:order-none md:mx-auto md:max-w-[35rem] md:flex-1 md:basis-auto"
           />
           <SyncBadge sync={sync} unsynced={unsynced} demo={demo} onSync={() => syncNow(id)} />
@@ -251,9 +254,10 @@ const PHONE_BLEED =
 const startPause = (competitionId: string, minutes: number) =>
   updateLive(competitionId, { pauseEndsAt: new Date(Date.now() + minutes * 60_000).toISOString() });
 
-/** The break countdown the TV shows. Kept in the live record, so it never ends up in the results. */
+/** The break (or warmup) countdown the TV shows. Kept in the live record, so it never ends up in the results. */
 function PauseTimer() {
-  const { id, live } = useComp();
+  const { id, state, live } = useComp();
+  const warmup = state.status === "warmup";
   const end = live?.pauseEndsAt ? Date.parse(live.pauseEndsAt) : null;
   const now = useNow(1000, end !== null);
   const left = end === null ? 0 : Math.max(0, Math.ceil((end - now) / 1000));
@@ -266,12 +270,12 @@ function PauseTimer() {
       }`}
     >
       <span className="flex-none font-medium text-faint">
-        <span className="max-sm:hidden">Pauzetimer op TV</span>
+        <span className="max-sm:hidden">{warmup ? "Opwarmtimer op TV" : "Pauzetimer op TV"}</span>
         <span className="sm:hidden">Timer</span>
       </span>
       {end === null ? (
         <div className="flex gap-0.5">
-          {[5, 10, 15, 20].map((m) => (
+          {(warmup ? [5] : [5, 10, 15, 20]).map((m) => (
             <button key={m} type="button" onClick={() => startPause(id, m)} className="cursor-pointer rounded-full px-2.5 py-[0.3125rem] hover:bg-fill">
               {m} min
             </button>
@@ -279,7 +283,7 @@ function PauseTimer() {
         </div>
       ) : (
         <>
-          <span className="px-1 text-sm tabular-nums">{done ? "Pauze voorbij" : formatClock(left)}</span>
+          <span className="px-1 text-sm tabular-nums">{done ? (warmup ? "Opwarming voorbij" : "Pauze voorbij") : formatClock(left)}</span>
           <button
             type="button"
             onClick={() =>
@@ -306,9 +310,17 @@ const STATUSES: { id: CompetitionStatus; label: string }[] = [
   { id: "round1", label: "Ronde 1" },
   { id: "break", label: "Pauze" },
   { id: "round2", label: "Ronde 2" },
+  { id: "semifinal", label: "Halve finale" },
+  { id: "final", label: "Finale" },
   { id: "shootoff", label: "Afkamping" },
   { id: "finished", label: "Einde" },
 ];
+
+/** The phases of this day: the semi-final and final only when the format has them switched on. */
+function statusesOf(state: CompetitionState) {
+  const ko = state.format.knockout;
+  return STATUSES.filter((s) => (s.id === "semifinal" ? !!ko?.semifinal : s.id === "final" ? !!ko?.final : true));
+}
 
 /**
  * The phase of the day. Drives what the TV shows; scoring itself follows the schedule.
@@ -321,10 +333,10 @@ function StatusControl() {
   async function setStatus(status: CompetitionStatus) {
     if (status === state.status) return;
     if (status === "finished") return askToFinish();
-    // Starting: freeze the shooting order of every rank, so late arrivals don't reshuffle pairs.
+    // Starting: freeze the shooting order of every group, so late arrivals don't reshuffle heats.
     const freeze =
       status === "warmup" || status === "round1"
-        ? ranksInShootingOrder(state)
+        ? groupsInShootingOrder(state)
             .filter((r) => !state.orders.has(r.code))
             .map((r) => ({
               type: "order.set" as const,
@@ -332,14 +344,17 @@ function StatusControl() {
             }))
         : [];
     await emitMany(id, [...freeze, { type: "status.set", payload: { status } }]);
-    if (status !== "break" && live?.pauseEndsAt) await updateLive(id, { pauseEndsAt: null });
+    // A timed day (WSA) counts the warmup down on the TV right away; any other phase stops a countdown.
+    const warmup = state.format.timing?.warmupSeconds;
+    if (status === "warmup" && warmup) await startPause(id, warmup / 60);
+    else if (status !== "break" && live?.pauseEndsAt) await updateLive(id, { pauseEndsAt: null });
   }
 
   return (
     <ScrollRow active={state.status} className={`flex items-center gap-2.5 ${PHONE_BLEED}`}>
       <span className="flex-none text-xs text-faint">Fase</span>
       <div role="radiogroup" aria-label="Fase" className="flex flex-none gap-0.5 rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] text-xs font-semibold">
-        {STATUSES.map((s) => {
+        {statusesOf(state).map((s) => {
           const on = state.status === s.id;
           return (
             <button

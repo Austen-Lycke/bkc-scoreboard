@@ -13,7 +13,7 @@ const { competitions, entries, ranks, shooterSeasonRanks, shooters } = schema;
 
 /** Public data for the portal. Cached per tag; every sync from the operator laptop invalidates the tags. */
 
-export const LIVE_STATUSES = ["warmup", "round1", "break", "round2", "shootoff"] as const;
+export const LIVE_STATUSES = ["warmup", "round1", "break", "round2", "semifinal", "final", "shootoff"] as const;
 export const FINISHED_STATUSES = ["finished", "published"] as const;
 const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Brussels" });
 
@@ -161,7 +161,7 @@ export async function getShooterProfile(id: string): Promise<ShooterProfile | nu
     for (const rank of view.ranks) {
       const row = rank.rows.find((r) => r.shooterId === id);
       if (!row) continue;
-      perfectPasses += row.passes.filter((p) => p === rank.maxPass).length;
+      perfectPasses += row.passes.filter((p, i) => p !== null && p === rank.maxPasses[i]).length;
       results.push({ slug: a.slug, competition: view.competition.name, date: a.date, rank: rank.name, position: row.position, total: row.total, passes: row.passes });
     }
   }

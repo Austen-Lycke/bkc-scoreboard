@@ -6,27 +6,35 @@ import {
   competitionProgress,
   competitionSchedule,
   effectiveOrder,
-  entriesOfRank,
+  entriesOfGroup,
   entryName,
-  ranksInShootingOrder,
+  entryTotal,
+  groupsInShootingOrder,
+  heatKey,
+  isShootingStatus,
+  knockoutPlan,
+  knockoutRounds,
+  type CompetitionState,
 } from "@/lib/competition";
 import { emit } from "@/lib/offline/store";
-import { passKey } from "@/lib/scoring";
+import { passKey, type GroupDef, type Heat } from "@/lib/scoring";
 import { useComp } from "../context";
 import { Empty, Panel, Tag } from "@/components/ui";
 
 /**
- * Shooting order per rank, shown in heats (one shooter per knockdown). Weakest first, leader last.
- * Heats that already shot (or are shooting) are fixed: moving those shooters would re-pair passes.
+ * Shooting order per group (a rank, or Junior / Volwassenen on a WSA day), shown in heats (one
+ * shooter per knockdown). Weakest first, leader last. Heats that already shot (or are shooting) are
+ * fixed: moving those shooters would re-pair passes. On a knockout day the semi-final and final follow.
  */
 export function OrderView() {
   const { id, state } = useComp();
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const next = useMemo(() => competitionProgress(state, schedule).heatIndex, [state, schedule]);
   // Only during a round is the next heat in line actually on the line.
-  const current = state.status === "round1" || state.status === "round2" ? next : null;
-  const perHeat = state.snapshot.competition.knockdowns;
-  const ranks = ranksInShootingOrder(state).filter((r) => entriesOfRank(state, r.code, { includeWithdrawn: true }).length > 0);
+  const current = isShootingStatus(state.status) ? next : null;
+  const { lanes: perHeat, rotate } = state.format;
+  const lastRound = state.snapshot.competition.rounds;
+  const ranks = groupsInShootingOrder(state).filter((g) => entriesOfGroup(state, g.code, { includeWithdrawn: true }).length > 0);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[0.875rem] overflow-auto px-4 pb-8 pt-2 sm:px-8">
@@ -44,10 +52,10 @@ export function OrderView() {
           {ranks.map((rank) => {
             const order = effectiveOrder(state, rank.code);
             const stored = state.orders.get(rank.code);
-            const withdrawn = entriesOfRank(state, rank.code, { includeWithdrawn: true }).filter((e) => e.withdrawn);
+            const withdrawn = entriesOfGroup(state, rank.code, { includeWithdrawn: true }).filter((e) => e.withdrawn);
             const heats = chunk(order, perHeat);
             const scheduled = (h: number) =>
-              schedule.map((s, i) => ({ s, i })).filter(({ s }) => s.rankCode === rank.code && s.index === h);
+              schedule.map((s, i) => ({ s, i })).filter(({ s }) => s.groupCode === rank.code && s.index === h && s.round <= lastRound);
             const isNow = (h: number) => scheduled(h).some(({ i }) => i === current);
             const isLocked = (h: number) =>
               isNow(h) || scheduled(h).some(({ s }) => s.phases.flat().some((a) => state.passes.has(passKey(a.entryId, s.round, a.knockdown))));
@@ -106,7 +114,7 @@ export function OrderView() {
                       {heat.map((entryId, j) => {
                         const index = h * perHeat + j;
                         const points = state.snapshot.seasonPoints[state.entries.get(entryId)!.shooterId];
-                        const kd = heat.length === 1 && perHeat > 1 ? `KD ${Array.from({ length: perHeat }, (_, k) => k + 1).join("+")}` : `KD ${j + 1}`;
+                        const kd = rotate && heat.length === 1 && perHeat > 1 ? `KD ${Array.from({ length: perHeat }, (_, k) => k + 1).join("+")}` : `KD ${j + 1}`;
                         return (
                           <div key={entryId} className="flex items-center gap-2.5 py-1.5 pl-2.5 pr-2 sm:pl-[0.875rem]">
                             {/* Phone: the place in the order over the knockdown, and the season points under the name. */}
@@ -138,11 +146,59 @@ export function OrderView() {
                     </div>
                   );
                 })}
+                <Knockout group={rank} current={current === null ? null : schedule[current]} />
               </Panel>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The semi-final and the final steps of a group, as far as they're decided, and a tie that holds them up. */
+function Knockout({ group, current }: { group: GroupDef; current: Heat | null }) {
+  const { state } = useComp();
+  const ko = state.format.knockout;
+  if (!ko || (!ko.semifinal && !ko.final)) return null;
+  const plan = knockoutPlan(state, group.code);
+  const { semi, finalStart } = knockoutRounds(state);
+  const stageName = (h: Heat) => (h.round === semi ? "Halve finale" : `Finale · reeks ${h.round - finalStart! + 1}`);
+  const blockedNames = plan.blocked?.group.map((e) => entryName(state, e)).join(", ");
+  return (
+    <div className="flex flex-col gap-2 border-t border-divider pt-3">
+      <span className="px-1 text-sm font-semibold">{ko.semifinal && ko.final ? "Halve finale en finale" : ko.semifinal ? "Halve finale" : "Finale"}</span>
+      {plan.heats.length === 0 && !plan.blocked && (
+        <span className="px-1 text-[0.8125rem] text-muted">De beste helft (minstens 3) gaat door zodra alle rondes van {group.name} geschoten zijn.</span>
+      )}
+      {plan.heats.map((h) => (
+        <KnockoutHeat key={heatKey(h)} state={state} heat={h} title={stageName(h)} now={!!current && heatKey(current) === heatKey(h)} />
+      ))}
+      {plan.blocked && (
+        <span className="rounded-xl bg-error-light px-3 py-2 text-[0.8125rem] font-semibold text-error">
+          Gelijke stand op de grens: afkamping tussen {blockedNames}
+        </span>
+      )}
+      {plan.done && <span className="px-1 text-[0.8125rem] text-muted">Alles geschoten.</span>}
+    </div>
+  );
+}
+
+function KnockoutHeat({ state, heat, title, now }: { state: CompetitionState; heat: Heat; title: string; now: boolean }) {
+  const done = heat.phases.flat().every((a) => state.passes.has(passKey(a.entryId, heat.round, a.knockdown)));
+  return (
+    <div className={`rounded-2xl border-[0.09375rem] px-[0.875rem] py-2 ${now ? "border-yellow bg-yellow-light" : "border-divider bg-background"}`}>
+      <div className="flex justify-between pb-1 text-xs font-semibold text-muted">
+        <span>{title}</span>
+        <span className={now ? "text-ink" : "text-faint"}>{now ? "nu" : done ? "✓" : "nog"}</span>
+      </div>
+      {heat.phases[0].map((a) => (
+        <div key={a.entryId} className="flex items-center gap-2.5 py-1 text-[0.9375rem]">
+          <span className="w-[3.25rem] flex-none text-xs font-semibold text-faint">KD {a.lane}</span>
+          <span className="min-w-0 flex-1 truncate font-semibold">{entryName(state, a.entryId)}</span>
+          <span className="text-sm tabular-nums text-muted">{entryTotal(state, a.entryId)}</span>
+        </div>
+      ))}
     </div>
   );
 }

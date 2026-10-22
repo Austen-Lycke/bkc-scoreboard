@@ -1,6 +1,6 @@
 "use client";
 
-import { entryName, entryTotal, pendingShootoffs, rankName, setupForRank, standingsFor } from "@/lib/competition";
+import { entryName, entryTotal, groupName, knockoutRounds, pendingShootoffs, setupFor, standingsFor, type CompetitionState } from "@/lib/competition";
 import type { ShootoffDraft } from "@/lib/offline/db";
 import { emit, emitMany, updateLive } from "@/lib/offline/store";
 import { iterationScore } from "@/lib/scoring";
@@ -10,13 +10,14 @@ import { Panel, Pill, Tag } from "@/components/ui";
 
 /**
  * Afkamping: the judge calls the targets one by one; every tied shooter shoots at the called
- * target. Most points wins the place; still tied → another round among just them.
+ * target. Most points wins the place; still tied → another round among just them. On a knockout
+ * day a tie on a cut line comes first: it decides who goes on to the semi-final or the next final series.
  */
 export function ShootoffView() {
   const { state, live } = useComp();
   if (live?.shootoff) return <ActiveShootoff draft={live.shootoff} />;
 
-  const pending = pendingShootoffs(state).flatMap(({ rankCode, groups }) => groups.map((group) => ({ rankCode, group })));
+  const pending = pendingShootoffs(state).flatMap(({ groupCode, stage, groups }) => groups.map((group) => ({ rankCode: groupCode, stage, group })));
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pb-8 pt-2 sm:px-8">
       <h2 className="px-1 text-[1.375rem] font-semibold">Afkamping</h2>
@@ -25,22 +26,31 @@ export function ShootoffView() {
           Geen gelijke standen die afgekampt moeten worden. Afkamping kan pas als een klasse alle passages geschoten heeft.
         </div>
       )}
-      {pending.map(({ rankCode, group }) => (
-        <PendingGroup key={group.join()} rankCode={rankCode} group={group} />
+      {pending.map(({ rankCode, stage, group }) => (
+        <PendingGroup key={group.join()} rankCode={rankCode} stage={stage} group={group} />
       ))}
       <History />
     </div>
   );
 }
 
-function PendingGroup({ rankCode, group }: { rankCode: string; group: string[] }) {
+/** What a tie on a cut line ("cut:N", after round N) decides. */
+function cutLabel(state: CompetitionState, stage: string): string {
+  const round = Number(stage.slice(4));
+  const { semi, finalStart } = knockoutRounds(state);
+  if (round + 1 === semi) return "wie naar de halve finale gaat";
+  if (round + 1 === finalStart) return "wie naar de finale gaat";
+  return "wie in de finale verder mag";
+}
+
+function PendingGroup({ rankCode, stage, group }: { rankCode: string; stage?: string; group: string[] }) {
   const { id, state } = useComp();
-  const earlier = state.shootoffs.filter((s) => s.rankCode === rankCode && group.every((p) => s.participants.includes(p)));
+  const earlier = state.shootoffs.filter((s) => s.rankCode === rankCode && s.stage === stage && group.every((p) => s.participants.includes(p)));
   const position = standingsFor(state, rankCode).rows.find((r) => r.entryId === group[0])?.position;
 
   async function start() {
     const returnStatus = state.status === "shootoff" ? null : state.status;
-    const draft: ShootoffDraft = { rankCode, participants: group, calls: [], results: Object.fromEntries(group.map((p) => [p, []])), returnStatus };
+    const draft: ShootoffDraft = { rankCode, stage, participants: group, calls: [], results: Object.fromEntries(group.map((p) => [p, []])), returnStatus };
     await updateLive(id, { shootoff: draft });
     if (state.status !== "shootoff") await emit(id, "status.set", { status: "shootoff" });
   }
@@ -48,12 +58,12 @@ function PendingGroup({ rankCode, group }: { rankCode: string; group: string[] }
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-[1.5rem] border-2 border-ink bg-surface px-4 py-[1.375rem] sm:px-6">
       <Tag tone="yellow" className="px-[0.6875rem] py-1 text-[0.8125rem]">
-        {rankName(state, rankCode)}
+        {groupName(state, rankCode)}
       </Tag>
       <div className="min-w-[min(13.75rem,100%)] flex-1">
         <div className="text-[1.625rem] font-semibold tracking-[-0.02em]">{group.map((e) => entryName(state, e)).join(" & ")}</div>
         <div className="mt-0.5 text-sm text-muted">
-          {entryTotal(state, group[0])} punten · gedeelde plaats{position ? ` ${position}` : ""}
+          {entryTotal(state, group[0])} punten · {stage ? `gelijk op de grens: beslist ${cutLabel(state, stage)}` : `gedeelde plaats${position ? ` ${position}` : ""}`}
           {earlier.length > 0 ? ` · al ${earlier.length}× afgekampt, nog steeds gelijk` : ""}
         </div>
       </div>
@@ -66,7 +76,8 @@ function PendingGroup({ rankCode, group }: { rankCode: string; group: string[] }
 
 function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
   const { id, state } = useComp();
-  const setup = setupForRank(state.snapshot, draft.rankCode);
+  // The plates of the last qualification round (WSA: variant 2, as in the knockout).
+  const setup = setupFor(state, draft.rankCode, state.snapshot.competition.rounds);
   const label = (targetId: string) => setup.targets.find((t) => t.id === targetId)?.label ?? targetId;
   const called = new Set(draft.calls.map((c) => c.targetId));
   const remaining = setup.targets.filter((t) => !called.has(t.id));
@@ -113,7 +124,7 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
     await emitMany(id, [
       {
         type: "shootoff.recorded",
-        payload: { iterationId: crypto.randomUUID(), rankCode: draft.rankCode, ...asIteration },
+        payload: { iterationId: crypto.randomUUID(), rankCode: draft.rankCode, ...(draft.stage && { stage: draft.stage }), ...asIteration },
       },
     ]);
     await updateLive(id, { shootoff: null });
@@ -129,7 +140,7 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-4 pb-8 pt-2 sm:px-8">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
-        <h2 className="text-[1.375rem] font-semibold">Afkamping · {rankName(state, draft.rankCode)}</h2>
+        <h2 className="text-[1.375rem] font-semibold">Afkamping · {groupName(state, draft.rankCode)}</h2>
         <span className="text-sm text-muted">
           {draft.calls.length} van {setup.targets.length} doelen geroepen
         </span>
@@ -275,7 +286,7 @@ function History() {
       <div className="pb-2 text-[0.9375rem] font-semibold">Gespeelde afkampingen</div>
       {state.shootoffs.map((s) => (
         <div key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-divider py-2.5 text-sm">
-          <Tag>{rankName(state, s.rankCode)}</Tag>
+          <Tag>{groupName(state, s.rankCode)}</Tag>
           <span className="min-w-[min(12rem,100%)] flex-1 font-medium">{s.participants.map((p) => `${entryName(state, p)} ${iterationScore(s, p)}`).join(" · ")}</span>
           <button
             type="button"

@@ -7,7 +7,7 @@ import {
   competitionProgress,
   competitionSchedule,
   effectiveOrder,
-  entriesOfRank,
+  entriesOfGroup,
   pendingShootoffs,
   resultsCsv,
   standingsFor,
@@ -55,8 +55,8 @@ describe("competition state", () => {
     const schedule = competitionSchedule(state);
     // Junior 3, 3de 5, 2de 3, 1ste 3, Ere 3 → 2+3+2+2+2 = 11 heats per round
     expect(schedule).toHaveLength(22);
-    expect(schedule[0]).toMatchObject({ round: 1, rankCode: "junior" });
-    expect(schedule[11]).toMatchObject({ round: 2, rankCode: "junior" });
+    expect(schedule[0]).toMatchObject({ round: 1, groupCode: "junior" });
+    expect(schedule[11]).toMatchObject({ round: 2, groupCode: "junior" });
     expect(competitionProgress(state)).toMatchObject({ heatIndex: 0, phaseIndex: 0 });
   });
 
@@ -68,7 +68,7 @@ describe("competition state", () => {
     expect(ere.complete).toBe(true);
     expect(ere.rows.every((r) => r.total === 120)).toBe(true);
     // Everyone tied on 120 → every rank needs afkamping.
-    expect(pendingShootoffs(state).map((p) => p.rankCode)).toEqual(["junior", "klasse3", "klasse2", "klasse1", "ereklasse"]);
+    expect(pendingShootoffs(state).map((p) => p.groupCode)).toEqual(["junior", "klasse3", "klasse2", "klasse1", "ereklasse"]);
   });
 
   it("settles a tie with afkamping and repeats when still tied", () => {
@@ -79,7 +79,7 @@ describe("competition state", () => {
     const [a, b, c] = [...juniorIds];
     // Juniors a and b tie on 120, c scores less.
     const run = shootEverything(snapshot, (id) => (id === c ? ["top-10"] : ALL_HITS));
-    const [group] = pendingShootoffs(run.state).find((p) => p.rankCode === "junior")!.groups;
+    const [group] = pendingShootoffs(run.state).find((p) => p.groupCode === "junior")!.groups;
     expect([...group].sort()).toEqual([a, b].sort());
 
     const calls = SPANISH_KNOCKDOWN.targets.map((t) => ({ targetId: t.id, points: t.points }));
@@ -102,7 +102,7 @@ describe("competition state", () => {
   it("keeps a corrected afkamping in its place among the iterations", () => {
     const snapshot = buildDemoSnapshot();
     const run = shootEverything(snapshot);
-    const group = pendingShootoffs(run.state).find((p) => p.rankCode === "junior")!.groups[0];
+    const group = pendingShootoffs(run.state).find((p) => p.groupCode === "junior")!.groups[0];
     const [a, b] = group;
     const calls = SPANISH_KNOCKDOWN.targets.map((t) => ({ targetId: t.id, points: t.points }));
     const shot = (loser?: string) => Object.fromEntries(group.map((id) => [id, calls.map((_, i) => id !== loser || i !== 2)]));
@@ -186,7 +186,7 @@ describe("competition state", () => {
 
     const state = buildState(snapshot, events);
     expect(effectiveOrder(state, "klasse3")).toEqual([...frozen.slice(1), lateEntry]);
-    expect(entriesOfRank(state, "klasse3")).toHaveLength(5);
+    expect(entriesOfGroup(state, "klasse3")).toHaveLength(5);
     const row = standingsFor(state, "klasse3").rows.find((r) => r.entryId === frozen[0])!;
     expect(row).toMatchObject({ withdrawn: true, position: null });
   });

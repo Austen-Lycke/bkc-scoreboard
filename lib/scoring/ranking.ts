@@ -29,16 +29,20 @@ export interface RankStandings {
 }
 
 /**
- * Standings for one rank in one competition. Highest total wins; equal totals are settled by
- * afkamping once the rank is complete. Withdrawn shooters are listed last without a position.
+ * Standings for one rank (or group) in one competition. Highest total wins; equal totals are settled
+ * by afkamping once the rank is complete. Withdrawn shooters are listed last without a position.
+ * With `bands` (a knockout day: how far each shooter got) a higher band always ranks higher, and only
+ * equal totals within a band are a tie. `complete` overrides the pass count check.
  */
 export function rankStandings(opts: {
   entries: readonly { entryId: string; withdrawn?: boolean }[];
   passes: readonly ScoredPass[];
   expectedPasses: number;
   shootoffs?: readonly ShootoffIteration[];
+  bands?: ReadonlyMap<string, number>;
+  complete?: boolean;
 }): RankStandings {
-  const { entries, passes, expectedPasses, shootoffs = [] } = opts;
+  const { entries, passes, expectedPasses, shootoffs = [], bands } = opts;
 
   const totals = new Map<string, { total: number; passCount: number }>();
   for (const e of entries) totals.set(e.entryId, { total: 0, passCount: 0 });
@@ -51,7 +55,7 @@ export function rankStandings(opts: {
 
   const active = entries.filter((e) => !e.withdrawn);
   const complete =
-    active.length > 0 && active.every((e) => totals.get(e.entryId)!.passCount >= expectedPasses);
+    opts.complete ?? (active.length > 0 && active.every((e) => totals.get(e.entryId)!.passCount >= expectedPasses));
 
   const row = (entryId: string, position: number | null, tie: TieState, withdrawn = false) => ({
     entryId,
@@ -61,13 +65,17 @@ export function rankStandings(opts: {
     withdrawn,
   });
 
-  // Group active shooters by total, best first.
-  const byTotal = new Map<number, string[]>();
+  // Group active shooters by band and total, best first.
+  const byScore = new Map<string, { band: number; total: number; ids: string[] }>();
   for (const e of active) {
-    const t = totals.get(e.entryId)!.total;
-    byTotal.set(t, [...(byTotal.get(t) ?? []), e.entryId]);
+    const band = bands?.get(e.entryId) ?? 0;
+    const total = totals.get(e.entryId)!.total;
+    const key = `${band}:${total}`;
+    const g = byScore.get(key) ?? { band, total, ids: [] };
+    g.ids.push(e.entryId);
+    byScore.set(key, g);
   }
-  const groups = [...byTotal.entries()].sort((a, b) => b[0] - a[0]).map(([, ids]) => ids);
+  const groups = [...byScore.values()].sort((a, b) => b.band - a.band || b.total - a.total).map((g) => g.ids);
 
   const rows: StandingRow[] = [];
   const pendingTies: string[][] = [];

@@ -62,6 +62,6 @@ export function competitionStatus(status: string): { label: string; tone: TagTon
   return { label: "bezig", tone: "yellow" };
 }
 
-/** "Spaanse knockdown" → "Spaanse", "WSA knockdown variant 1" → "WSA 1": short enough for a chip. */
+/** "Spaanse knockdown" → "Spaanse", "WSA variant 1 · groot naar klein" → "WSA 1": short enough for a chip. */
 export const setupShortName = (name: string) =>
-  name.replace(/\s*knockdown\s*/i, " ").replace(/\bvariant\s+/i, "").replace(/\s+/g, " ").trim() || name;
+  name.replace(/\s*·.*$/, "").replace(/\s*knockdown\s*/i, " ").replace(/\bvariant\s+/i, "").replace(/\s+/g, " ").trim() || name;

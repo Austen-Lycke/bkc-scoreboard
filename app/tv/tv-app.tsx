@@ -5,22 +5,31 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import {
   competitionProgress,
   competitionSchedule,
+  entriesOfGroup,
   entryShortName,
   entryTotal,
+  expectedPasses,
+  groupName,
+  groupsInShootingOrder,
+  isShootingStatus,
+  knockoutPlan,
+  knockoutRounds,
+  passColumns,
   passOf,
   pendingShootoffs,
-  rankName,
-  ranksInShootingOrder,
-  setupForRank,
+  roundTitle,
+  setupFor,
   standingsFor,
+  timerStep,
   tvName,
   heatKey,
   type CompetitionState,
+  type TimerStep,
 } from "@/lib/competition";
 import { ACTIVE_COMPETITION_KEY, getMeta, type LiveRecord, type ShootoffDraft } from "@/lib/offline/db";
 import { useLocalCompetition } from "@/lib/offline/store";
 import { useQueryParam } from "@/lib/offline/url";
-import { iterationScore, passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
+import { achievableScores, iterationScore, passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
 import { HeatProgress } from "@/components/heat-progress";
 import { Plate, plateRows, type PlateLook } from "@/components/plates";
 import { formatClock, useNow } from "@/components/use-now";
@@ -114,6 +123,8 @@ const PHASE_LABEL: Record<CompetitionState["status"], string> = {
   round1: "Ronde 1",
   break: "Pauze",
   round2: "Ronde 2",
+  semifinal: "Halve finale",
+  final: "Finale",
   shootoff: "Afkamping",
   finished: "Einde wedstrijd",
 };
@@ -124,9 +135,10 @@ const welcomeDate = (date: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-/** "Lotte D. & Mathis C." */
-const heatNames = (state: CompetitionState, heat: Heat) => heat.shooters.map((e) => tvName(state, e)).join(" & ");
-const heatMeta = (state: CompetitionState, heat: Heat) => `Ronde ${heat.round} · ${rankName(state, heat.rankCode)}`;
+/** "Lotte D. & Mathis C.", or "14 schutters" for a WSA line. */
+const heatNames = (state: CompetitionState, heat: Heat) =>
+  heat.shooters.length > 2 ? `${heat.shooters.length} schutters` : heat.shooters.map((e) => tvName(state, e)).join(" & ");
+const heatMeta = (state: CompetitionState, heat: Heat) => `${roundTitle(state, heat.round)} · ${groupName(state, heat.groupCode)}`;
 
 /**
  * Names on the afkamping cards. `short` (narrow cards): "Pieter D.", unless two of them would read
@@ -148,7 +160,8 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
   const heat = heatIndex === null ? null : schedule[heatIndex];
   const comp = state.snapshot.competition;
   const firstUp = heat ? { label: "Als eerste", names: heatNames(state, heat), meta: heatMeta(state, heat) } : null;
-  const shooting = (state.status === "round1" || state.status === "round2") && heat;
+  const shooting = isShootingStatus(state.status) && heat;
+  const lastRound = schedule.at(-1)?.round ?? comp.rounds;
 
   let body: ReactNode;
   switch (state.status) {
@@ -159,7 +172,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       break;
     }
     case "warmup":
-      body = <Centered title="Opwarming" bar={firstUp} />;
+      body = live?.pauseEndsAt ? <Warmup end={live.pauseEndsAt} bar={firstUp} /> : <Centered title="Opwarming" bar={firstUp} />;
       break;
     case "break":
       body = <Pause state={state} live={live} schedule={schedule} heat={heat} />;
@@ -168,14 +181,32 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       body = live?.shootoff ? <ShootoffLive state={state} draft={live.shootoff} /> : <ShootoffWaiting state={state} />;
       break;
     case "finished":
-      body = <Centered kicker={comp.name} title="Einde wedstrijd" sub="Bedankt aan alle schutters, juryleden en supporters." />;
+      body = state.format.knockout?.final ? (
+        <Podium state={state} kicker="Einde wedstrijd" />
+      ) : (
+        <Centered kicker={comp.name} title="Einde wedstrijd" sub="Bedankt aan alle schutters, juryleden en supporters." />
+      );
       break;
-    default:
+    default: {
+      const cut = pendingShootoffs(state).find((p) => p.stage);
       body = heat ? (
-        <LiveHeat state={state} live={live} schedule={schedule} heatIndex={heatIndex!} phaseIndex={Math.min(phaseIndex, heat.phases.length - 1)} />
+        setupFor(state, heat.groupCode, heat.round).entry === "points" ? (
+          <LiveLine state={state} live={live} schedule={schedule} heatIndex={heatIndex!} />
+        ) : (
+          <LiveHeat state={state} live={live} schedule={schedule} heatIndex={heatIndex!} phaseIndex={Math.min(phaseIndex, heat.phases.length - 1)} />
+        )
+      ) : cut ? (
+        <Centered
+          kicker="Afkamping"
+          title="Gelijke stand op de grens"
+          bar={{ label: groupName(state, cut.groupCode), names: cut.groups[0].map((e) => tvName(state, e)).join(" & "), meta: "De afkamping beslist wie verder mag" }}
+        />
+      ) : state.format.knockout?.final && groupsInShootingOrder(state).every((g) => knockoutPlan(state, g.code).done) ? (
+        <Podium state={state} kicker={comp.name} />
       ) : (
         <Centered kicker={comp.name} title="Alle beurten geschoten" sub="De uitslag volgt." />
       );
+    }
   }
 
   return (
@@ -183,7 +214,17 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       <TopBar
         name={comp.name}
         phase={shooting ? null : PHASE_LABEL[state.status]}
-        progress={shooting ? <HeatProgress variant="tv" rounds={schedule.map((h) => h.round)} current={progress.heatIndex} className="w-[47.5rem]" /> : null}
+        progress={
+          shooting ? (
+            <HeatProgress
+              variant="tv"
+              rounds={schedule.map((h) => h.round)}
+              current={progress.heatIndex}
+              endLabel={roundTitle(state, lastRound)}
+              className="w-[47.5rem]"
+            />
+          ) : null
+        }
       />
       {body}
     </>
@@ -286,9 +327,9 @@ function LiveHeat({
 }) {
   const heat = schedule[heatIndex];
   const phase = heat.phases[phaseIndex];
-  const knockdowns = state.snapshot.competition.knockdowns;
-  const setup = setupForRank(state.snapshot, heat.rankCode);
-  const heatsInRank = schedule.filter((h) => h.round === heat.round && h.rankCode === heat.rankCode).length;
+  const knockdowns = state.format.lanes;
+  const setup = setupFor(state, heat.groupCode, heat.round);
+  const heatsInRank = schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length;
   const next = schedule[heatIndex + 1];
   const hitsOf = (entryId: string, kd: number) => live?.drafts[passKey(entryId, heat.round, kd)] ?? passOf(state, entryId, heat.round, kd)?.hits ?? [];
   const liveTotal = (entryId: string, kd: number) =>
@@ -301,8 +342,8 @@ function LiveHeat({
         <div className="flex items-center justify-between">
           <span className="rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">Nu aan de lijn</span>
           <span className="text-[2.125rem] text-white/60">
-            Ronde {heat.round} · {rankName(state, heat.rankCode)} · beurt {heat.index + 1}/{heatsInRank}
-            {phaseIndex > 0 ? " · gewisseld" : ""}
+            {heatMeta(state, heat)} · beurt {heat.index + 1}/{heatsInRank}
+            {phaseIndex > 0 && state.format.rotate ? " · gewisseld" : ""}
           </span>
         </div>
         <div className="grid gap-14" style={{ gridTemplateColumns: columns }}>
@@ -344,14 +385,18 @@ function LiveHeat({
           <span className="text-[1.875rem] font-semibold text-muted">Hierna klaarmaken</span>
           {next ? (
             <>
-              {next.shooters.map((e) => (
-                <span key={e} className="truncate text-[4rem] font-semibold leading-[1.05] tracking-[-0.02em]">
-                  {tvName(state, e)}
-                </span>
-              ))}
+              {next.shooters.length > 2 ? (
+                <span className="line-clamp-4 text-[2.25rem] font-semibold leading-[1.2]">{next.shooters.map((e) => entryShortName(state, e)).join(", ")}</span>
+              ) : (
+                next.shooters.map((e) => (
+                  <span key={e} className="truncate text-[4rem] font-semibold leading-[1.05] tracking-[-0.02em]">
+                    {tvName(state, e)}
+                  </span>
+                ))
+              )}
               <span className="mt-auto text-[1.75rem] text-muted">
                 {heatMeta(state, next)} · beurt {next.index + 1}
-                {next.shooters.length === 1 && knockdowns > 1
+                {next.shooters.length === 1 && knockdowns > 1 && state.format.rotate
                   ? ` · alleen op KD ${Array.from({ length: knockdowns }, (_, k) => k + 1).join(" en ")}`
                   : ""}
               </span>
@@ -380,10 +425,8 @@ function LiveStandings({
   hitsOf: (entryId: string, kd: number) => string[];
   setup: Setup;
 }) {
-  const { rounds, knockdowns } = state.snapshot.competition;
-  const cols: [number, number][] = [];
-  for (let r = 1; r <= rounds; r++) for (let k = 1; k <= knockdowns; k++) cols.push([r, k]);
-  const rows = standingsFor(state, heat.rankCode)
+  const cols = passColumns(state, heat.groupCode).map((c) => [c.round, c.knockdown] as const);
+  const rows = standingsFor(state, heat.groupCode)
     .rows.filter((r) => !r.withdrawn)
     .map((r) => {
       const onLine = phase.find((s) => s.entryId === r.entryId);
@@ -428,7 +471,7 @@ function LiveStandings({
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-[2.25rem] border-[0.1875rem] border-border bg-surface px-11 pb-6 pt-[1.625rem]">
       <div className="flex items-baseline justify-between pb-1">
-        <span className="text-[1.875rem] font-semibold">Voorlopige stand · {rankName(state, heat.rankCode)}</span>
+        <span className="text-[1.875rem] font-semibold">Voorlopige stand · {groupName(state, heat.groupCode)}</span>
         <span className="text-[1.5rem] text-muted">passages</span>
       </div>
       <div className="flex flex-1 flex-col justify-between">{items}</div>
@@ -449,10 +492,11 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
   const now = useNow(1000, end !== null);
   const left = end === null ? 0 : Math.max(0, Math.ceil((end - now) / 1000));
   const nextRound = heat?.round ?? null;
-  const { rounds, knockdowns } = state.snapshot.competition;
+  const { rounds } = state.snapshot.competition;
   const roundDone = (r: number) => schedule.filter((h) => h.round === r).every((h) => h.phases.flat().every((a) => state.passes.has(passKey(a.entryId, r, a.knockdown))));
   const doneRounds = Array.from({ length: rounds }, (_, i) => i + 1).filter(roundDone).length;
-  const ranks = ranksInShootingOrder(state).filter((r) => standingsFor(state, r.code).rows.some((x) => !x.withdrawn));
+  const perRound = expectedPasses(state) / rounds;
+  const ranks = groupsInShootingOrder(state).filter((r) => standingsFor(state, r.code).rows.some((x) => !x.withdrawn));
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[32.5rem_minmax(0,1fr)] gap-10">
@@ -482,7 +526,7 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
         <div className="flex items-baseline justify-between">
           <span className="text-[2.5rem] font-semibold tracking-[-0.02em]">{doneRounds > 0 ? `Voorlopige stand na ronde ${doneRounds}` : "Voorlopige stand"}</span>
           <span className="text-[1.625rem] text-muted">
-            {doneRounds * knockdowns} van {rounds * knockdowns} passages
+            {doneRounds * perRound} van {rounds * perRound} {state.format.rotate ? "passages" : "reeksen"}
           </span>
         </div>
         <div
@@ -577,22 +621,22 @@ function ShootoffWaiting({ state }: { state: CompetitionState }) {
   const next = pendingShootoffs(state)[0];
   if (!next) return <Centered kicker="Afkamping" title="Alle gelijke standen zijn beslecht" />;
   const group = next.groups[0];
-  const position = standingsFor(state, next.rankCode).rows.find((r) => r.entryId === group[0])?.position;
+  const position = standingsFor(state, next.groupCode).rows.find((r) => r.entryId === group[0])?.position;
   return (
     <Centered
       kicker="Afkamping"
-      title={rankName(state, next.rankCode)}
+      title={groupName(state, next.groupCode)}
       bar={{
-        label: "Gelijke stand",
+        label: next.stage ? "Gelijk op de grens" : "Gelijke stand",
         names: group.map((e) => tvName(state, e)).join(" & "),
-        meta: `${entryTotal(state, group[0])} punten${position ? ` · plaats ${position}` : ""}`,
+        meta: `${entryTotal(state, group[0])} punten${next.stage ? " · wie mag verder?" : position ? ` · plaats ${position}` : ""}`,
       }}
     />
   );
 }
 
 function ShootoffLive({ state, draft }: { state: CompetitionState; draft: ShootoffDraft }) {
-  const setup = setupForRank(state.snapshot, draft.rankCode);
+  const setup = setupFor(state, draft.rankCode, state.snapshot.competition.rounds);
   const label = (id: string) => setup.targets.find((t) => t.id === id)?.label ?? id;
   const last = draft.calls.length - 1;
   const lastId = last >= 0 ? draft.calls[last].targetId : null;
@@ -619,7 +663,7 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
     <>
       <div className="flex flex-none items-end justify-between gap-10">
         <div className="flex flex-col gap-5">
-          <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">Afkamping · {rankName(state, draft.rankCode)}</span>
+          <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">Afkamping · {groupName(state, draft.rankCode)}</span>
           <span className="text-[6.875rem] font-semibold leading-[0.95] tracking-[-0.04em]">{lastId ? `Geroepen: ${label(lastId)}` : "Wachten op het eerste doel"}</span>
         </div>
         <div className="flex flex-col items-end gap-[0.875rem]">
@@ -723,7 +767,7 @@ function Centered({
     <>
       <div className="flex flex-1 flex-col justify-center gap-7 px-5">
         {kicker && <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">{kicker}</span>}
-        <span className="text-balance text-[10.625rem] font-semibold leading-[0.95] tracking-[-0.04em]">{title}</span>
+        <span className="text-balance text-[10.625rem] font-semibold leading-[0.95] tracking-[-0.04em] tabular-nums">{title}</span>
         {sub && <span className="max-w-[87.5rem] text-pretty text-[2.5rem] text-muted">{sub}</span>}
       </div>
       {bar && (
@@ -736,5 +780,205 @@ function Centered({
         </div>
       )}
     </>
+  );
+}
+
+/** The warmup countdown before a round of a timed (WSA) day, with who shoots first. */
+function Warmup({ end, bar }: { end: string; bar: { label: string; names: string; meta: string } | null }) {
+  const endMs = Date.parse(end);
+  const now = useNow(1000);
+  const left = Math.max(0, Math.ceil((endMs - now) / 1000));
+  return <Centered kicker="Opwarming" title={left > 0 ? formatClock(left) : "Opwarming voorbij"} sub={left > 0 ? "Nog op te warmen" : undefined} bar={bar} />;
+}
+
+/**
+ * A WSA line: up to 15 shooters, each on their own frame, with this heat's series scores as they're
+ * typed from the cards (only scores the plates can make) and the series countdown.
+ */
+function LiveLine({ state, live, schedule, heatIndex }: { state: CompetitionState; live: LiveRecord | undefined; schedule: Heat[]; heatIndex: number }) {
+  const heat = schedule[heatIndex];
+  const setup = setupFor(state, heat.groupCode, heat.round);
+  const allowed = achievableScores(setup);
+  const heatsInGroup = schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length;
+  const next = schedule[heatIndex + 1];
+  const spots = heat.phases[0];
+  const scoreOf = (entryId: string, kd: number) => {
+    const v = live?.draftScores?.[passKey(entryId, heat.round, kd)] ?? passOf(state, entryId, heat.round, kd)?.score;
+    return v !== undefined && allowed.has(v) ? v : undefined;
+  };
+  const lineOf = (entryId: string) => heat.phases.map((ph) => scoreOf(entryId, ph.find((x) => x.entryId === entryId)!.knockdown));
+  const savedLine = (entryId: string) => heat.phases.reduce((n, ph) => n + (passOf(state, entryId, heat.round, ph.find((x) => x.entryId === entryId)!.knockdown)?.score ?? 0), 0);
+  const total = (entryId: string) => entryTotal(state, entryId) - savedLine(entryId) + lineOf(entryId).reduce<number>((n, v) => n + (v ?? 0), 0);
+  const groupTotals = entriesOfGroup(state, heat.groupCode).map((e) => (heat.shooters.includes(e.entryId) ? total(e.entryId) : entryTotal(state, e.entryId)));
+  const placeOf = (entryId: string) => 1 + groupTotals.filter((t) => t > total(entryId)).length;
+  // In the final: who dropped out after the previous series.
+  const { finalStart } = knockoutRounds(state);
+  const before = finalStart !== null && heat.round > finalStart ? schedule.filter((h) => h.groupCode === heat.groupCode && h.round === heat.round - 1).flatMap((h) => h.shooters) : [];
+  const dropped = before.filter((e) => !heat.shooters.includes(e));
+
+  const big = spots.length <= 5;
+  const cols = big ? Math.max(1, spots.length) : 5;
+  const rows = Math.ceil(spots.length / cols);
+
+  return (
+    <>
+      <section className="flex min-h-0 flex-1 flex-col gap-6 rounded-[2.75rem] bg-ink px-12 pb-10 pt-8 text-white">
+        <div className="flex flex-none items-center justify-between gap-10">
+          <div className="flex min-w-0 items-center gap-8">
+            <span className="whitespace-nowrap rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">Nu aan de lijn</span>
+            <span className="truncate text-[2.125rem] text-white/60">
+              {heatMeta(state, heat)}
+              {heatsInGroup > 1 ? ` · beurt ${heat.index + 1}/${heatsInGroup}` : ""}
+            </span>
+          </div>
+          {state.format.timing && <TvSeriesTimer state={state} live={live} heat={heat} />}
+        </div>
+        <div className="grid min-h-0 flex-1 gap-5" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
+          {spots.map((s) => {
+            const line = lineOf(s.entryId);
+            return (
+              <div key={s.entryId} className={`flex min-h-0 min-w-0 flex-col justify-between rounded-[1.75rem] bg-white/[0.07] ${big ? "gap-4 px-9 py-8" : "gap-1.5 px-6 py-[1.125rem]"}`}>
+                <div className="flex items-baseline justify-between text-white/50">
+                  <span className={big ? "text-[2rem]" : "text-[1.375rem]"}>KD {s.lane}</span>
+                  <span className={big ? "text-[1.875rem]" : "text-[1.375rem]"}>plaats {placeOf(s.entryId)}</span>
+                </div>
+                <div className={`truncate font-semibold tracking-[-0.02em] ${big ? "text-[3.5rem] leading-[1.05]" : "text-[2.125rem] leading-[1.1]"}`}>{tvName(state, s.entryId)}</div>
+                <div className="flex items-end justify-between gap-4">
+                  <span className={`tabular-nums text-white/70 ${big ? "text-[2.5rem]" : "text-[1.75rem]"}`}>{line.map((v) => (v === undefined ? "–" : v)).join(" · ")}</span>
+                  <span className={`font-semibold leading-[0.85] tracking-[-0.04em] text-yellow tabular-nums ${big ? "text-[6.5rem]" : "text-[3.5rem]"}`}>{total(s.entryId)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <div className="flex flex-none items-baseline gap-8 rounded-[2.25rem] border-[0.1875rem] border-border bg-surface px-11 py-6">
+        {dropped.length > 0 ? (
+          <>
+            <span className="whitespace-nowrap text-[1.875rem] font-semibold text-muted">Viel af</span>
+            <span className="min-w-0 flex-1 truncate text-[2.5rem] font-semibold">{dropped.map((e) => tvName(state, e)).join(" & ")}</span>
+          </>
+        ) : (
+          <>
+            <span className="whitespace-nowrap text-[1.875rem] font-semibold text-muted">Hierna klaarmaken</span>
+            <span className="min-w-0 flex-1 truncate text-[2.5rem] font-semibold">
+              {next ? (next.shooters.length > 2 ? next.shooters.map((e) => entryShortName(state, e)).join(", ") : next.shooters.map((e) => tvName(state, e)).join(" & ")) : "Dit is de laatste beurt"}
+            </span>
+          </>
+        )}
+        {next && <span className="whitespace-nowrap text-[1.75rem] text-muted">{heatMeta(state, next)}</span>}
+      </div>
+    </>
+  );
+}
+
+/** The series countdown on the TV, with a beep when a series starts and two when it ends. */
+function TvSeriesTimer({ state, live, heat }: { state: CompetitionState; live: LiveRecord | undefined; heat: Heat }) {
+  const timing = state.format.timing!;
+  const timer = live?.seriesTimer?.heatKey === heatKey(heat) ? live.seriesTimer : null;
+  const now = useNow(250, !!timer);
+  const step: TimerStep | null = timer ? timerStep(timing, heat.phases.length, timer, now) : null;
+  const sound = useSoundUnlocked();
+  useStepBeeps(step);
+  const series = heat.phases.length;
+
+  if (!step) {
+    return (
+      <span className="whitespace-nowrap text-[2rem] text-white/60">
+        {series} × {formatClock(timing.seriesSeconds)}
+        {!sound && <span className="ml-6 text-[1.375rem] text-white/40">klik op het scherm voor geluid</span>}
+      </span>
+    );
+  }
+  if (step.kind === "done") return <span className="whitespace-nowrap text-[2.5rem] font-semibold text-white/70">Reeksen gedaan</span>;
+  return (
+    <span className="flex items-baseline gap-6 whitespace-nowrap">
+      {!sound && <span className="text-[1.375rem] text-white/40">klik op het scherm voor geluid</span>}
+      <span className={`text-[2.5rem] font-semibold ${step.kind === "recover" ? "text-yellow" : "text-white/70"}`}>
+        {step.kind === "recover" ? "Herstel" : series === 1 ? "Reeks" : `Reeks ${step.series}`}
+      </span>
+      <span className={`text-[6rem] font-semibold leading-[0.8] tracking-[-0.04em] tabular-nums ${step.kind === "series" && step.left <= 10 ? "text-yellow" : ""}`}>
+        {formatClock(step.left)}
+      </span>
+    </span>
+  );
+}
+
+// Browsers only play sound after a click on the page; the TV window gets one when it's set up.
+let audio: AudioContext | null = null;
+
+function useSoundUnlocked(): boolean {
+  const [on, setOn] = useState(() => audio?.state === "running");
+  useEffect(() => {
+    if (on) return;
+    const unlock = () => {
+      audio ??= new AudioContext();
+      void audio.resume().then(() => setOn(audio!.state === "running"));
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [on]);
+  return on;
+}
+
+/** Beeps: `pattern` alternates sound and silence, in ms. */
+function beep(pattern: number[]) {
+  if (!audio || audio.state !== "running") return;
+  let t = audio.currentTime;
+  pattern.forEach((ms, i) => {
+    if (i % 2 === 0) {
+      const osc = audio!.createOscillator();
+      const gain = audio!.createGain();
+      osc.frequency.value = 880;
+      gain.gain.value = 0.3;
+      osc.connect(gain).connect(audio!.destination);
+      osc.start(t);
+      osc.stop(t + ms / 1000);
+    }
+    t += ms / 1000;
+  });
+}
+
+/** One long beep as a series starts, two short ones as it ends. Not when the TV opens halfway. */
+function useStepBeeps(step: TimerStep | null) {
+  const key = !step ? "idle" : step.kind === "series" ? `series:${step.series}` : step.kind;
+  const previous = useRef<string | null>(null);
+  useEffect(() => {
+    const was = previous.current;
+    previous.current = key;
+    if (was === null || was === key) return;
+    if (key.startsWith("series")) beep([700]);
+    else if (was.startsWith("series") && (key === "recover" || key === "done")) beep([180, 140, 180]);
+  }, [key]);
+}
+
+/** The podium of every group after the final: 1-2-3 with their totals. */
+function Podium({ state, kicker }: { state: CompetitionState; kicker: string }) {
+  const groups = groupsInShootingOrder(state)
+    .map((g) => ({ g, top: standingsFor(state, g.code).rows.filter((r) => r.position !== null && r.position <= 3) }))
+    .filter((x) => x.top.length > 0);
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-8">
+      <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">{kicker}</span>
+      <span className="text-[6.875rem] font-semibold leading-[0.95] tracking-[-0.04em]">Podium</span>
+      <div className="grid min-h-0 flex-1 gap-8" style={{ gridTemplateColumns: `repeat(${Math.max(1, groups.length)}, minmax(0, 1fr))` }}>
+        {groups.map(({ g, top }) => (
+          <section key={g.code} className="flex min-w-0 flex-col justify-center gap-7 rounded-[2.75rem] bg-ink px-14 py-11 text-white">
+            <span className="text-[2.125rem] text-white/60">{g.name}</span>
+            {top.map((r) => (
+              <div key={r.entryId} className="flex items-baseline gap-8">
+                <span className={`w-[5.5rem] font-semibold leading-none text-yellow tabular-nums ${r.position === 1 ? "text-[7rem]" : "text-[4.5rem]"}`}>{r.position}</span>
+                <span className={`min-w-0 flex-1 truncate font-semibold tracking-[-0.02em] ${r.position === 1 ? "text-[4.5rem]" : "text-[3.25rem]"}`}>{tvName(state, r.entryId)}</span>
+                <span className="text-[2.5rem] tabular-nums text-white/60">{r.total}</span>
+              </div>
+            ))}
+          </section>
+        ))}
+      </div>
+    </div>
   );
 }
