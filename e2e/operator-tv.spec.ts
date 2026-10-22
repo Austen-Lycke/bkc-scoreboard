@@ -144,13 +144,23 @@ test("the TV afkamping keeps five tied shooters and their plates inside their ca
   // Every pass Niets: all ranks end tied, 3de klasse five-way.
   const where = page.locator("main").getByText(/^Fase \d van \d/);
   const heading = page.locator("main").getByText(/ · ronde \d · beurt \d+$/);
-  for (let i = 0; i < 60 && (await heading.count()) > 0; i++) {
-    const before = `${await heading.innerText()} ${await where.innerText()}`;
-    for (const key of ["0", "w", "0", "Enter"]) await page.keyboard.press(key);
-    await expect
-      .poll(async () => ((await heading.count()) ? `${await heading.innerText()} ${await where.innerText()}` : "done"))
-      .not.toBe(before);
-  }
+  const shootRound = async () => {
+    for (let i = 0; i < 60 && (await heading.count()) > 0; i++) {
+      const before = `${await heading.innerText()} ${await where.innerText()}`;
+      for (const key of ["0", "w", "0", "Enter"]) await page.keyboard.press(key);
+      // Read in one step: the heading may go between a count and a read (the "Ronde 1 is klaar" card).
+      await expect
+        .poll(async () => [...(await heading.allInnerTexts()), ...(await where.allInnerTexts())].join(" ") || "done")
+        .not.toBe(before);
+    }
+  };
+  await shootRound();
+  // Round 1 is shot: the break or straight on, and the TV says so meanwhile.
+  await expect(page.getByText("Ronde 1 is klaar")).toBeVisible();
+  await page.getByRole("button", { name: "Meteen door met ronde 2" }).click();
+  await expect(page.getByRole("radio", { name: "Ronde 2" })).toHaveAttribute("aria-checked", "true");
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await shootRound();
   await expect(page.getByText("Alle beurten zijn geschoten")).toBeVisible();
 
   await page.getByRole("radio", { name: "Afkamping" }).click();

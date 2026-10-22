@@ -57,14 +57,13 @@ async function Competitions() {
     db.select().from(schema.competitions).orderBy(desc(schema.competitions.date), desc(schema.competitions.createdAt)).limit(30),
     db.select({ id: schema.setups.id, name: schema.setups.name }).from(schema.setups),
   ]);
-  // A new competition starts from the latest one: same place, fee and setup.
+  // A new competition starts from the latest one: same place and setup.
   const last = rows[0];
   const lastSetupId = last && Object.values(last.setupByRank)[0]?.id;
   const defaults = last
     ? {
         from: last.name,
         location: last.location ?? "",
-        fee: last.feeCents ? (last.feeCents / 100).toLocaleString("nl-BE", { useGrouping: false }) : "",
         setupId: setups.some((s) => s.id === lastSetupId) ? lastSetupId! : undefined,
         countsForSeason: last.countsForSeason,
         ...(last.format && {

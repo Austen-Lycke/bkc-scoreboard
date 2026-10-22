@@ -10,7 +10,6 @@ const field =
 export interface CompetitionDefaults {
   from: string;
   location: string;
-  fee: string;
   setupId?: string;
   countsForSeason: boolean;
   kind?: "spanish" | "wsa";
@@ -28,7 +27,7 @@ export function NewCompetitionForm({ setups, defaults }: { setups: { id: string;
     <form action={action} className="mt-3 flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
       {defaults && (
         <p className="text-sm text-muted">
-          Locatie, inschrijvingsgeld en formaat komen van <span className="font-medium text-ink">{defaults.from}</span>. Pas aan waar nodig.
+          Locatie en formaat komen van <span className="font-medium text-ink">{defaults.from}</span>. Pas aan waar nodig.
         </p>
       )}
       <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -42,10 +41,6 @@ export function NewCompetitionForm({ setups, defaults }: { setups: { id: string;
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Locatie <span className="font-normal text-muted">(optioneel)</span>
         <input name="location" placeholder="Clublokaal" defaultValue={defaults?.location} className={field} />
-      </label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Inschrijvingsgeld (€)
-        <input name="fee" inputMode="decimal" placeholder="5" defaultValue={defaults?.fee} className={field} />
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Formaat

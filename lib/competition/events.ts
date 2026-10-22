@@ -66,6 +66,8 @@ export const eventPayloads = {
     knockdown,
     hits: z.array(z.string().max(40)).max(20),
     score: z.number().int().min(0).max(1000).optional(),
+    /** Why a correction was made (from Stand), for questions afterwards. */
+    note: z.string().trim().max(200).optional(),
   }),
   "pass.cleared": z.object({ entryId: z.uuid(), round, knockdown }),
   /** `rankCode` is the group the tie is in. `stage` "cut:N": the tie decides who goes on after round N. */
@@ -82,6 +84,19 @@ export const eventPayloads = {
     results: z.record(z.uuid(), z.array(z.boolean()).max(MAX_SHOOTOFF)),
   }),
   "shootoff.cleared": z.object({ iterationId: z.uuid() }),
+  /**
+   * The jury chose not to afkamp a tie of the final standings: these shooters share the place.
+   * `waived: false` takes that back (the tie needs an afkamping again).
+   */
+  "shootoff.waived": z.object({
+    rankCode,
+    participants: z
+      .array(z.uuid())
+      .min(2)
+      .max(MAX_SHOOTOFF)
+      .refine((ids) => new Set(ids).size === ids.length, "Dubbele schutter in afkamping"),
+    waived: z.boolean(),
+  }),
   "status.set": z.object({ status: competitionStatus }),
   /** Semi-final and final on or off, decided on the day; only before either has a score. */
   "knockout.set": z.object({ semifinal: z.boolean(), final: z.boolean() }),

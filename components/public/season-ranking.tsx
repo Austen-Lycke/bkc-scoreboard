@@ -2,8 +2,12 @@ import Link from "next/link";
 import { getSeasonRanking, getSeasonYears } from "@/lib/server/public-data";
 import { PROMOTE_COUNT } from "@/lib/scoring";
 
+/** "↑ promotie" only from the second competition on: after one, every shooter of a small rank would have it. */
+const PROMOTION_SHOWN_FROM = 2;
+
 export async function SeasonRankingView({ year }: { year: number }) {
   const [ranking, years] = await Promise.all([getSeasonRanking(year), getSeasonYears()]);
+  const showPromotion = ranking.competitionCount >= PROMOTION_SHOWN_FROM;
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -47,13 +51,13 @@ export async function SeasonRankingView({ year }: { year: number }) {
               </thead>
               <tbody>
                 {rank.rows.map((row) => (
-                  <tr key={row.shooterId} className={`border-b border-border last:border-0 ${row.promotion ? "bg-[var(--hit)]/[0.07]" : ""}`}>
+                  <tr key={row.shooterId} className={`border-b border-border last:border-0 ${showPromotion && row.promotion ? "bg-[var(--hit)]/[0.07]" : ""}`}>
                     <td className="px-4 py-2.5 font-semibold tabular-nums">{row.position ?? "–"}</td>
                     <td className="px-4 py-2.5">
                       <Link href={`/schutter/${row.shooterId}`} className="font-medium hover:underline">
                         {row.name}
                       </Link>
-                      {row.promotion && <span className="ml-2 text-xs text-[#15803d] dark:text-[#4ade80]">↑ promotie</span>}
+                      {showPromotion && row.promotion && <span className="ml-2 text-xs text-[#15803d] dark:text-[#4ade80]">↑ promotie</span>}
                       {!row.eligible && <span className="ml-2 text-xs text-muted">te weinig wedstrijden</span>}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-muted">{row.participations}</td>

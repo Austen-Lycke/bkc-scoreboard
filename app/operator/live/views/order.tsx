@@ -123,8 +123,11 @@ export function OrderView() {
                               <span className="w-[3.25rem] whitespace-nowrap text-xs font-semibold text-faint">{kd}</span>
                             </span>
                             <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2.5">
-                              <span className="truncate text-[0.9375rem] font-semibold sm:min-w-[7.5rem] sm:flex-1">{entryName(state, entryId)}</span>
-                              <span className="min-w-0 truncate whitespace-nowrap text-xs text-muted" title={points === undefined ? "Nog geen seizoenspunten" : undefined}>
+                              <span className="truncate text-[0.9375rem] font-semibold sm:min-w-0 sm:flex-1" title={entryName(state, entryId)}>
+                                {entryName(state, entryId)}
+                              </span>
+                              {/* Never cut short ("g…"): the name gives way instead. */}
+                              <span className="flex-none whitespace-nowrap text-xs text-muted" title={points === undefined ? "Nog geen seizoenspunten" : undefined}>
                                 {points === undefined ? "geen punten" : `${Math.round(points)} ptn`}
                               </span>
                             </span>

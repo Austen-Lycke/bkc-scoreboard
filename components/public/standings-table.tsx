@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { PublicRank } from "@/lib/competition";
 
-const TIE: Record<string, string | null> = { none: null, resolved: "na afkamping", shared: "gelijk", pending: "afkamping" };
+const TIE: Record<string, string | null> = { none: null, resolved: "na afkamping", shared: "gelijk", pending: "afkamping", waived: "gedeelde plaats" };
 
 /** Standings of one rank. Server-safe (no hooks), also rendered inside the live client view. */
 export function StandingsTable({ rank, passLabels, highlight }: { rank: PublicRank; passLabels: string[]; highlight?: string[] }) {

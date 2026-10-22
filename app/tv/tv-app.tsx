@@ -17,6 +17,7 @@ import {
   passColumns,
   passOf,
   pendingShootoffs,
+  phaseDone,
   roundTitle,
   setupFor,
   standingsFor,
@@ -181,15 +182,16 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       body = live?.shootoff ? <ShootoffLive state={state} draft={live.shootoff} /> : <ShootoffWaiting state={state} />;
       break;
     case "finished":
-      body = state.format.knockout?.final ? (
-        <Podium state={state} kicker="Einde wedstrijd" />
-      ) : (
-        <Centered kicker={comp.name} title="Einde wedstrijd" sub="Bedankt aan alle schutters, juryleden en supporters." />
-      );
+      // For the prize-giving: the top three of every group (after a knockout final: its podium).
+      body = <Podium state={state} kicker="Einde wedstrijd" title={state.format.knockout?.final ? "Podium" : "Eindstand"} />;
       break;
     default: {
       const cut = pendingShootoffs(state).find((p) => p.stage);
-      body = heat ? (
+      // Round 1 is shot and the operator hasn't chosen between a break and going on yet.
+      const between = heat && focusIndex < 0 && phaseDone(state, heat.round);
+      body = between ? (
+        <Centered kicker={comp.name} title={`${PHASE_LABEL[state.status]} is klaar`} sub="Zo meteen gaan we verder." bar={firstUp} />
+      ) : heat ? (
         setupFor(state, heat.groupCode, heat.round).entry === "points" ? (
           <LiveLine state={state} live={live} schedule={schedule} heatIndex={heatIndex!} />
         ) : (
@@ -557,11 +559,13 @@ function Pause({ state, live, schedule, heat }: { state: CompetitionState; live:
 }
 
 /**
- * A list that fits stays put. One that doesn't scrolls slowly upwards in a loop (after a short
- * pause), with a fade at the bottom, so every shooter passes by during the break.
+ * A list that fits stays put. One that doesn't shows a page of whole rows, rests long enough to read
+ * it, fades to the next page and loops: no row is ever shown cut in half, also when rows differ in
+ * height (the winner larger). The pause and the final standings use it.
  */
-function Marquee({ children }: { children: ReactNode }) {
+function Marquee({ children, className = "flex-1", gap = "gap-1" }: { children: ReactNode; className?: string; gap?: string }) {
   const viewport = useRef<HTMLDivElement>(null);
+  const window_ = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
 
@@ -569,49 +573,67 @@ function Marquee({ children }: { children: ReactNode }) {
     const vp = viewport.current;
     const tr = track.current;
     if (!vp || !tr) return;
-    const first = tr.firstElementChild as HTMLElement | null;
-    const measure = () => setOverflow(!!first && first.offsetHeight > vp.clientHeight + 2);
+    const measure = () => setOverflow(tr.offsetHeight > vp.clientHeight + 2);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(vp);
-    if (first) ro.observe(first);
+    ro.observe(tr);
     return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
+    const vp = viewport.current;
+    const win = window_.current;
     const tr = track.current;
-    if (!overflow || !tr) {
-      if (tr) tr.style.transform = "";
-      return;
-    }
-    let offset = 0;
-    let hold = 3000;
-    let last: number | null = null;
-    let raf = 0;
-    const step = (t: number) => {
-      const dt = last === null ? 0 : Math.min(64, t - last);
-      last = t;
-      // Measured on the page, so in px: the copy's height plus the gap to the next copy.
-      const height = (tr.firstElementChild as HTMLElement).offsetHeight + parseFloat(getComputedStyle(tr).rowGap || "0");
-      hold -= dt;
-      if (hold <= 0) offset = (offset + dt * 0.03) % height;
-      tr.style.transform = `translateY(${-offset}px)`;
-      raf = requestAnimationFrame(step);
+    if (!vp || !win || !tr) return;
+    const reset = () => {
+      tr.style.transform = "";
+      win.style.height = "";
+      win.style.marginBottom = "";
+      win.style.opacity = "";
     };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    if (!overflow) return reset();
+    // Measured on the page, so in px: where each row starts and ends in the list. Layout offsets, not
+    // screen boxes: the TV canvas is scaled as a whole, and heights are set in unscaled px.
+    const rows = () => [...tr.children].map((r) => ({ top: (r as HTMLElement).offsetTop, bottom: (r as HTMLElement).offsetTop + (r as HTMLElement).offsetHeight }));
+    /** Shows the whole rows that fit from row `first` on; returns the row after them. */
+    const show = (first: number) => {
+      const all = rows();
+      const top = all[first]?.top ?? 0;
+      let last = first;
+      while (last + 1 < all.length && all[last + 1].bottom - top <= vp.clientHeight + 1) last++;
+      tr.style.transform = `translateY(${-top}px)`;
+      win.style.height = `${all[last].bottom - top}px`;
+      return { next: last + 1 < all.length ? last + 1 : 0, count: last - first + 1 };
+    };
+    // A page keeps its top edge in one place, also in a centred box.
+    win.style.marginBottom = "auto";
+    win.style.transition = "opacity 450ms ease";
+    let page = show(0);
+    let timer: ReturnType<typeof setTimeout>;
+    // About two seconds a name, at least four seconds a page.
+    const rest = (count: number) => Math.max(4000, 2000 * count);
+    const flip = () => {
+      win.style.opacity = "0";
+      timer = setTimeout(() => {
+        page = show(page.next);
+        win.style.opacity = "1";
+        timer = setTimeout(flip, rest(page.count));
+      }, 450);
+    };
+    timer = setTimeout(flip, rest(page.count));
+    return () => {
+      clearTimeout(timer);
+      reset();
+    };
   }, [overflow]);
 
-  const mask = overflow ? "linear-gradient(#000 0, #000 calc(100% - 2rem), transparent)" : undefined;
   return (
-    <div ref={viewport} className="min-h-0 flex-1 overflow-hidden" style={{ maskImage: mask, WebkitMaskImage: mask }}>
-      <div ref={track} className="flex flex-col gap-1 will-change-transform">
-        <div className="flex flex-col gap-1">{children}</div>
-        {overflow && (
-          <div aria-hidden className="flex flex-col gap-1">
-            {children}
-          </div>
-        )}
+    <div ref={viewport} className={`min-h-0 overflow-hidden ${className}`}>
+      <div ref={window_} className="overflow-hidden">
+        <div ref={track} className={`relative flex flex-col ${gap}`}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -709,7 +731,7 @@ function ShootoffLive({ state, draft }: { state: CompetitionState; draft: Shooto
               <span className="font-semibold leading-[0.8] tracking-[-0.04em] text-yellow tabular-nums" style={{ fontSize: look.score }}>
                 {iterationScore(iteration, p)}
               </span>
-              {lastId && result !== null && <span className="text-[1.875rem] text-white/60">{`${label(lastId)} ${result ? "raak" : "mis"}`}</span>}
+              {lastId && result !== null && <span className="text-[1.875rem] text-white/60">{`Doel ${label(lastId)}: ${result ? "raak" : "mis"}`}</span>}
             </div>
           );
           return (
@@ -956,26 +978,42 @@ function useStepBeeps(step: TimerStep | null) {
   }, [key]);
 }
 
-/** The podium of every group after the final: 1-2-3 with their totals. */
-function Podium({ state, kicker }: { state: CompetitionState; kicker: string }) {
+/**
+ * The top three of every group, 1-2-3 with their totals: the podium after a knockout final, or the
+ * final standings of a club day. More than three groups (the five ranks) go on two rows, a size smaller.
+ */
+function Podium({ state, kicker, title = "Podium" }: { state: CompetitionState; kicker: string; title?: string }) {
   const groups = groupsInShootingOrder(state)
     .map((g) => ({ g, top: standingsFor(state, g.code).rows.filter((r) => r.position !== null && r.position <= 3) }))
     .filter((x) => x.top.length > 0);
+  const many = groups.length > 3;
+  const columns = many ? Math.ceil(groups.length / 2) : Math.max(1, groups.length);
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-8">
+    <div className={`flex min-h-0 flex-1 flex-col ${many ? "gap-6" : "gap-8"}`}>
       <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">{kicker}</span>
-      <span className="text-[6.875rem] font-semibold leading-[0.95] tracking-[-0.04em]">Podium</span>
-      <div className="grid min-h-0 flex-1 gap-8" style={{ gridTemplateColumns: `repeat(${Math.max(1, groups.length)}, minmax(0, 1fr))` }}>
+      <span className={`${many ? "text-[5rem]" : "text-[6.875rem]"} font-semibold leading-[0.95] tracking-[-0.04em]`}>{title}</span>
+      <div className={`grid min-h-0 flex-1 ${many ? "gap-6" : "gap-8"}`} style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridAutoRows: "minmax(0, 1fr)" }}>
         {groups.map(({ g, top }) => (
-          <section key={g.code} className="flex min-w-0 flex-col justify-center gap-7 rounded-[2.75rem] bg-ink px-14 py-11 text-white">
-            <span className="text-[2.125rem] text-white/60">{g.name}</span>
-            {top.map((r) => (
-              <div key={r.entryId} className="flex items-baseline gap-8">
-                <span className={`w-[5.5rem] font-semibold leading-none text-yellow tabular-nums ${r.position === 1 ? "text-[7rem]" : "text-[4.5rem]"}`}>{r.position}</span>
-                <span className={`min-w-0 flex-1 truncate font-semibold tracking-[-0.02em] ${r.position === 1 ? "text-[4.5rem]" : "text-[3.25rem]"}`}>{tvName(state, r.entryId)}</span>
-                <span className="text-[2.5rem] tabular-nums text-white/60">{r.total}</span>
-              </div>
-            ))}
+          <section key={g.code} className={`flex min-h-0 min-w-0 flex-col justify-center rounded-[2.75rem] bg-ink text-white ${many ? "gap-3 px-10 py-7" : "gap-7 px-14 py-11"}`}>
+            <span className={`flex-none ${many ? "text-[1.875rem]" : "text-[2.125rem]"} text-white/60`}>{g.name}</span>
+            {/* Shared places can make it more than three: then the names move by, a row at a time. */}
+            <Marquee className="flex flex-1 flex-col justify-center" gap={many ? "gap-3" : "gap-7"}>
+              {top.map((r) => (
+                <div key={r.entryId} className={`flex items-baseline ${many ? "gap-5" : "gap-8"}`}>
+                  <span
+                    className={`flex-none font-semibold leading-none text-yellow tabular-nums ${
+                      many ? `w-[3.25rem] ${r.position === 1 ? "text-[4rem]" : "text-[2.75rem]"}` : `w-[5.5rem] ${r.position === 1 ? "text-[7rem]" : "text-[4.5rem]"}`
+                    }`}
+                  >
+                    {r.position}
+                  </span>
+                  <span className={`min-w-0 flex-1 truncate font-semibold tracking-[-0.02em] ${many ? (r.position === 1 ? "text-[2.75rem]" : "text-[2.25rem]") : r.position === 1 ? "text-[4.5rem]" : "text-[3.25rem]"}`}>
+                    {tvName(state, r.entryId)}
+                  </span>
+                  <span className={`${many ? "text-[1.875rem]" : "text-[2.5rem]"} tabular-nums text-white/60`}>{r.total}</span>
+                </div>
+              ))}
+            </Marquee>
           </section>
         ))}
       </div>

@@ -6,8 +6,6 @@ import {
   competitionProgress,
   competitionSchedule,
   isDemoId,
-  effectiveOrder,
-  groupsInShootingOrder,
   pendingShootoffs,
   roundTitle,
   type CompetitionState,
@@ -15,11 +13,12 @@ import {
 } from "@/lib/competition";
 import { downloadSnapshot } from "@/lib/offline/api";
 import { ACTIVE_COMPETITION_KEY, setMeta } from "@/lib/offline/db";
-import { emitMany, resetDemo, saveSnapshot, updateLive, useLocalCompetition } from "@/lib/offline/store";
+import { resetDemo, saveSnapshot, updateLive, useLocalCompetition } from "@/lib/offline/store";
 import { syncNow, useSyncLoop, useSyncStatus, type SyncStatus } from "@/lib/offline/sync";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useQueryParam } from "@/lib/offline/url";
 import { CompetitionContext, NavContext, useComp, useNav, type Tab } from "./context";
+import { setPhase } from "./phase";
 import { HeatProgress } from "@/components/heat-progress";
 import { ScrollRow } from "@/components/scroll-row";
 import { Pill } from "@/components/ui";
@@ -274,10 +273,18 @@ function PauseTimer() {
         <span className="sm:hidden">Timer</span>
       </span>
       {end === null ? (
-        <div className="flex gap-0.5">
-          {(warmup ? [5] : [5, 10, 15, 20]).map((m) => (
-            <button key={m} type="button" onClick={() => startPause(id, m)} className="cursor-pointer rounded-full px-2.5 py-[0.3125rem] hover:bg-fill">
-              {m} min
+        // Real buttons, so they never read as a label: one start for the warmup, a few lengths for the break.
+        <div className="flex gap-1">
+          {(warmup ? [5] : [5, 10, 15, 20]).map((m, i) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => startPause(id, m)}
+              className={`cursor-pointer whitespace-nowrap rounded-full border-[0.09375rem] px-2.5 py-[0.3125rem] ${
+                i === 0 ? "border-ink bg-ink text-white hover:bg-black" : "border-border bg-surface hover:border-ink"
+              }`}
+            >
+              {i === 0 ? `▶ Start ${m} min` : `${m} min`}
             </button>
           ))}
         </div>
@@ -327,27 +334,13 @@ function statusesOf(state: CompetitionState) {
  * "Einde" locks scoring, so it asks first, on Afronden, where the open passages and ties are listed.
  */
 function StatusControl() {
-  const { id, state, live } = useComp();
+  const { id, state } = useComp();
   const { askToFinish } = useNav();
 
   async function setStatus(status: CompetitionStatus) {
     if (status === state.status) return;
     if (status === "finished") return askToFinish();
-    // Starting: freeze the shooting order of every group, so late arrivals don't reshuffle heats.
-    const freeze =
-      status === "warmup" || status === "round1"
-        ? groupsInShootingOrder(state)
-            .filter((r) => !state.orders.has(r.code))
-            .map((r) => ({
-              type: "order.set" as const,
-              payload: { rankCode: r.code, entryIds: effectiveOrder(state, r.code), source: "reverse_ranking" as const },
-            }))
-        : [];
-    await emitMany(id, [...freeze, { type: "status.set", payload: { status } }]);
-    // A timed day (WSA) counts the warmup down on the TV right away; any other phase stops a countdown.
-    const warmup = state.format.timing?.warmupSeconds;
-    if (status === "warmup" && warmup) await startPause(id, warmup / 60);
-    else if (status !== "break" && live?.pauseEndsAt) await updateLive(id, { pauseEndsAt: null });
+    await setPhase(id, state, status);
   }
 
   return (

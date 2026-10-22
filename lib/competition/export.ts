@@ -2,7 +2,7 @@ import { toCsv } from "@/lib/csv";
 import { competitionSchedule, entryName, groupsInShootingOrder, passColumns, passLabel, passOf, standingsFor } from "./derive";
 import type { CompetitionState } from "./state";
 
-const TIE_LABEL = { none: "", resolved: "na afkamping", shared: "gedeeld", pending: "afkamping nodig" } as const;
+const TIE_LABEL = { none: "", resolved: "na afkamping", shared: "gedeeld", pending: "afkamping nodig", waived: "gedeelde plaats (niet afgekampt)" } as const;
 
 /** Results as CSV for Excel (semicolon separated, UTF-8 with BOM, as Belgian Excel expects). */
 export function resultsCsv(state: CompetitionState): string {

@@ -8,7 +8,7 @@ import type { PublicRank, PublicView } from "@/lib/competition";
 
 const POLL_MS = 5000;
 const clock = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
-const TIE: Record<string, string | null> = { none: null, resolved: "na afkamping", shared: "gelijk", pending: "afkamping" };
+const TIE: Record<string, string | null> = { none: null, resolved: "na afkamping", shared: "gelijk", pending: "afkamping", waived: "gedeelde plaats" };
 
 /** The public competition page. While the competition runs, it refreshes itself every few seconds. */
 export function CompetitionView({ initial, live }: { initial: PublicView; live: boolean }) {

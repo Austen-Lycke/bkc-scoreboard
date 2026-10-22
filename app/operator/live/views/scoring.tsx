@@ -11,7 +11,9 @@ import {
   heatKey,
   passOf,
   pendingShootoffs,
+  phaseDone,
   roundName,
+  statusForRound,
   sameHits,
   setupFor,
   standingsFor,
@@ -25,6 +27,7 @@ import { offlineDb } from "@/lib/offline/db";
 import { emit, emitMany, updateLive } from "@/lib/offline/store";
 import { passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
 import { useComp, useNav } from "../context";
+import { setPhase, useAutoPhase } from "../phase";
 import { LineScoring } from "./line-scoring";
 import { OPERATOR_HIT, OPERATOR_OPEN, Plate, plateRows } from "@/components/plates";
 import { Empty, Kbd, Panel, Pill } from "@/components/ui";
@@ -63,11 +66,17 @@ export function ScoringView(props: { activeKd: number; setActiveKd: (kd: number)
 function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd: (kd: number) => void }) {
   const { id, state, live } = useComp();
   const { schedule, focusIndex, heatIndex, heat, phaseIndex } = useLineup();
-  const [justSaved, setJustSaved] = useState(false);
+  // "Fase 1 opgeslagen ✓" for a moment after a save, so it never reads as the next phase being saved.
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const finished = state.status === "finished";
+  const advance = useAutoPhase();
+  // Round 1 is shot and round 2 is next: first the break or not (not while correcting an earlier heat).
+  const waiting = focusIndex < 0 && !!heat && phaseDone(state, heat.round);
 
   const phase = heat && phaseIndex !== null ? heat.phases[phaseIndex] : null;
+  // A knockdown nobody shoots in this phase (a shooter on their own) is never the active one.
+  const currentKd = !phase || phase.some((s) => s.knockdown === activeKd) ? activeKd : (phase[0]?.knockdown ?? activeKd);
   const knockdowns = state.format.lanes;
   const drafts = useMemo(() => live?.drafts ?? {}, [live]);
   const setup = heat ? setupFor(state, heat.groupCode, heat.round) : null;
@@ -85,6 +94,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
       const a = phase?.find((s) => s.knockdown === kd);
       if (!a || !heat || finished) return;
       setActiveKd(kd);
+      void advance(heat.round);
       const key = passKey(a.entryId, heat.round, kd);
       const saved = passOf(state, a.entryId, heat.round, kd)?.hits ?? [];
       void updateLive(id, (current) => {
@@ -93,7 +103,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
         return { drafts: { ...current.drafts, [key]: next } };
       });
     },
-    [finished, heat, id, phase, setActiveKd, state],
+    [advance, finished, heat, id, phase, setActiveKd, state],
   );
 
   const setAll = useCallback(
@@ -101,10 +111,11 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
       const a = phase?.find((s) => s.knockdown === kd);
       if (!a || !heat || !setup || finished) return;
       setActiveKd(kd);
+      void advance(heat.round);
       const key = passKey(a.entryId, heat.round, kd);
       void updateLive(id, (current) => ({ drafts: { ...current.drafts, [key]: all ? setup.targets.map((t) => t.id) : [] } }));
     },
-    [finished, heat, id, phase, setActiveKd, setup],
+    [advance, finished, heat, id, phase, setActiveKd, setup],
   );
 
   /**
@@ -125,7 +136,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
   const confirming = confirmingFor !== null && confirmingFor === phaseKey && untouched.length > 0;
 
   const save = useCallback(async ({ allowEmpty = false } = {}) => {
-    if (!heat || !phase || phaseIndex === null || finished) return;
+    if (!heat || !phase || phaseIndex === null || finished || waiting) return;
     // Read the drafts from storage, not from render state: the last tap may be milliseconds old.
     const storedDrafts = (await offlineDb().live.get(id))?.drafts ?? {};
     if (!allowEmpty && untouchedIn(storedDrafts).length > 0) {
@@ -141,6 +152,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
     const actions = passes
       .filter((p) => !(p.previous && sameHits(p.previous, p.hits)))
       .map(({ entryId, round, knockdown, hits }) => ({ type: "pass.recorded" as const, payload: { entryId, round, knockdown, hits } }));
+    await advance(heat.round);
     if (actions.length) await emitMany(id, actions);
     // Stay on a heat the operator jumped to until its phases are done; otherwise follow the schedule.
     const nextPhase = phaseIndex + 1 < heat.phases.length ? phaseIndex + 1 : null;
@@ -152,10 +164,10 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
     }));
     buzz();
     setActiveKd(1);
-    setJustSaved(true);
+    setSavedNote(nextPhase !== null ? `Fase ${phaseIndex + 1} opgeslagen ✓` : `Beurt ${heat.index + 1} opgeslagen ✓`);
     clearTimeout(savedTimer.current);
-    savedTimer.current = setTimeout(() => setJustSaved(false), 1600);
-  }, [finished, focusIndex, heat, id, phase, phaseIndex, phaseKey, setActiveKd, state, untouchedIn]);
+    savedTimer.current = setTimeout(() => setSavedNote(null), 1000);
+  }, [advance, finished, focusIndex, heat, id, phase, phaseIndex, phaseKey, setActiveKd, state, untouchedIn, waiting]);
 
   useEffect(() => () => clearTimeout(savedTimer.current), []);
 
@@ -181,11 +193,13 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
     );
     if (actions) buzz([20, 60, 20]);
     setActiveKd(1);
-    setJustSaved(false);
+    setSavedNote(null);
   }, [finished, id, setActiveKd, state]);
 
   // Keyboard: 1–n toggles plates on the active knockdown, 0 is "Niets", W switches knockdown, Enter saves,
-  // Esc drops the "0 opslaan?" question, Cmd/Ctrl+Z undoes. Enter never answers that question.
+  // Esc drops the "0 opslaan?" question, Cmd/Ctrl+Z undoes. Enter saves wherever the mouse left the focus
+  // (a plate, "Alles raak", a tab), and never presses that button again; only inside [data-keep-enter]
+  // (undo, the "0 opslaan?" question) does it press the focused button. So Enter never answers that question.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const el = e.target instanceof Element ? e.target : null;
@@ -196,25 +210,26 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (!heat || !setup || finished) return;
+      if (!heat || !setup || finished || waiting) return;
       if (e.key === "w" || e.key === "W") {
         e.preventDefault();
-        setActiveKd((activeKd % knockdowns) + 1);
-      } else if (e.key === "Enter" && !el?.closest("button")) {
+        setActiveKd((currentKd % knockdowns) + 1);
+      } else if (e.key === "Enter") {
+        if (el?.closest("[data-keep-enter]")) return;
         e.preventDefault();
         void save();
       } else if (e.key === "Escape") {
         setConfirmingFor(null);
       } else if (e.key === "0") {
-        setAll(activeKd, false);
+        setAll(currentKd, false);
       } else if (/^[1-9]$/.test(e.key)) {
         const target = setup.targets[Number(e.key) - 1];
-        if (target) toggle(activeKd, target.id);
+        if (target) toggle(currentKd, target.id);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeKd, finished, heat, knockdowns, save, setActiveKd, setAll, setup, toggle, undo]);
+  }, [currentKd, finished, heat, knockdowns, save, setActiveKd, setAll, setup, toggle, undo, waiting]);
 
   if (state.entries.size === 0) {
     return (
@@ -240,7 +255,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
 
   const next = heatIndex === null ? [] : schedule.slice(heatIndex + 1, heatIndex + 4);
   const lastPhase = !!heat && phaseIndex !== null && phaseIndex + 1 >= heat.phases.length;
-  const saveLabel = finished ? "Op slot" : justSaved ? "Opgeslagen ✓" : lastPhase ? "Opslaan & volgende" : "Opslaan & wisselen";
+  const saveLabel = finished ? "Op slot" : (savedNote ?? (lastPhase ? "Opslaan & volgende" : "Opslaan & wisselen"));
 
   return (
     // Landscape from a tablet up: a side column next to the knockdowns. Upright tablet: that column goes
@@ -248,13 +263,20 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
     // undo and save stuck to the bottom of the screen.
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-7 pt-2 sm:px-8 md:landscape:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[0.875rem]">
-        {heat && phase && phaseIndex !== null && setup ? (
+        {waiting && heat ? (
+          <PhaseDone round={heat.round} />
+        ) : heat && phase && phaseIndex !== null && setup ? (
           <>
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
               <span className="text-[1.375rem] font-semibold">{heatTitle(state, heat)}</span>
               <span className="flex items-baseline gap-3 text-sm text-muted">
                 {focusIndex >= 0 && (
-                  <button type="button" onClick={() => updateLive(id, { focus: null })} className="cursor-pointer font-semibold text-ink underline underline-offset-2">
+                  <button
+                    type="button"
+                    data-keep-enter
+                    onClick={() => updateLive(id, { focus: null })}
+                    className="cursor-pointer font-semibold text-ink underline underline-offset-2"
+                  >
                     Terug naar de volgende in de rij
                   </button>
                 )}
@@ -288,7 +310,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
                     hits={hits}
                     total={total}
                     place={placeOf(a.entryId, total)}
-                    active={activeKd === kd}
+                    active={currentKd === kd}
                     locked={finished}
                     nudge={confirming && untouched.some((u) => u.knockdown === kd)}
                     onActivate={() => setActiveKd(kd)}
@@ -317,6 +339,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
           {canUndo && (
             <button
               type="button"
+              data-keep-enter
               onClick={undo}
               className="flex cursor-pointer items-center gap-3 rounded-[1.125rem] border-[0.09375rem] border-ink bg-surface px-[1.125rem] py-3 text-left transition hover:bg-hover"
             >
@@ -333,7 +356,7 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
           )}
           {confirming && (
             // Above the save button, so a second tap on Opslaan never lands on "0 opslaan".
-            <div role="alert" className="flex flex-col gap-2.5 rounded-[1.125rem] border-[0.09375rem] border-yellow bg-yellow-light px-[1.125rem] py-3">
+            <div role="alert" data-keep-enter className="flex flex-col gap-2.5 rounded-[1.125rem] border-[0.09375rem] border-yellow bg-yellow-light px-[1.125rem] py-3">
               <span className="text-[0.9375rem] font-bold">
                 Nog niets ingevuld voor{" "}
                 {untouched.map((a, i) => (
@@ -357,15 +380,16 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
           <button
             type="button"
             onClick={() => save()}
-            disabled={finished || !phase}
+            disabled={finished || !phase || waiting}
             className="flex cursor-pointer items-center justify-between rounded-[1.125rem] bg-yellow px-[1.375rem] py-5 text-lg font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
           >
             <span>{saveLabel}</span>
             <Kbd className="touch:hidden">Enter</Kbd>
           </button>
-        </div>
-        <div className="text-center text-xs text-faint touch:hidden">
-          1–{setup?.targets.length ?? 7} plaat · 0 niets · W andere kant · Enter opslaan · ⌘/Ctrl Z ongedaan
+          {/* In the save block: as a row of its own it would squeeze the upright-tablet layout. */}
+          <div className="text-center text-xs text-faint touch:hidden">
+            1–{setup?.targets.length ?? 7} plaat · 0 niets · W andere kant · Enter opslaan · ⌘/Ctrl Z ongedaan
+          </div>
         </div>
       </aside>
     </div>
@@ -382,7 +406,8 @@ export function NextUp({ next }: { next: Heat[] }) {
         <span className="text-sm text-muted">Niemand meer.</span>
       ) : (
         next.map((h, j) => (
-          <div key={heatKey(h)} className="flex items-center gap-3">
+          // A short screen (laptop, tablet in landscape) shows two, so the list never runs under the save block.
+          <div key={heatKey(h)} className={`flex items-center gap-3 ${j >= 2 ? "[@media(max-height:56rem)]:hidden" : ""}`}>
             <span className="grid size-[1.625rem] flex-none place-items-center rounded-full border-[0.09375rem] border-border text-xs font-semibold">{j + 1}</span>
             <div className="min-w-0">
               {h.shooters.length > 2 ? (
@@ -429,10 +454,31 @@ export function AllShot() {
   );
 }
 
+/** "Ronde 1 is klaar": the operator starts the break, or goes straight on (scoring then moves the phase itself). */
+export function PhaseDone({ round }: { round: number }) {
+  const { id, state } = useComp();
+  const next = statusForRound(state, round);
+  const done = state.status === "round1" ? "Ronde 1" : state.status === "round2" ? "Ronde 2" : "De halve finale";
+  return (
+    <Panel data-keep-enter className="flex flex-col items-start gap-3 px-7 py-6">
+      <span className="text-[1.375rem] font-semibold">{done} is klaar</span>
+      <span className="text-[0.9375rem] text-muted">
+        Start de pauze (de TV toont de tussenstand en een aftelklok), of ga meteen door met {roundName(state, round)}.
+      </span>
+      <div className="flex flex-wrap gap-2">
+        <Pill tone="ink" onClick={() => setPhase(id, state, "break")}>
+          Pauze starten
+        </Pill>
+        <Pill onClick={() => setPhase(id, state, next)}>Meteen door met {roundName(state, round)}</Pill>
+      </div>
+    </Panel>
+  );
+}
+
 export function FinishedBanner() {
   const { id, state } = useComp();
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-ink px-[1.125rem] py-3 text-[0.9375rem] font-semibold text-white">
+    <div data-keep-enter className="flex items-center gap-3 rounded-2xl bg-ink px-[1.125rem] py-3 text-[0.9375rem] font-semibold text-white">
       <span className="flex-1">Wedstrijd beëindigd. Scoren staat op slot.</span>
       <button
         type="button"

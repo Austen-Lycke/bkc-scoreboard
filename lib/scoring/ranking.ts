@@ -8,7 +8,9 @@ export type TieState =
   /** Equal totals while the rank is still shooting: shared place for now. */
   | "shared"
   /** Rank finished and still tied: afkamping needed. */
-  | "pending";
+  | "pending"
+  /** Rank finished and tied, and the jury chose not to afkamp: a shared place. */
+  | "waived";
 
 export interface StandingRow {
   entryId: string;
@@ -41,8 +43,11 @@ export function rankStandings(opts: {
   shootoffs?: readonly ShootoffIteration[];
   bands?: ReadonlyMap<string, number>;
   complete?: boolean;
+  /** Ties the jury chose not to afkamp (each exactly this set of shooters): they keep a shared place. */
+  waived?: readonly (readonly string[])[];
 }): RankStandings {
-  const { entries, passes, expectedPasses, shootoffs = [], bands } = opts;
+  const { entries, passes, expectedPasses, shootoffs = [], bands, waived = [] } = opts;
+  const isWaived = (ids: readonly string[]) => waived.some((w) => w.length === ids.length && ids.every((id) => w.includes(id)));
 
   const totals = new Map<string, { total: number; passCount: number }>();
   for (const e of entries) totals.set(e.entryId, { total: 0, passCount: 0 });
@@ -93,6 +98,9 @@ export function rankStandings(opts: {
     for (const sub of resolveTie(group, shootoffs)) {
       if (sub.length === 1) {
         rows.push(row(sub[0], position++, "resolved"));
+      } else if (isWaived(sub)) {
+        for (const id of sub) rows.push(row(id, position, "waived"));
+        position += sub.length;
       } else {
         pendingTies.push(sub);
         for (const id of sub) rows.push(row(id, position, "pending"));

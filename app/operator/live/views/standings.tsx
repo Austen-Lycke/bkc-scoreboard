@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   competitionProgress,
   competitionSchedule,
@@ -26,6 +26,7 @@ const TIE_TAG: Record<TieState, { label: string; tone: "fill" | "error" | "good"
   shared: { label: "gelijk", tone: "fill" },
   pending: { label: "afkamping nodig", tone: "error" },
   resolved: { label: "na afkamping", tone: "good" },
+  waived: { label: "gedeelde plaats", tone: "fill" },
 };
 
 /** Standings per group (rank) with every pass; click a pass to correct it. */
@@ -131,6 +132,7 @@ export function StandingsView() {
                       type="button"
                       onClick={() => (isLive ? goTo("scoring", k) : setEditing({ entryId: row.entryId, round: r, knockdown: k }))}
                       aria-label={isLive ? `${name}: wordt nu geschoten` : `${name} aanpassen`}
+                      title={pass?.note ? `Aangepast: ${pass.note}` : undefined}
                       className={`mx-1 my-1.5 flex h-11 cursor-pointer items-center justify-center gap-[0.3125rem] rounded-xl text-[1.0625rem] font-semibold tabular-nums hover:outline-[0.09375rem] hover:outline-ink ${tone}`}
                     >
                       {isLive ? liveScore : pass ? pass.score : "·"}
@@ -172,18 +174,33 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
   const [typed, setTyped] = useState(existing ? String(existing.score) : "");
   const typedScore = typed.trim() === "" ? null : Number(typed);
   const typedOk = typedScore !== null && achievableScores(setup).has(typedScore);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Why it was corrected: optional, kept with the pass for questions afterwards.
+  const [note, setNote] = useState(existing?.note ?? "");
 
   async function save() {
     if (points && !typedOk) return;
-    await emit(id, "pass.recorded", points ? { entryId, round, knockdown, hits: [], score: typedScore! } : { entryId, round, knockdown, hits });
+    const reason = note.trim() ? { note: note.trim() } : {};
+    await emit(id, "pass.recorded", points ? { entryId, round, knockdown, hits: [], score: typedScore!, ...reason } : { entryId, round, knockdown, hits, ...reason });
     onClose();
   }
+
+  // Esc closes. Enter saves, also right after clicking a plate (the click leaves the focus on it, and
+  // Enter would toggle that plate back); on Annuleren or Passage wissen it presses that button.
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "Enter" && !(e.target instanceof Element && e.target.closest("[data-keep-enter], textarea"))) {
+        e.preventDefault();
+        void saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   async function clear() {
     await emit(id, "pass.cleared", { entryId, round, knockdown });
     onClose();
@@ -210,7 +227,6 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
               inputMode="numeric"
               value={typed}
               onChange={(e) => setTyped(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
-              onKeyDown={(e) => e.key === "Enter" && void save()}
               aria-invalid={typed !== "" && !typedOk}
               className={`w-32 rounded-xl border-2 bg-background px-4 py-2.5 text-[2rem] font-semibold tabular-nums outline-none ${
                 typed !== "" && !typedOk ? "border-error" : "border-border focus:border-ink"
@@ -253,6 +269,15 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
           </div>
           </>
         )}
+        <label className="flex flex-col gap-1.5 text-[0.8125rem] font-semibold">
+          Reden <span className="sr-only">van de aanpassing</span>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value.slice(0, 200))}
+            placeholder="optioneel, bv. scorekaart nagekeken"
+            className="rounded-xl border-[0.09375rem] border-border bg-background px-3 py-2.5 text-[0.9375rem] font-normal outline-none focus:border-ink"
+          />
+        </label>
         <div className="flex flex-wrap items-center gap-2 pt-4">
           <button
             type="button"
@@ -262,11 +287,11 @@ function PassEditor({ entryId, round, knockdown, onClose }: { entryId: string; r
           >
             Opslaan
           </button>
-          <Pill tone="ghost" className="text-[0.9375rem]" onClick={onClose}>
+          <Pill tone="ghost" data-keep-enter className="text-[0.9375rem]" onClick={onClose}>
             Annuleren
           </Pill>
           {existing && (
-            <Pill tone="danger-outline" size="sm" className="ml-auto" onClick={clear}>
+            <Pill tone="danger-outline" data-keep-enter size="sm" className="ml-auto" onClick={clear}>
               Passage wissen
             </Pill>
           )}

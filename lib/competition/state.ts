@@ -30,6 +30,8 @@ export interface PassRecord {
   at: string;
   /** Recorded again after the first time: a correction ("aangepast" in the standings). */
   edited: boolean;
+  /** The reason the jury gave for the last correction. */
+  note?: string;
 }
 
 export interface ShootoffRecord extends ShootoffIteration {
@@ -52,6 +54,8 @@ export interface CompetitionState {
   /** Keyed by `passKey(entryId, round, knockdown)`. */
   passes: Map<string, PassRecord>;
   shootoffs: ShootoffRecord[];
+  /** Ties of the final standings the jury chose not to afkamp: those shooters share the place. */
+  waivedTies: { rankCode: string; participants: string[] }[];
   status: CompetitionStatus;
   /** The phase before the last change, so "Heropenen" can return to it after the end. */
   previousStatus: CompetitionStatus | null;
@@ -135,6 +139,7 @@ export function buildState(snapshot: CompetitionSnapshot, localEvents: readonly 
     orders: new Map(),
     passes: new Map(),
     shootoffs: [],
+    waivedTies: [],
     status: snapshot.competition.status,
     previousStatus: null,
     lastEventAt: null,
@@ -237,6 +242,7 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
         score,
         at: event.at,
         edited: state.passes.has(key),
+        ...(p.note && { note: p.note }),
       });
       return;
     }
@@ -260,6 +266,17 @@ function applyEvent(state: CompetitionState, event: CompetitionEvent): string | 
     }
     case "shootoff.cleared": {
       state.shootoffs = state.shootoffs.filter((s) => s.id !== event.payload.iterationId);
+      return;
+    }
+    case "shootoff.waived": {
+      const p = event.payload;
+      if (!groupExists(p.rankCode)) return `Onbekende klasse ${p.rankCode}`;
+      if (p.participants.some((id) => !state.entries.has(id))) return "Onbekende schutter in afkamping";
+      const set = new Set(p.participants);
+      const same = (w: { rankCode: string; participants: string[] }) =>
+        w.rankCode === p.rankCode && w.participants.length === set.size && w.participants.every((id) => set.has(id));
+      state.waivedTies = state.waivedTies.filter((w) => !same(w));
+      if (p.waived) state.waivedTies.push({ rankCode: p.rankCode, participants: [...p.participants] });
       return;
     }
     case "knockout.set": {

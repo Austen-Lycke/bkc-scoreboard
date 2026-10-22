@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { entriesOfRank, rankName, rankShortName, ranksInShootingOrder } from "@/lib/competition";
 import { emit } from "@/lib/offline/store";
-import { entryAdultRank, fullName } from "@/lib/scoring";
+import { entryAdultRank, fullName, similarNames, tidyName } from "@/lib/scoring";
 import { useComp } from "../context";
 import { Panel, Pill, Tag } from "@/components/ui";
 
@@ -40,13 +40,26 @@ export function CheckInView() {
       <Panel className="flex flex-col gap-[0.875rem] p-4 sm:p-[1.375rem]">
         <h2 className="text-[1.0625rem] font-semibold">Schutter inschrijven</h2>
         {creating ? (
-          <NewShooterForm initialName={query} onDone={done} onCancel={() => setCreating(false)} />
+          <NewShooterForm
+            initialName={query}
+            onDone={done}
+            onCancel={() => setCreating(false)}
+            // Searched by name, so the picked shooter is in the list even with a long member list.
+            onPick={(shooterId) => (setCreating(false), setQuery(fullName(state.shooters.get(shooterId)!)), setSelected(shooterId))}
+          />
         ) : (
           <>
             <input
               autoFocus
               value={query}
               onChange={(e) => (setQuery(e.target.value), setSelected(null))}
+              // Enter takes the first match (then Enter again checks them in), or adds a new shooter.
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || !query.trim()) return;
+                e.preventDefault();
+                if (candidates.length) setSelected(candidates[0].id);
+                else setCreating(true);
+              }}
               placeholder="Zoek op naam…"
               className={`${input} rounded-[0.875rem] px-[0.875rem] py-3`}
               aria-label="Zoek schutter"
@@ -143,14 +156,26 @@ function ConfirmEntry({ shooterId, onDone, onCancel }: { shooterId: string; onDo
   );
 }
 
-function NewShooterForm({ initialName, onDone, onCancel }: { initialName: string; onDone: () => void; onCancel: () => void }) {
+function NewShooterForm({
+  initialName,
+  onDone,
+  onCancel,
+  onPick,
+}: {
+  initialName: string;
+  onDone: () => void;
+  onCancel: () => void;
+  /** "Bedoel je …?": check in that known shooter instead. */
+  onPick: (shooterId: string) => void;
+}) {
   const { id, state } = useComp();
   const [first, ...rest] = initialName.trim().split(/\s+/);
   const [firstName, setFirstName] = useState(first ?? "");
   const [lastName, setLastName] = useState(rest.join(" "));
   const [rankCode, setRankCode] = useState(() => entryAdultRank(state.snapshot.ranks).code);
 
-  const full = `${firstName.trim()} ${lastName.trim()}`.toLowerCase();
+  const typed = { firstName: tidyName(firstName), lastName: tidyName(lastName) };
+  const full = `${typed.firstName} ${typed.lastName}`.toLowerCase();
   const enteredNames = new Set([...state.entries.values()].map((e) => fullName(state.shooters.get(e.shooterId)!).toLowerCase()));
   const duplicate =
     firstName.trim() && lastName.trim()
@@ -161,13 +186,16 @@ function NewShooterForm({ initialName, onDone, onCancel }: { initialName: string
           : null
       : null;
   const valid = !!firstName.trim() && !!lastName.trim() && !duplicate;
+  // A typo of someone the club already knows: suggest them before a second record is made.
+  const entered = new Set([...state.entries.values()].map((e) => e.shooterId));
+  const alike = !duplicate && typed.firstName && typed.lastName ? similarNames(typed, [...state.shooters.values()]).slice(0, 2) : [];
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
     await emit(id, "entry.checked_in", {
       entryId: crypto.randomUUID(),
-      shooter: { id: crypto.randomUUID(), firstName: firstName.trim(), lastName: lastName.trim(), birthdate: null },
+      shooter: { id: crypto.randomUUID(), firstName: typed.firstName, lastName: typed.lastName, birthdate: null },
       isNewShooter: true,
       rankCode,
       feePaid: true,
@@ -193,6 +221,18 @@ function NewShooterForm({ initialName, onDone, onCancel }: { initialName: string
         <RankChips value={rankCode} onChange={setRankCode} />
       </div>
       {duplicate && <span className="text-[0.8125rem] font-semibold text-error">{duplicate}</span>}
+      {alike.map((s) => (
+        <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-yellow-light px-3 py-2 text-[0.8125rem] font-semibold">
+          <span className="flex-1">
+            Bedoel je {fullName(s)}?{entered.has(s.id) && <span className="font-normal text-muted"> Staat al ingeschreven.</span>}
+          </span>
+          {!entered.has(s.id) && (
+            <Pill tone="ink" size="sm" onClick={() => onPick(s.id)}>
+              Ja, die inschrijven
+            </Pill>
+          )}
+        </div>
+      ))}
       <div className="flex flex-wrap gap-1.5">
         <Pill tone="yellow" size="lg" type="submit" disabled={!valid}>
           Toevoegen en inschrijven

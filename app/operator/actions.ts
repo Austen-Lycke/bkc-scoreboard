@@ -11,11 +11,6 @@ const newCompetition = z.object({
   name: z.string().trim().min(3, "Geef de wedstrijd een naam").max(120),
   date: z.iso.date("Kies een datum"),
   location: z.string().trim().max(120).optional(),
-  fee: z
-    .string()
-    .trim()
-    .transform((v) => (v === "" ? 0 : Math.round(Number(v.replace(",", ".")) * 100)))
-    .pipe(z.number().int().min(0, "Ongeldig bedrag").max(100_000, "Ongeldig bedrag")),
   kind: z.enum(["spanish", "wsa"]).default("spanish"),
   setupId: z.string().min(1).optional(),
   countsForSeason: z.boolean(),
@@ -40,7 +35,6 @@ export async function createCompetition(_prev: CreateCompetitionState, form: For
     name: form.get("name"),
     date: form.get("date"),
     location: form.get("location") || undefined,
-    fee: String(form.get("fee") ?? ""),
     kind: form.get("kind") || undefined,
     setupId: form.get("setupId") || undefined,
     countsForSeason: form.get("countsForSeason") === "on",
@@ -82,7 +76,8 @@ export async function createCompetition(_prev: CreateCompetitionState, form: For
       name: input.name,
       date: input.date,
       location: input.location,
-      feeCents: input.fee,
+      // The club asks no entry fee (decided 2026-10-22); the column stays for older competitions.
+      feeCents: 0,
       countsForSeason: input.countsForSeason,
       status: "prepared",
       ...shape,

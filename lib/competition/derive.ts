@@ -260,6 +260,7 @@ export function standingsFor(state: CompetitionState, groupCode: string): RankSt
     expectedPasses: expectedPasses(state),
     // Ties on a cut line are settled for that cut only; these settle the final standings.
     shootoffs: state.shootoffs.filter((s) => s.rankCode === groupCode && !s.stage),
+    waived: state.waivedTies.filter((w) => w.rankCode === groupCode).map((w) => w.participants),
     ...(plan ? { bands: plan.bands, complete: plan.done } : {}),
   });
 }

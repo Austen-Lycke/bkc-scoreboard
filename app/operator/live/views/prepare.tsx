@@ -35,6 +35,8 @@ export function PrepareView() {
   const [sw, setSw] = useState<OfflineReadiness>(serviceWorkerState);
   const [warm, setWarm] = useState<{ ok: boolean; text: string } | null>(null);
   const [persisted, setPersisted] = useState<boolean | null>(null);
+  // Chrome decides itself whether to keep the storage: a refused "Vastzetten" says so instead of nothing.
+  const [persistRefused, setPersistRefused] = useState(false);
   const [device, setDevice] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -165,8 +167,25 @@ export function PrepareView() {
             <Check
               ok={persisted}
               label="Opslag vastgezet (de browser wist niets automatisch)"
-              note={persisted === null ? "Niet beschikbaar in deze browser." : undefined}
-              action={persisted === false ? { label: "Vastzetten", run: async () => setPersisted(await navigator.storage.persist()) } : undefined}
+              note={
+                persisted === null
+                  ? "Niet beschikbaar in deze browser."
+                  : persisted === false && persistRefused
+                    ? "De browser weigerde. Zet deze pagina bij je bladwijzers of installeer de app (Chrome-menu → Installeren) en probeer opnieuw."
+                    : undefined
+              }
+              action={
+                persisted === false
+                  ? {
+                      label: persistRefused ? "Opnieuw proberen" : "Vastzetten",
+                      run: async () => {
+                        const ok = await navigator.storage.persist();
+                        setPersisted(ok);
+                        setPersistRefused(!ok);
+                      },
+                    }
+                  : undefined
+              }
             />
             <Check ok={state.entries.size > 0} label="Schutters ingeschreven" note={ranksIn || "nog niemand"} />
             <Check ok={null} label="TV-scherm" action={{ label: "TV openen op tweede scherm", run: () => openTvWindow(id) }} />

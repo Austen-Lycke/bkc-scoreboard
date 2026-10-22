@@ -8,6 +8,7 @@ import {
   entryTotal,
   heatKey,
   passOf,
+  phaseDone,
   setupFor,
   timerStep,
   undoActions,
@@ -21,7 +22,8 @@ import { achievableScores, passKey, type Heat } from "@/lib/scoring";
 import { formatClock, useNow } from "@/components/use-now";
 import { Kbd, Panel, Pill } from "@/components/ui";
 import { useComp } from "../context";
-import { FinishedBanner, heatTitle, NextUp, useLineup } from "./scoring";
+import { useAutoPhase } from "../phase";
+import { FinishedBanner, heatTitle, NextUp, PhaseDone, useLineup } from "./scoring";
 
 /**
  * Scoring a WSA line: every shooter on their own frame, the scores typed from the scorecards. One row
@@ -40,6 +42,9 @@ export function LineScoring() {
   const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const inputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => () => clearTimeout(savedTimer.current), []);
+  const advance = useAutoPhase();
+  // The qualification is shot and the semi-final is next (or round 1 and round 2): first the break or not.
+  const waiting = focusIndex < 0 && !!heat && phaseDone(state, heat.round);
 
   const drafts: Record<string, number> = { ...live?.draftScores };
   for (const [key, text] of Object.entries(typing)) {
@@ -65,6 +70,7 @@ export function LineScoring() {
   const type = (key: string, text: string) => {
     const digits = text.replace(/[^0-9]/g, "").slice(0, 3);
     setTyping((t) => ({ ...t, [key]: digits }));
+    if (heat) void advance(heat.round);
     void updateLive(id, (current) => {
       const next = { ...(current.draftScores ?? {}) };
       if (digits === "") delete next[key];
@@ -86,6 +92,7 @@ export function LineScoring() {
       return [{ entryId: s.entryId, round: heat.round, knockdown: s.knockdown, hits: [], previous: existing?.hits ?? null, score, previousScore: existing?.score ?? null }];
     });
     if (passes.length === 0) return;
+    await advance(heat.round);
     await emitMany(
       id,
       passes.map(({ entryId, round, knockdown, score }) => ({ type: "pass.recorded" as const, payload: { entryId, round, knockdown, hits: [], score } })),
@@ -102,7 +109,7 @@ export function LineScoring() {
     setTyping({});
     setJustSaved(true);
     clearTimeout(savedTimer.current);
-    savedTimer.current = setTimeout(() => setJustSaved(false), 1600);
+    savedTimer.current = setTimeout(() => setJustSaved(false), 1000);
   }
 
   const lastSave = live?.lastSave ?? null;
@@ -199,76 +206,84 @@ export function LineScoring() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-7 pt-2 sm:px-8 md:landscape:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[0.875rem]">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
-          <span className="text-[1.375rem] font-semibold first-letter:uppercase">{heatTitle(state, heat)}</span>
-          <span className="flex items-baseline gap-3 text-sm text-muted">
-            {focusIndex >= 0 && (
-              <button type="button" onClick={() => updateLive(id, { focus: null })} className="cursor-pointer font-semibold text-ink underline underline-offset-2">
-                Terug naar de volgende in de rij
-              </button>
-            )}
-            {setup.name} · {setup.targets.map((t) => t.points).join("·")}
-          </span>
-        </div>
-        {finished && <FinishedBanner />}
-        {state.format.timing && <SeriesTimerBar heat={heat} />}
-        <Panel className="min-h-0 overflow-auto px-2 py-1.5 sm:px-3 md:flex-1">
-          <div className={`${grid} border-b border-divider px-1 py-2 text-xs font-semibold text-faint`} style={{ "--series": series } as CSSProperties}>
-            <span>KD</span>
-            <span>Naam</span>
-            {heat.phases.map((_, p) => (
-              <span key={p} className="text-center">
-                {series === 1 ? "Punten" : `Reeks ${p + 1}`}
-              </span>
-            ))}
-            <span className="text-right">Totaal</span>
+        {!waiting && (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
+            <span className="text-[1.375rem] font-semibold first-letter:uppercase">{heatTitle(state, heat)}</span>
+            <span className="flex items-baseline gap-3 text-sm text-muted">
+              {focusIndex >= 0 && (
+                <button type="button" onClick={() => updateLive(id, { focus: null })} className="cursor-pointer font-semibold text-ink underline underline-offset-2">
+                  Terug naar de volgende in de rij
+                </button>
+              )}
+              {setup.name} · {setup.targets.map((t) => t.points).join("·")}
+            </span>
           </div>
-          {heat.phases[0].map((spot, row) => (
-            <div key={spot.entryId} className={`${grid} border-b border-divider px-1 py-1 last:border-b-0`} style={{ "--series": series } as CSSProperties}>
-              <span className="text-sm font-semibold tabular-nums text-faint">{spot.lane}</span>
-              <span className="min-w-0">
-                <span className="block truncate text-[0.9375rem] font-semibold max-sm:hidden">{entryName(state, spot.entryId)}</span>
-                <span className="block truncate text-[0.9375rem] font-semibold sm:hidden">{entryShortName(state, spot.entryId)}</span>
-                <span className="block text-xs text-muted">plaats {placeOf(spot.entryId)}</span>
-              </span>
-              {heat.phases.map((phase, p) => {
-                const s = phase[row];
-                const key = keyOf(s);
-                const draft = drafts[key];
-                const saved = passOf(state, s.entryId, heat.round, s.knockdown)?.score;
-                const value = draft ?? saved;
-                const bad = draft !== undefined && !allowed.has(draft) && editing !== key;
-                const unsaved = draft !== undefined && draft !== saved;
-                return (
-                  <input
-                    key={p}
-                    ref={(el) => {
-                      if (el) inputs.current.set(key, el);
-                      else inputs.current.delete(key);
-                    }}
-                    inputMode="numeric"
-                    enterKeyHint={row === heat.phases[0].length - 1 && p === series - 1 ? "done" : "next"}
-                    aria-label={`${entryName(state, s.entryId)}, ${series === 1 ? "punten" : `reeks ${p + 1}`}`}
-                    aria-invalid={bad}
-                    disabled={finished}
-                    value={typing[key] ?? (value === undefined ? "" : String(value))}
-                    onChange={(e) => type(key, e.target.value)}
-                    onFocus={(e) => (setEditing(key), e.target.select())}
-                    onBlur={() => {
-                      setEditing((k) => (k === key ? null : k));
-                      setTyping((t) => Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)));
-                    }}
-                    onKeyDown={(e) => onCellKey(e, row * series + p)}
-                    className={`h-11 w-full min-w-0 rounded-xl border-2 text-center text-xl font-semibold tabular-nums outline-none transition-colors focus:border-ink disabled:opacity-45 ${
-                      bad ? "border-error bg-error-light text-error" : unsaved ? "border-yellow bg-yellow-light" : saved !== undefined ? "border-transparent bg-fill" : "border-border bg-background"
-                    }`}
-                  />
-                );
-              })}
-              <span className="text-right text-lg font-semibold tabular-nums">{liveTotal(spot.entryId)}</span>
-            </div>
-          ))}
-        </Panel>
+        )}
+        {finished && <FinishedBanner />}
+        {waiting ? (
+          <PhaseDone round={heat.round} />
+        ) : (
+          <>
+            {state.format.timing && <SeriesTimerBar heat={heat} />}
+            <Panel className="min-h-0 overflow-auto px-2 py-1.5 sm:px-3 md:flex-1">
+              <div className={`${grid} border-b border-divider px-1 py-2 text-xs font-semibold text-faint`} style={{ "--series": series } as CSSProperties}>
+                <span>KD</span>
+                <span>Naam</span>
+                {heat.phases.map((_, p) => (
+                  <span key={p} className="text-center">
+                    {series === 1 ? "Punten" : `Reeks ${p + 1}`}
+                  </span>
+                ))}
+                <span className="text-right">Totaal</span>
+              </div>
+              {heat.phases[0].map((spot, row) => (
+                <div key={spot.entryId} className={`${grid} border-b border-divider px-1 py-1 last:border-b-0`} style={{ "--series": series } as CSSProperties}>
+                  <span className="text-sm font-semibold tabular-nums text-faint">{spot.lane}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[0.9375rem] font-semibold max-sm:hidden">{entryName(state, spot.entryId)}</span>
+                    <span className="block truncate text-[0.9375rem] font-semibold sm:hidden">{entryShortName(state, spot.entryId)}</span>
+                    <span className="block text-xs text-muted">plaats {placeOf(spot.entryId)}</span>
+                  </span>
+                  {heat.phases.map((phase, p) => {
+                    const s = phase[row];
+                    const key = keyOf(s);
+                    const draft = drafts[key];
+                    const saved = passOf(state, s.entryId, heat.round, s.knockdown)?.score;
+                    const value = draft ?? saved;
+                    const bad = draft !== undefined && !allowed.has(draft) && editing !== key;
+                    const unsaved = draft !== undefined && draft !== saved;
+                    return (
+                      <input
+                        key={p}
+                        ref={(el) => {
+                          if (el) inputs.current.set(key, el);
+                          else inputs.current.delete(key);
+                        }}
+                        inputMode="numeric"
+                        enterKeyHint={row === heat.phases[0].length - 1 && p === series - 1 ? "done" : "next"}
+                        aria-label={`${entryName(state, s.entryId)}, ${series === 1 ? "punten" : `reeks ${p + 1}`}`}
+                        aria-invalid={bad}
+                        disabled={finished}
+                        value={typing[key] ?? (value === undefined ? "" : String(value))}
+                        onChange={(e) => type(key, e.target.value)}
+                        onFocus={(e) => (setEditing(key), e.target.select())}
+                        onBlur={() => {
+                          setEditing((k) => (k === key ? null : k));
+                          setTyping((t) => Object.fromEntries(Object.entries(t).filter(([k]) => k !== key)));
+                        }}
+                        onKeyDown={(e) => onCellKey(e, row * series + p)}
+                        className={`h-11 w-full min-w-0 rounded-xl border-2 text-center text-xl font-semibold tabular-nums outline-none transition-colors focus:border-ink disabled:opacity-45 ${
+                          bad ? "border-error bg-error-light text-error" : unsaved ? "border-yellow bg-yellow-light" : saved !== undefined ? "border-transparent bg-fill" : "border-border bg-background"
+                        }`}
+                      />
+                    );
+                  })}
+                  <span className="text-right text-lg font-semibold tabular-nums">{liveTotal(spot.entryId)}</span>
+                </div>
+              ))}
+            </Panel>
+          </>
+        )}
       </div>
       {/* Phone: `contents`, so the save block can stick to the bottom over the whole view. */}
       <aside className="flex min-h-0 flex-none flex-col gap-4 max-md:contents md:portrait:flex-row md:portrait:items-end md:landscape:w-[clamp(14.375rem,22vw,18.75rem)] md:landscape:pt-11">
@@ -299,7 +314,7 @@ export function LineScoring() {
           <button
             type="button"
             onClick={() => save()}
-            disabled={finished || invalid.length > 0 || pending.length === 0}
+            disabled={finished || waiting || invalid.length > 0 || pending.length === 0}
             className="flex cursor-pointer items-center justify-between gap-3 rounded-[1.125rem] bg-yellow px-[1.375rem] py-5 text-left text-lg font-bold transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
           >
             <span>{saveLabel}</span>

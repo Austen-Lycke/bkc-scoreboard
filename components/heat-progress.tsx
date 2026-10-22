@@ -28,7 +28,9 @@ export function HeatProgress({
     <div className={`flex flex-col ${className}`} style={{ gap: s.gap }}>
       <div className="flex justify-between text-muted" style={{ fontSize: s.label }}>
         <span>Ronde 1</span>
-        <span className="font-semibold text-ink">{current === null ? "Alle beurten geschoten" : `Beurt ${current + 1} van ${rounds.length}`}</span>
+        <span className="font-semibold text-ink">
+          {rounds.length === 0 ? "Nog niemand ingeschreven" : current === null ? "Alle beurten geschoten" : `Beurt ${current + 1} van ${rounds.length}`}
+        </span>
         <span>{endLabel ?? (lastRound > 1 ? `Ronde ${lastRound}` : "")}</span>
       </div>
       <div className="flex" style={{ gap: s.between }}>

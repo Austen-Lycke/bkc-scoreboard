@@ -27,7 +27,18 @@ async function openWsaInRound1(page: Page) {
  * Types every card of the heat on the line with the keyboard (Enter to the next cell, Enter on the
  * last one saves). Round 1 (2·4·6·8·10) gives every row its own score, so nobody ties; later all 10s.
  */
+/** A part of the day is done (round 1, the qualification, the semi-final): go straight on. */
+async function goOnIfAsked(page: Page) {
+  const goOn = page.getByRole("button", { name: /^Meteen door met / });
+  await expect(heading(page).or(goOn)).toBeVisible();
+  if (await goOn.isVisible()) {
+    await goOn.click();
+    await expect(heading(page)).toBeVisible();
+  }
+}
+
 async function shootHeat(page: Page) {
+  await goOnIfAsked(page);
   const title = await heading(page).innerText();
   const series = /finale · reeks/.test(title) ? 1 : 2;
   const n = await cells(page).count();
@@ -38,7 +49,8 @@ async function shootHeat(page: Page) {
     await page.keyboard.type(String(value));
     await page.keyboard.press("Enter");
   }
-  await expect.poll(async () => ((await heading(page).count()) ? await heading(page).innerText() : "done")).not.toBe(title);
+  // Read in one step: the heading may go between a count and a read (the "Ronde 1 is klaar" card).
+  await expect.poll(async () => (await heading(page).allInnerTexts())[0] ?? "done").not.toBe(title);
 }
 
 test("typed scores reach the TV; a typo is refused; save and undo", async ({ context, page }) => {
@@ -118,6 +130,9 @@ test("a whole WSA day: qualification, semi-final, final and podium", async ({ co
 
   // Qualification: 2 rounds of Junior (3) and Volwassenen (14).
   for (let i = 0; i < 4; i++) await shootHeat(page);
+  await expect(page.getByText("Ronde 2 is klaar")).toBeVisible();
+  await goOnIfAsked(page);
+  await expect(page.getByRole("radio", { name: "Halve finale" })).toHaveAttribute("aria-checked", "true");
   await expect(heading(page)).toHaveText("Junior · halve finale · beurt 1");
   await expect(cells(page)).toHaveCount(6);
   await shootHeat(page);
@@ -127,6 +142,7 @@ test("a whole WSA day: qualification, semi-final, final and podium", async ({ co
   await shootHeat(page);
 
   // Final: 3 juniors and floor(7 / 2) = 3 adults: one podium series each.
+  await goOnIfAsked(page);
   await expect(heading(page)).toHaveText("Junior · finale · reeks 1 · beurt 1");
   await expect(cells(page)).toHaveCount(3);
   await shootHeat(page);
