@@ -3,6 +3,7 @@
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { hasRole } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { readWsaForm, wsaCompetitionFormat } from "@/lib/server/competition-format";
 import { requireRole } from "@/lib/session";
@@ -30,7 +31,7 @@ const slugify = (s: string) =>
     .slice(0, 60);
 
 export async function createCompetition(_prev: CreateCompetitionState, form: FormData): Promise<CreateCompetitionState> {
-  await requireRole("admin", "operator");
+  const session = await requireRole("admin", "operator");
   const parsed = newCompetition.safeParse({
     name: form.get("name"),
     date: form.get("date"),
@@ -41,8 +42,14 @@ export async function createCompetition(_prev: CreateCompetitionState, form: For
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Controleer de gegevens" };
   const input = parsed.data;
+  const seasonYear = Number(input.date.slice(0, 4));
 
   const db = getDb();
+  // Every sync to a closed season's competition is refused for operators, so don't let them create one.
+  const season = await db.query.seasons.findFirst({ where: eq(schema.seasons.year, seasonYear), columns: { status: true } });
+  if (season?.status === "closed" && !hasRole(session.user.role, "admin")) {
+    return { error: `Seizoen ${seasonYear} is afgesloten. Kies een datum in een open seizoen of vraag het aan een beheerder.` };
+  }
   // A WSA day: its own format (lanes, series, groups, timer, knockout). A Spanish day: one setup for every rank.
   let shape: Pick<typeof schema.competitions.$inferInsert, "setupByRank" | "format">;
   if (input.kind === "wsa") {
@@ -57,7 +64,6 @@ export async function createCompetition(_prev: CreateCompetitionState, form: For
   }
 
   // A new season inherits the ranking rule of the latest one.
-  const seasonYear = Number(input.date.slice(0, 4));
   const latest = await db.query.seasons.findFirst({ orderBy: desc(schema.seasons.year) });
   await db
     .insert(schema.seasons)
