@@ -11,6 +11,7 @@ import { tags } from "@/lib/server/tags";
 import { requireRole } from "@/lib/session";
 
 const { competitions, events, setups } = schema;
+const uuid = z.uuid();
 
 export interface FormState {
   error?: string;
@@ -81,6 +82,7 @@ export async function updateCompetition(_prev: FormState, form: FormData): Promi
 
 export async function releaseLease(id: string): Promise<FormState> {
   await requireRole("admin");
+  if (!uuid.safeParse(id).success) return { error: "Wedstrijd niet gevonden" };
   await getDb().update(competitions).set({ operatorDeviceId: null, operatorLeaseAt: null }).where(eq(competitions.id, id));
   refresh();
   return { message: "Vrijgegeven: het volgende toestel dat synchroniseert, neemt de wedstrijd over." };
@@ -92,6 +94,7 @@ export async function releaseLease(id: string): Promise<FormState> {
  */
 export async function deleteCompetition(id: string, typedName?: string): Promise<FormState> {
   await requireRole("admin");
+  if (!uuid.safeParse(id).success) return { error: "Wedstrijd niet gevonden" };
   const db = getDb();
   const comp = await db.query.competitions.findFirst({ where: eq(competitions.id, id) });
   if (!comp) return { error: "Wedstrijd niet gevonden" };

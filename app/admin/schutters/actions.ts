@@ -12,6 +12,7 @@ import { tags } from "@/lib/server/tags";
 import { requireRole } from "@/lib/session";
 
 const { entries, shooterSeasonRanks, shooters } = schema;
+const uuid = z.uuid();
 
 export interface FormState {
   error?: string;
@@ -45,6 +46,9 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const input = parsed.data;
   const db = getDb();
+  if (input.rankCode && !(await db.query.ranks.findFirst({ where: eq(schema.ranks.code, input.rankCode), columns: { code: true } }))) {
+    return { error: "Onbekende klasse" };
+  }
   const year = await currentSeasonYear();
 
   const sameKey = (
@@ -58,8 +62,10 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
   // A birthdate from an older import stays as it is; the form no longer asks for it.
   const id = input.id ?? crypto.randomUUID();
   const values = { firstName: input.firstName, lastName: input.lastName, active: input.active, notes: input.notes ?? null };
-  if (input.id) await db.update(shooters).set(values).where(eq(shooters.id, id));
-  else await db.insert(shooters).values({ id, ...values });
+  if (input.id) {
+    const updated = await db.update(shooters).set(values).where(eq(shooters.id, id)).returning({ id: shooters.id });
+    if (!updated.length) return { error: "Schutter niet gevonden" };
+  } else await db.insert(shooters).values({ id, ...values });
 
   if (input.rankCode) {
     await db
@@ -80,6 +86,7 @@ export async function saveShooter(_prev: FormState, form: FormData): Promise<For
 
 export async function deleteShooter(id: string): Promise<FormState> {
   await requireRole("admin");
+  if (!uuid.safeParse(id).success) return { error: "Schutter niet gevonden" };
   const db = getDb();
   const [{ n }] = await db.select({ n: count() }).from(entries).where(eq(entries.shooterId, id));
   if (n > 0) return { error: "Deze schutter heeft al wedstrijden geschoten. Zet hem of haar op inactief in plaats van te verwijderen." };
