@@ -4,7 +4,8 @@
  * - The operator and TV pages: network first, falling back to the cached copy when offline.
  * Data never goes through here: it lives in IndexedDB on the device.
  */
-const VERSION = "bkc-v1";
+// Set per deploy by the registration (`/sw.js?v=<commit>`), so each deploy gets fresh caches.
+const VERSION = `bkc-${new URL(self.location.href).searchParams.get("v") ?? "v1"}`;
 const SHELL_CACHE = `${VERSION}-shell`;
 const STATIC_CACHE = `${VERSION}-static`;
 const SHELL_PAGES = ["/operator/live", "/tv"];

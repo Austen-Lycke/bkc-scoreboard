@@ -2,11 +2,14 @@
 
 import { useEffect } from "react";
 
+/** Changes with every deploy, so a new service worker installs and old caches are cleared. */
+const BUILD = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "local";
+
 /** Registers the offline service worker (production only: in dev it would cache stale chunks). */
 export function ServiceWorkerRegistration() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("Service worker niet geregistreerd", err));
+    navigator.serviceWorker.register(`/sw.js?v=${BUILD}`).catch((err) => console.warn("Service worker niet geregistreerd", err));
   }, []);
   return null;
 }
