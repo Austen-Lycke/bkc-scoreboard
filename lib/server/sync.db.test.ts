@@ -139,6 +139,24 @@ describe("applySync (database)", () => {
     expect(comp.materializedEvents).toBe(SHOOTERS.length);
   });
 
+  it("rebuilds tables a sync wrote from a stale log on the next heartbeat", async () => {
+    const { make } = makeEvents();
+    const { entryIds, events } = checkIns(make);
+    const a = make("pass.recorded", { entryId: entryIds[0], round: 1, knockdown: 1, hits: ALL_HITS });
+    const b = make("pass.recorded", { entryId: entryIds[1], round: 1, knockdown: 1, hits: ALL_HITS.slice(0, 3) });
+    await sync([...events, a]);
+    await sync([b]);
+    // What a sync that read the log before `a` was stored leaves behind: its tables without `a`.
+    const db = getDb();
+    await db.delete(passes).where(eq(passes.entryId, entryIds[0]));
+    await db.update(competitions).set({ materializedEvents: events.length + 1 }).where(eq(competitions.id, competitionId));
+
+    await sync([]);
+
+    expect((await passRows()).map((p) => p.entryId).sort()).toEqual([...entryIds].sort());
+    expect((await competition()).materializedEvents).toBe(events.length + 2);
+  });
+
   it("ends up with every score after two overlapping syncs and a heartbeat", async () => {
     const { make } = makeEvents();
     const { entryIds, events } = checkIns(make);
@@ -147,7 +165,8 @@ describe("applySync (database)", () => {
     const a = [make("pass.recorded", { entryId: entryIds[0], round: 1, knockdown: 1, hits: ALL_HITS })];
     const b = [make("pass.recorded", { entryId: entryIds[1], round: 1, knockdown: 1, hits: ALL_HITS.slice(0, 3) })];
     const settled = await Promise.allSettled([sync(a), sync(b)]);
-    // A sync that lost the race on the database is retried on the laptop's next sync, as it would be live.
+    // Fully overlapping rewrites collide on the entries' keys, so one sync fails and rolls back (its
+    // events too); the laptop sends it again on its next sync.
     for (const [i, s] of settled.entries()) if (s.status === "rejected") await sync([a, b][i]);
     await sync([]);
 
