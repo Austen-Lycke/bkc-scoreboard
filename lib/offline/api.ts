@@ -5,9 +5,9 @@ import type { CompetitionSnapshot } from "@/lib/competition";
 export async function downloadSnapshot(competitionId: string): Promise<CompetitionSnapshot> {
   let res: Response;
   try {
-    res = await fetch(`/api/operator/competitions/${competitionId}/snapshot`, { cache: "no-store" });
+    res = await fetch(`/api/operator/competitions/${competitionId}/snapshot`, { cache: "no-store", signal: AbortSignal.timeout(30_000) });
   } catch {
-    throw new Error("Geen internetverbinding. Deze wedstrijd staat nog niet op dit toestel: laad ze eerst terwijl je online bent.");
+    throw new Error("Geen of te trage internetverbinding. Deze wedstrijd staat nog niet op dit toestel: laad ze eerst terwijl je online bent.");
   }
   if (res.status === 401) throw new Error("Je bent niet aangemeld. Meld je aan via /login en open de wedstrijd opnieuw.");
   if (res.status === 403) throw new Error("Je account heeft geen toegang tot de wedstrijdleiding.");

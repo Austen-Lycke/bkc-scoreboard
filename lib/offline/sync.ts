@@ -21,6 +21,8 @@ export interface SyncStatus {
 
 const BATCH = 200;
 const HEARTBEAT_MS = 10_000;
+/** Venue wifi can hang a request for minutes; give up and retry on the next heartbeat. */
+const SYNC_TIMEOUT_MS = 15_000;
 const statuses = new Map<string, SyncStatus>();
 const listeners = new Set<() => void>();
 const inFlight = new Set<string>();
@@ -73,6 +75,7 @@ async function runSync(competitionId: string, { takeover = false }: { takeover?:
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ deviceId: device, takeover, events: batch.map(toWire) }),
+          signal: AbortSignal.timeout(SYNC_TIMEOUT_MS),
         });
       } catch {
         setStatus(competitionId, { state: "offline", message: undefined });

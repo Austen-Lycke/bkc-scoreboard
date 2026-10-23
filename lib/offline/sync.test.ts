@@ -56,6 +56,16 @@ describe("syncNow", () => {
     expect(await pendingIds(id)).toHaveLength(1);
   });
 
+  it("treats a request that times out as offline and keeps the events", async () => {
+    const id = crypto.randomUUID();
+    await emit(id, "status.set", { status: "warmup" });
+    fetchMock.mockRejectedValue(new DOMException("timeout", "TimeoutError"));
+    await syncNow(id);
+    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(syncStatus(id).state).toBe("offline");
+    expect(await pendingIds(id)).toHaveLength(1);
+  });
+
   it("stops at a lease held by another device and only overrides it on takeover", async () => {
     const id = crypto.randomUUID();
     await saveSnapshot(snapshotFor(id));
