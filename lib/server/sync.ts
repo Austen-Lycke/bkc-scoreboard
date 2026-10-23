@@ -143,13 +143,15 @@ function materialize(state: CompetitionState, opts: { deviceId: string; keepPubl
     );
   }
 
-  // The rank someone shoots in is their rank for the season.
-  if (entryList.length) {
+  // The rank someone shoots in becomes their rank for the season, once they've shot.
+  const shot = new Set([...state.passes.values()].map((p) => p.entryId));
+  const ranked = entryList.filter((e) => shot.has(e.entryId));
+  if (ranked.length) {
     ops.push(
       db
         .insert(shooterSeasonRanks)
         .values(
-          entryList.map((e) => ({
+          ranked.map((e) => ({
             shooterId: e.shooterId,
             seasonYear: comp.seasonYear,
             rankCode: e.rankCode,
@@ -158,7 +160,9 @@ function materialize(state: CompetitionState, opts: { deviceId: string; keepPubl
         )
         .onConflictDoUpdate({
           target: [shooterSeasonRanks.shooterId, shooterSeasonRanks.seasonYear],
-          set: { rankCode: sql`excluded.rank_code` },
+          set: { rankCode: sql`excluded.rank_code`, reason: sql`excluded.reason` },
+          // Same rank as already set (e.g. by a promotion): leave the row and its reason alone.
+          setWhere: sql`${shooterSeasonRanks.rankCode} <> excluded.rank_code`,
         }),
     );
   }
