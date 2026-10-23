@@ -32,11 +32,12 @@ export async function buildSnapshot(competitionId: string): Promise<CompetitionS
     db.select().from(ranks).orderBy(asc(ranks.order)),
     db.select().from(shooters).where(eq(shooters.active, true)).orderBy(asc(shooters.lastName), asc(shooters.firstName)),
     db.select().from(shooterSeasonRanks).where(eq(shooterSeasonRanks.seasonYear, comp.seasonYear)),
+    // Only each shooter's latest earlier season, not every row of every past season.
     db
-      .select()
+      .selectDistinctOn([shooterSeasonRanks.shooterId], { shooterId: shooterSeasonRanks.shooterId, rankCode: shooterSeasonRanks.rankCode })
       .from(shooterSeasonRanks)
       .where(lt(shooterSeasonRanks.seasonYear, comp.seasonYear))
-      .orderBy(desc(shooterSeasonRanks.seasonYear)),
+      .orderBy(shooterSeasonRanks.shooterId, desc(shooterSeasonRanks.seasonYear)),
     db.query.seasons.findFirst({ where: eq(seasons.year, comp.seasonYear) }),
     db.select().from(events).where(eq(events.competitionId, comp.id)).orderBy(asc(events.clientCreatedAt)),
     // Totals of the other competitions this season that count for the ranking.
@@ -62,8 +63,7 @@ export async function buildSnapshot(competitionId: string): Promise<CompetitionS
 
   const rankDefs: RankDef[] = rankRows.map((r) => ({ code: r.code, name: r.name, order: r.order, isJunior: r.isJunior }));
   const thisSeasonRank = new Map(thisSeason.map((r) => [r.shooterId, r.rankCode]));
-  const lastRank = new Map<string, string>();
-  for (const r of earlier) if (!lastRank.has(r.shooterId)) lastRank.set(r.shooterId, r.rankCode);
+  const lastRank = new Map(earlier.map((r) => [r.shooterId, r.rankCode]));
 
   const snapshotShooters = shooterRows.map((s) => ({
     id: s.id,
