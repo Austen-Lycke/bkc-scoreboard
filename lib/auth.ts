@@ -21,8 +21,25 @@ function createAuth() {
     baseURL: baseURL(),
     database: drizzleAdapter(getDb(), {
       provider: "pg",
-      schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification },
+      schema: {
+        user: schema.user,
+        session: schema.session,
+        account: schema.account,
+        verification: schema.verification,
+        rateLimit: schema.rateLimit,
+      },
     }),
+    // In the database, not in memory: on Vercel every serverless instance would count on its own.
+    // Not `enabled` here, so Better Auth's default applies (production only): dev and e2e are unaffected.
+    rateLimit: {
+      storage: "database",
+      window: 60,
+      max: 100,
+      customRules: {
+        // Five password attempts per minute per IP address.
+        "/sign-in/email": { window: 60, max: 5 },
+      },
+    },
     // Logins are created by an admin (scripts/create-admin.ts), never by public sign-up.
     emailAndPassword: { enabled: true, disableSignUp: true },
     session: {

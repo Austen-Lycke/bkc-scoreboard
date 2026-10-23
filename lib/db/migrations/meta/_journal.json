@@ -29,6 +29,13 @@
       "when": 1792749074580,
       "tag": "0003_materialized_events",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792749232196,
+      "tag": "0004_rate_limit",
+      "breakpoints": true
     }
   ]
 }
