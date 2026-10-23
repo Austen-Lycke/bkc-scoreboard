@@ -127,6 +127,8 @@ export const competitions = pgTable(
     operatorDeviceId: text("operator_device_id"),
     operatorLeaseAt: timestamp("operator_lease_at", { withTimezone: true }),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    /** How many logged events the derived tables were last built from; a mismatch triggers a rebuild. */
+    materializedEvents: integer("materialized_events").notNull().default(0),
     ...timestamps,
   },
   (t) => [uniqueIndex("competitions_slug_idx").on(t.slug), index("competitions_season_idx").on(t.seasonYear)],

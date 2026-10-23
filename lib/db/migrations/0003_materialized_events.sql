@@ -1,0 +1,1 @@
+ALTER TABLE "competitions" ADD COLUMN "materialized_events" integer DEFAULT 0 NOT NULL;

@@ -22,6 +22,13 @@
       "when": 1792651817955,
       "tag": "0002_wsa_format",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792749074580,
+      "tag": "0003_materialized_events",
+      "breakpoints": true
     }
   ]
 }

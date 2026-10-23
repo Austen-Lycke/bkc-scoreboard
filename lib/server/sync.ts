@@ -89,7 +89,10 @@ export async function applySync(opts: {
 
   // Looking at a closed season's competition is fine; it just isn't written to.
   if (closed) return { ...result, tags: [] };
-  if (!fresh.length && comp.operatorDeviceId === opts.deviceId) {
+  // Two overlapping syncs can each rebuild from a log without the other's events; the count catches that.
+  const logSize = snapshot!.events.length + fresh.length;
+  const inStep = comp.materializedEvents === logSize;
+  if (!fresh.length && comp.operatorDeviceId === opts.deviceId && inStep) {
     // Heartbeat: nothing new, so the tables and the public pages stay as they are.
     await db.update(competitions).set({ operatorLeaseAt: new Date() }).where(eq(competitions.id, comp.id));
     return { ...result, tags: [] };
@@ -113,14 +116,14 @@ export async function applySync(opts: {
       ]
     : [];
   // neon-http runs a batch as a single transaction.
-  const ops = [...insert, ...materialize(state, { deviceId: opts.deviceId, keepPublished: comp.status === "published" })];
+  const ops = [...insert, ...materialize(state, { deviceId: opts.deviceId, keepPublished: comp.status === "published", logSize })];
   await db.batch(ops as [BatchItem<"pg">, ...BatchItem<"pg">[]]);
 
   return { ...result, tags: [tags.competitions, tags.competition(comp.id), tags.season(comp.seasonYear), tags.shooters] };
 }
 
 /** The statements that rewrite the derived tables (entries, passes, orders, afkamping, new shooters, season ranks). */
-function materialize(state: CompetitionState, opts: { deviceId: string; keepPublished: boolean }): BatchItem<"pg">[] {
+function materialize(state: CompetitionState, opts: { deviceId: string; keepPublished: boolean; logSize: number }): BatchItem<"pg">[] {
   const db = getDb();
   const comp = state.snapshot.competition;
   const juniorRanks = new Set(state.snapshot.ranks.filter((r) => r.isJunior).map((r) => r.code));
@@ -233,6 +236,7 @@ function materialize(state: CompetitionState, opts: { deviceId: string; keepPubl
         lastEventAt: state.lastEventAt ? new Date(state.lastEventAt) : null,
         operatorDeviceId: opts.deviceId,
         operatorLeaseAt: new Date(),
+        materializedEvents: opts.logSize,
       })
       .where(eq(competitions.id, comp.id)),
   );

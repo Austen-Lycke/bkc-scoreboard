@@ -44,7 +44,19 @@ export function useSyncStatus(competitionId: string): SyncStatus {
 /** The event as the server expects it, without the local bookkeeping fields. */
 const toWire = (e: StoredEvent) => ({ id: e.id, competitionId: e.competitionId, deviceId: e.deviceId, at: e.at, type: e.type, payload: e.payload });
 
-export async function syncNow(competitionId: string, { takeover = false } = {}): Promise<void> {
+/** One sync per competition across every tab and window of this browser, not only this one. */
+export async function syncNow(competitionId: string, opts: { takeover?: boolean } = {}): Promise<void> {
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    // A heartbeat skips when another tab is already syncing; a takeover waits its turn.
+    await navigator.locks.request(`bkc-sync:${competitionId}`, { ifAvailable: !opts.takeover }, async (lock) => {
+      if (lock) await runSync(competitionId, opts);
+    });
+    return;
+  }
+  await runSync(competitionId, opts);
+}
+
+async function runSync(competitionId: string, { takeover = false }: { takeover?: boolean } = {}): Promise<void> {
   if (inFlight.has(competitionId)) return;
   inFlight.add(competitionId);
   try {
