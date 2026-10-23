@@ -23,7 +23,8 @@ import { formatClock, useNow } from "@/components/use-now";
 import { Kbd, Panel, Pill } from "@/components/ui";
 import { useComp } from "../context";
 import { useAutoPhase } from "../phase";
-import { FinishedBanner, heatTitle, NextUp, PhaseDone, useLineup } from "./scoring";
+import { heatTitle, useLineup } from "./scoring";
+import { FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
 
 /**
  * Scoring a WSA line: every shooter on their own frame, the scores typed from the scorecards. One row
