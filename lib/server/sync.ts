@@ -60,7 +60,8 @@ export async function applySync(opts: {
     buildSnapshot(comp.id),
     db.query.seasons.findFirst({ where: eq(seasons.year, comp.seasonYear), columns: { status: true } }),
   ]);
-  const stored = new Set(snapshot!.events.map((e) => e.id));
+  if (!snapshot) return { kind: "not_found" };
+  const stored = new Set(snapshot.events.map((e) => e.id));
   const unseen = valid.filter((e) => !stored.has(e.id));
   // An id another competition already uses would be skipped by the insert, yet counted below.
   const taken = new Set<string>();
@@ -78,7 +79,7 @@ export async function applySync(opts: {
   const closed = season?.status === "closed" && !opts.mayEditClosedSeason;
   if (closed && fresh.length) return { kind: "closed", seasonYear: comp.seasonYear };
 
-  const state = buildState(snapshot!, fresh);
+  const state = buildState(snapshot, fresh);
   const result = {
     kind: "ok" as const,
     accepted: valid.filter((e) => !taken.has(e.id)).map((e) => e.id),
@@ -90,7 +91,7 @@ export async function applySync(opts: {
   // Looking at a closed season's competition is fine; it just isn't written to.
   if (closed) return { ...result, tags: [] };
   // Two overlapping syncs can each rebuild from a log without the other's events; the count catches that.
-  const logSize = snapshot!.events.length + fresh.length;
+  const logSize = snapshot.events.length + fresh.length;
   const inStep = comp.materializedEvents === logSize;
   if (!fresh.length && comp.operatorDeviceId === opts.deviceId && inStep) {
     // Heartbeat: nothing new, so the tables and the public pages stay as they are.

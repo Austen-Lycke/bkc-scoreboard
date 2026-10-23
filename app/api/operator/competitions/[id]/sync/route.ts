@@ -20,13 +20,22 @@ export async function POST(request: Request, ctx: RouteContext<"/api/operator/co
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: "Ongeldige aanvraag" }, { status: 400 });
 
-  const result = await applySync({
-    competitionId: id,
-    deviceId: parsed.data.deviceId,
-    takeover: parsed.data.takeover ?? false,
-    events: parsed.data.events,
-    mayEditClosedSeason: hasRole(auth.session.user.role, "admin"),
-  });
+  let result: Awaited<ReturnType<typeof applySync>>;
+  try {
+    result = await applySync({
+      competitionId: id,
+      deviceId: parsed.data.deviceId,
+      takeover: parsed.data.takeover ?? false,
+      events: parsed.data.events,
+      mayEditClosedSeason: hasRole(auth.session.user.role, "admin"),
+    });
+  } catch (err) {
+    console.error("[sync] failed", { competitionId: id, deviceId: parsed.data.deviceId, events: parsed.data.events.length }, err);
+    return Response.json(
+      { error: "De server kon deze acties niet opslaan. Ze staan veilig op dit toestel; meld dit aan de beheerder." },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   if (result.kind === "not_found") return Response.json({ error: "Wedstrijd niet gevonden" }, { status: 404 });
   if (result.kind === "lease") {
     return Response.json({ error: "Een ander toestel beheert deze wedstrijd", holder: result.holder, since: result.since }, { status: 409 });
