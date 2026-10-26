@@ -17,11 +17,14 @@ export function statusForRound(state: Pick<CompetitionState, "snapshot" | "forma
 
 /**
  * The phase scoring a round moves the day to, or null when it stays: only forwards, and never out of
- * an afkamping or the end. So the TV follows the line without the operator switching phases.
+ * the end. An afkamping is over once the line shoots again (a tie on a cut line, then the semi-final),
+ * so from there it goes back to the round's phase. So the TV follows the line without the operator
+ * switching phases.
  */
 export function autoStatus(state: CompetitionState, round: number): CompetitionStatus | null {
-  if (state.status === "shootoff" || state.status === "finished") return null;
+  if (state.status === "finished") return null;
   const target = statusForRound(state, round);
+  if (state.status === "shootoff") return target;
   return phaseIndex(target) > phaseIndex(state.status) ? target : null;
 }
 

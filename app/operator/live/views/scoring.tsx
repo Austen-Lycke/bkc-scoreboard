@@ -8,6 +8,7 @@ import {
   entryShortName,
   entryTotal,
   groupName,
+  groupsInShootingOrder,
   heatKey,
   passOf,
   roundName,
@@ -47,7 +48,10 @@ export const heatTitle = (state: CompetitionState, heat: Heat) => `${groupName(s
 export function ScoringView(props: { activeKd: number; setActiveKd: (kd: number) => void }) {
   const { state } = useComp();
   const { heat } = useLineup();
-  if (heat && setupFor(state, heat.groupCode, heat.round).entry === "points") return <LineScoring />;
+  // Nobody on the line (all shot, or a tie on a cut line holds up the knockout): a points day still gets its own screen.
+  const group = heat?.groupCode ?? groupsInShootingOrder(state)[0]?.code;
+  const points = !!group && setupFor(state, group, heat?.round ?? 1).entry === "points";
+  if (points && state.entries.size > 0) return <LineScoring />;
   return <PlateScoring {...props} />;
 }
 

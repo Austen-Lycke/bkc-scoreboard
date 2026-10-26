@@ -167,6 +167,8 @@ function ActiveShootoff({ draft }: { draft: ShootoffDraft }) {
       },
     ]);
     await updateLive(id, { shootoff: null });
+    // A tie on a cut line: the knockout goes on, so back to its phase and the TV shows the line again.
+    if (draft.stage && draft.returnStatus && state.status === "shootoff") await emit(id, "status.set", { status: draft.returnStatus });
   }
 
   async function cancel() {

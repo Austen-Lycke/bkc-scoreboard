@@ -26,7 +26,7 @@ function makeEvents() {
 }
 
 describe("phases follow the scoring", () => {
-  it("moves Klaar or Opwarming to Ronde 1, and Pauze to Ronde 2, but never back", () => {
+  it("moves Klaar or Opwarming to Ronde 1, and Pauze to Ronde 2, but never back (only out of an afkamping)", () => {
     const snapshot = buildDemoSnapshot();
     const { events, emit } = makeEvents();
     expect(autoStatus(buildState(snapshot, events), 1)).toBe("round1");
@@ -36,6 +36,8 @@ describe("phases follow the scoring", () => {
     expect(autoStatus(buildState(snapshot, events), 1)).toBeNull();
     expect(autoStatus(buildState(snapshot, events), 2)).toBe("round2");
     emit("status.set", { status: "shootoff" });
+    expect(autoStatus(buildState(snapshot, events), 2)).toBe("round2");
+    emit("status.set", { status: "finished" });
     expect(autoStatus(buildState(snapshot, events), 2)).toBeNull();
   });
 

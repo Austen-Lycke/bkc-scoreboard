@@ -111,6 +111,23 @@ test("the series countdown and the warmup run on the TV", async ({ context, page
   await expect(tv.getByText(/^(5:00|4:59|4:58)$/)).toBeVisible();
 });
 
+test("starting series 1 during the warmup moves on to round 1, so the TV shows the countdown", async ({ context, page }) => {
+  await page.goto("/operator/live?c=demo-wsa");
+  await expect(page.getByText("Demowedstrijd WSA · demo")).toBeVisible();
+  await page.getByRole("radio", { name: "Opwarming" }).click();
+  await page.getByRole("button", { name: "Scoren", exact: true }).click();
+  const tv = await context.newPage();
+  await tv.setViewportSize({ width: 1920, height: 1080 });
+  await tv.goto("/tv?c=demo-wsa");
+  await expect(tv.getByText(/^(5:00|4:59|4:58)$/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Start reeks 1" }).click();
+  await expect(page.getByRole("radio", { name: "Ronde 1" })).toHaveAttribute("aria-checked", "true");
+  // One countdown: the warmup's is gone, the series' is on the TV.
+  await expect(page.getByText("Opwarmtimer op TV")).toHaveCount(0);
+  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/);
+});
+
 test("semi-final and final can be switched off in Voorbereiden", async ({ page }) => {
   await openWsaInRound1(page);
   await expect(page.getByRole("radio", { name: "Halve finale" })).toBeVisible();

@@ -24,7 +24,7 @@ import { Kbd, Panel, Pill } from "@/components/ui";
 import { useComp } from "../context";
 import { useAutoPhase } from "../phase";
 import { heatTitle, useLineup } from "./scoring";
-import { FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
+import { AllShot, FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
 
 /**
  * Scoring a WSA line: every shooter on their own frame, the scores typed from the scorecards. One row
@@ -154,7 +154,34 @@ export function LineScoring() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!heat || !setup) return null;
+  const undoButton = canUndo && (
+    <button
+      type="button"
+      onClick={undo}
+      className="flex cursor-pointer items-center gap-3 rounded-[1.125rem] border-[0.09375rem] border-ink bg-surface px-[1.125rem] py-3 text-left transition hover:bg-hover"
+    >
+      <span aria-hidden className="text-xl leading-none">
+        ↶
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[0.9375rem] font-bold">Ongedaan maken</span>
+        <span className="block truncate text-xs text-muted">{lastSave!.passes.length} scores terug naar vóór opslaan</span>
+      </span>
+    </button>
+  );
+
+  // Nobody left on the line: everything is shot, or a tie on a cut line holds up the knockout.
+  if (!heat || !setup) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-7 pt-2 sm:px-8 md:landscape:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[0.875rem]">
+          {finished && <FinishedBanner />}
+          <AllShot />
+        </div>
+        {undoButton && <aside className="flex flex-none flex-col gap-2.5 md:landscape:w-[clamp(14.375rem,22vw,18.75rem)]">{undoButton}</aside>}
+      </div>
+    );
+  }
   const series = heat.phases.length;
 
   /** Enter goes to the next cell (and saves on the last); arrows move up and down a column. */
@@ -292,21 +319,7 @@ export function LineScoring() {
           <NextUp next={next} />
         </div>
         <div className="flex flex-none flex-col gap-2.5 max-md:sticky max-md:bottom-0 max-md:z-10 max-md:-mb-4 max-md:bg-background max-md:pb-4 max-md:pt-2 md:portrait:w-[clamp(14.375rem,30vw,18.75rem)]">
-          {canUndo && (
-            <button
-              type="button"
-              onClick={undo}
-              className="flex cursor-pointer items-center gap-3 rounded-[1.125rem] border-[0.09375rem] border-ink bg-surface px-[1.125rem] py-3 text-left transition hover:bg-hover"
-            >
-              <span aria-hidden className="text-xl leading-none">
-                ↶
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[0.9375rem] font-bold">Ongedaan maken</span>
-                <span className="block truncate text-xs text-muted">{lastSave!.passes.length} scores terug naar vóór opslaan</span>
-              </span>
-            </button>
-          )}
+          {undoButton}
           {invalid.length > 0 && (
             <div role="alert" className="rounded-[1.125rem] border-[0.09375rem] border-error bg-error-light px-[1.125rem] py-3 text-[0.8125rem] font-semibold text-error">
               {[...new Set(invalid.map((s) => drafts[keyOf(s)]))].join(", ")} kan niet op deze platen ({setup.targets.map((t) => t.points).join("·")}).
@@ -328,15 +341,23 @@ export function LineScoring() {
   );
 }
 
-/** The series countdown of this heat, on the TV: series, a short recovery, the next series. */
+/**
+ * The series countdown of this heat, on the TV: series, a short recovery, the next series. Starting it
+ * moves the phase to the round (out of the warmup or the break, which stops that countdown), as the
+ * TV only shows the line and its countdown while a round is on.
+ */
 function SeriesTimerBar({ heat }: { heat: Heat }) {
   const { id, state, live } = useComp();
+  const advance = useAutoPhase();
   const timing = state.format.timing!;
   const timer = live?.seriesTimer?.heatKey === heatKey(heat) ? live.seriesTimer : null;
   const now = useNow(250, !!timer);
   const step = timer ? timerStep(timing, heat.phases.length, timer, now) : null;
   const series = heat.phases.length;
-  const start = (fromSeries: number) => updateLive(id, { seriesTimer: { heatKey: heatKey(heat), startedAt: new Date().toISOString(), fromSeries } });
+  const start = async (fromSeries: number) => {
+    await advance(heat.round);
+    await updateLive(id, { seriesTimer: { heatKey: heatKey(heat), startedAt: new Date().toISOString(), fromSeries } });
+  };
   const stop = () => updateLive(id, { seriesTimer: null });
 
   return (
