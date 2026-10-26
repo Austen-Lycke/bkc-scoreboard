@@ -18,7 +18,7 @@ const cells = (page: Page) => page.locator("main input[inputmode=numeric]");
 async function openWsaInRound1(page: Page) {
   await page.goto("/operator/live?c=demo-wsa");
   await expect(page.getByText("Demowedstrijd WSA · demo")).toBeVisible();
-  await page.getByRole("radio", { name: "Ronde 1" }).click();
+  await page.getByLabel("Fase").selectOption({ label: "Ronde 1" });
   await page.getByRole("button", { name: "Scoren", exact: true }).click();
   await expect(page.getByText("Junior · ronde 1 · beurt 1")).toBeVisible();
 }
@@ -51,6 +51,15 @@ async function shootHeat(page: Page) {
   }
   // Read in one step: the heading may go between a count and a read (the "Ronde 1 is klaar" card).
   await expect.poll(async () => (await heading(page).allInnerTexts())[0] ?? "done").not.toBe(title);
+}
+
+
+/** A tab, or Volgorde: the second part of Inschrijving. */
+async function openView(page: Page, name: string) {
+  if (name === "Volgorde") {
+    await page.locator("nav").getByRole("button", { name: /^Inschrijving/ }).click();
+    await page.getByRole("tab", { name: "Volgorde" }).click();
+  } else await page.getByRole("button", { name, exact: false }).first().click();
 }
 
 test("typed scores reach the TV; a typo is refused; save and undo", async ({ context, page }) => {
@@ -106,7 +115,7 @@ test("the series countdown and the warmup run on the TV", async ({ context, page
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText("2 × 2:30");
 
-  await page.getByRole("radio", { name: "Opwarming" }).click();
+  await page.getByLabel("Fase").selectOption({ label: "Opwarming" });
   await expect(page.getByText("Opwarmtimer op TV")).toBeVisible();
   await expect(tv.getByText(/^(5:00|4:59|4:58)$/)).toBeVisible();
 });
@@ -114,7 +123,7 @@ test("the series countdown and the warmup run on the TV", async ({ context, page
 test("starting series 1 during the warmup moves on to round 1, so the TV shows the countdown", async ({ context, page }) => {
   await page.goto("/operator/live?c=demo-wsa");
   await expect(page.getByText("Demowedstrijd WSA · demo")).toBeVisible();
-  await page.getByRole("radio", { name: "Opwarming" }).click();
+  await page.getByLabel("Fase").selectOption({ label: "Opwarming" });
   await page.getByRole("button", { name: "Scoren", exact: true }).click();
   const tv = await context.newPage();
   await tv.setViewportSize({ width: 1920, height: 1080 });
@@ -122,7 +131,7 @@ test("starting series 1 during the warmup moves on to round 1, so the TV shows t
   await expect(tv.getByText(/^(5:00|4:59|4:58)$/)).toBeVisible();
 
   await page.getByRole("button", { name: "Start reeks 1" }).click();
-  await expect(page.getByRole("radio", { name: "Ronde 1" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel("Fase")).toHaveValue("round1");
   // One countdown: the warmup's is gone, the series' is on the TV.
   await expect(page.getByText("Opwarmtimer op TV")).toHaveCount(0);
   await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/);
@@ -130,12 +139,12 @@ test("starting series 1 during the warmup moves on to round 1, so the TV shows t
 
 test("semi-final and final can be switched off in Voorbereiden", async ({ page }) => {
   await openWsaInRound1(page);
-  await expect(page.getByRole("radio", { name: "Halve finale" })).toBeVisible();
+  await expect(page.getByLabel("Fase").locator("option", { hasText: /^Halve finale$/ })).toHaveCount(1);
   await page.getByRole("button", { name: "Voorbereiden" }).click();
   await page.getByRole("switch", { name: /Halve finale/ }).click();
   await expect(page.getByRole("switch", { name: /Halve finale/ })).toHaveAttribute("aria-checked", "false");
-  await expect(page.getByRole("radio", { name: "Halve finale" })).toHaveCount(0);
-  await expect(page.getByRole("radio", { name: "Finale" })).toBeVisible();
+  await expect(page.getByLabel("Fase").locator("option", { hasText: /^Halve finale$/ })).toHaveCount(0);
+  await expect(page.getByLabel("Fase").locator("option", { hasText: /^Finale$/ })).toHaveCount(1);
 });
 
 test("a whole WSA day: qualification, semi-final, final and podium", async ({ context, page, isMobile }) => {
@@ -149,7 +158,7 @@ test("a whole WSA day: qualification, semi-final, final and podium", async ({ co
   for (let i = 0; i < 4; i++) await shootHeat(page);
   await expect(page.getByText("Ronde 2 is klaar")).toBeVisible();
   await goOnIfAsked(page);
-  await expect(page.getByRole("radio", { name: "Halve finale" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel("Fase")).toHaveValue("semifinal");
   await expect(heading(page)).toHaveText("Junior · halve finale · beurt 1");
   await expect(cells(page)).toHaveCount(6);
   await shootHeat(page);
@@ -186,10 +195,10 @@ test("a whole WSA day: qualification, semi-final, final and podium", async ({ co
 test("on a touchscreen the WSA controls are at least 44px", async ({ page, isMobile }) => {
   test.skip(!isMobile, "touch layout only");
   await openWsaInRound1(page);
-  for (const tab of ["Scoren", "Volgorde", "Stand", "Voorbereiden"]) {
-    await page.getByRole("button", { name: tab, exact: false }).first().click();
+  for (const tab of ["Scoren", "Inschrijving", "Volgorde", "Stand", "Voorbereiden"]) {
+    await openView(page, tab);
     const small = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>(".touch-targets :is(button, a[href], [role=radio], [role=switch], select, input:not([type=checkbox]):not([type=radio]))")]
+      [...document.querySelectorAll<HTMLElement>(".touch-targets :is(button, a[href], [role=radio], [role=tab], [role=switch], select, input:not([type=checkbox]):not([type=radio]))")]
         .filter((el) => el.offsetParent !== null)
         .map((el) => ({ el: (el.innerText || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30), r: el.getBoundingClientRect() }))
         .filter(({ r }) => r.width < 43.5 || r.height < 43.5)

@@ -354,6 +354,7 @@ function SeriesTimerBar({ heat }: { heat: Heat }) {
   const now = useNow(250, !!timer);
   const step = timer ? timerStep(timing, heat.phases.length, timer, now) : null;
   const series = heat.phases.length;
+  const from = Math.max(1, heat.phases.findIndex((phase) => phase.some((s) => !passOf(state, s.entryId, heat.round, s.knockdown))) + 1);
   const start = async (fromSeries: number) => {
     await advance(heat.round);
     await updateLive(id, { seriesTimer: { heatKey: heatKey(heat), startedAt: new Date().toISOString(), fromSeries } });
@@ -383,16 +384,10 @@ function SeriesTimerBar({ heat }: { heat: Heat }) {
       </span>
       <div className="flex flex-wrap gap-1.5">
         {!step || step.kind === "done" ? (
-          <>
-            <Pill tone="yellow" size="sm" onClick={() => start(1)} disabled={state.status === "finished"}>
-              {series === 1 ? "Start reeks" : "Start reeks 1"}
-            </Pill>
-            {series > 1 && (
-              <Pill tone="outline" size="sm" onClick={() => start(2)} disabled={state.status === "finished"}>
-                Vanaf reeks 2
-              </Pill>
-            )}
-          </>
+          // One button: it starts at the first series whose cards aren't all in yet.
+          <Pill tone="yellow" size="sm" onClick={() => start(from)} disabled={state.status === "finished"}>
+            {series === 1 ? "Start reeks" : `Start reeks ${from}`}
+          </Pill>
         ) : (
           <Pill tone="surface" size="sm" onClick={stop}>
             Stop

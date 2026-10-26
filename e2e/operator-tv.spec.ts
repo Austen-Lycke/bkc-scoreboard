@@ -16,12 +16,21 @@ function watchErrors(page: Page, errors: string[]) {
 async function openDemoInRound1(page: Page) {
   await page.goto("/operator/live?c=demo");
   await expect(page.getByText("Demowedstrijd · demo")).toBeVisible();
-  await page.getByRole("radio", { name: "Ronde 1" }).click();
+  await page.getByLabel("Fase").selectOption({ label: "Ronde 1" });
   await page.getByRole("button", { name: "Scoren", exact: true }).click();
   await expect(page.getByText("Junior · ronde 1 · beurt 1")).toBeVisible();
 }
 
 const knockdown = (page: Page, kd: number) => page.getByRole("group", { name: new RegExp(`^Knockdown ${kd}:`) });
+
+
+/** A tab, or Volgorde: the second part of Inschrijving. */
+async function openView(page: Page, name: string) {
+  if (name === "Volgorde") {
+    await page.locator("nav").getByRole("button", { name: /^Inschrijving/ }).click();
+    await page.getByRole("tab", { name: "Volgorde" }).click();
+  } else await page.getByRole("button", { name, exact: false }).first().click();
+}
 
 test("taps, saves and undo reach the TV", async ({ context, page }) => {
   const errors: string[] = [];
@@ -116,12 +125,13 @@ test("a knockdown nobody filled in is only saved as 0 after asking", async ({ pa
 
 test("Einde asks on Afronden before scoring locks", async ({ page }) => {
   await openDemoInRound1(page);
-  const einde = page.getByRole("radio", { name: "Einde" });
+  const fase = page.getByLabel("Fase");
+  const einde = { click: () => fase.selectOption({ label: "Einde" }) };
 
   await einde.click();
   await expect(page.getByRole("heading", { name: "Afronden" })).toBeVisible();
   await expect(page.getByText("Nog niet alles is volledig. Toch beëindigen?")).toBeVisible();
-  await expect(einde).toHaveAttribute("aria-checked", "false");
+  await expect(fase).not.toHaveValue("finished");
 
   // Leaving the tab drops the question; scoring still works.
   await page.getByRole("button", { name: "Scoren", exact: true }).click();
@@ -132,7 +142,7 @@ test("Einde asks on Afronden before scoring locks", async ({ page }) => {
   await einde.click();
   await page.getByRole("button", { name: "Ja, beëindigen" }).click();
   await expect(page.getByText("Wedstrijd beëindigd ✓")).toBeVisible();
-  await expect(einde).toHaveAttribute("aria-checked", "true");
+  await expect(fase).toHaveValue("finished");
 });
 
 test("the TV afkamping keeps five tied shooters and their plates inside their cards", async ({ context, page, isMobile }) => {
@@ -158,12 +168,12 @@ test("the TV afkamping keeps five tied shooters and their plates inside their ca
   // Round 1 is shot: the break or straight on, and the TV says so meanwhile.
   await expect(page.getByText("Ronde 1 is klaar")).toBeVisible();
   await page.getByRole("button", { name: "Meteen door met ronde 2" }).click();
-  await expect(page.getByRole("radio", { name: "Ronde 2" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByLabel("Fase")).toHaveValue("round2");
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await shootRound();
   await expect(page.getByText("Alle beurten zijn geschoten")).toBeVisible();
 
-  await page.getByRole("radio", { name: "Afkamping" }).click();
+  await page.getByLabel("Fase").selectOption({ label: "Afkamping" });
   await page.getByRole("button", { name: /^Afkamping/ }).click();
   const card = page
     .locator("main div")
@@ -202,10 +212,10 @@ test("the TV afkamping keeps five tied shooters and their plates inside their ca
 test("on a touchscreen every operator control is at least 44px", async ({ page, isMobile }) => {
   test.skip(!isMobile, "touch layout only");
   await openDemoInRound1(page);
-  for (const tab of ["Scoren", "Inschrijving", "Volgorde", "Stand", "Afkamping", "Afronden", "Voorbereiden"]) {
-    await page.getByRole("button", { name: tab, exact: false }).first().click();
+  for (const tab of ["Scoren", "Inschrijving", "Volgorde", "Stand", "Afronden", "Voorbereiden"]) {
+    await openView(page, tab);
     const small = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>(".touch-targets :is(button, a[href], [role=radio], select, input:not([type=checkbox]):not([type=radio]))")]
+      [...document.querySelectorAll<HTMLElement>(".touch-targets :is(button, a[href], [role=radio], [role=tab], select, input:not([type=checkbox]):not([type=radio]))")]
         .filter((el) => el.offsetParent !== null)
         .map((el) => ({ el: (el.innerText || el.getAttribute("aria-label") || el.tagName).trim().slice(0, 30), r: el.getBoundingClientRect() }))
         .filter(({ r }) => r.width < 43.5 || r.height < 43.5)
@@ -217,4 +227,24 @@ test("on a touchscreen every operator control is at least 44px", async ({ page, 
   await page.getByRole("button", { name: "Scoren", exact: true }).click();
   await expect(page.getByText("Enter opslaan")).toBeHidden();
   await expect(knockdown(page, 2)).toContainText("tik een plaat");
+});
+
+test("the screen shows only what the day needs", async ({ page }) => {
+  await openDemoInRound1(page);
+  const nav = page.locator("nav");
+  // No tie yet: no Afkamping tab. Voorbereiden sits behind the ⚙.
+  await expect(nav.getByRole("button", { name: /^Afkamping/ })).toHaveCount(0);
+  await expect(nav.getByRole("button")).toHaveCount(4);
+
+  // The order is automatic: the arrows only come with "Aanpassen".
+  await openView(page, "Volgorde");
+  await expect(page.getByRole("button", { name: "Naar beneden" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Aanpassen" }).click();
+  await expect(page.getByRole("button", { name: "Naar beneden" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Klaar" }).click();
+
+  // The break counts down on the TV right away.
+  await page.getByLabel("Fase").selectOption({ label: "Pauze" });
+  await expect(page.getByText("Pauzetimer op TV")).toBeVisible();
+  await expect(nav.getByText(/^(10:00|9:59|9:58)$/)).toBeVisible();
 });

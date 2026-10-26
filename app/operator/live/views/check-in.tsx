@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { entriesOfRank, rankName, rankShortName, ranksInShootingOrder } from "@/lib/competition";
 import { emit } from "@/lib/offline/store";
 import { entryAdultRank, fullName, similarNames, tidyName } from "@/lib/scoring";
-import { useComp } from "../context";
+import { useComp, useNav } from "../context";
 import { Panel, Pill, Tag } from "@/components/ui";
 
 const input = "w-full min-w-0 rounded-xl border-[0.09375rem] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink";
@@ -37,6 +37,7 @@ export function CheckInView() {
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 items-start gap-5 overflow-auto px-4 pb-8 pt-2 sm:px-8 md:grid-cols-[minmax(0,23.75rem)_minmax(0,1fr)]">
+      <EntrySections current="checkin" className="md:col-span-2" />
       <Panel className="flex flex-col gap-[0.875rem] p-4 sm:p-[1.375rem]">
         <h2 className="text-[1.0625rem] font-semibold">Schutter inschrijven</h2>
         {creating ? (
@@ -93,6 +94,34 @@ export function CheckInView() {
         )}
       </Panel>
       <EntryList />
+    </div>
+  );
+}
+
+/** Inschrijving holds two screens: who's in, and the order they shoot in. `children` sit at the right. */
+export function EntrySections({ current, className = "", children }: { current: "checkin" | "order"; className?: string; children?: React.ReactNode }) {
+  const { goTo } = useNav();
+  const sections = [
+    { id: "checkin", label: "Schutters" },
+    { id: "order", label: "Volgorde" },
+  ] as const;
+  return (
+    <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${className}`}>
+      <div role="tablist" aria-label="Inschrijving" className="flex gap-0.5 rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] text-sm font-semibold">
+        {sections.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="tab"
+            aria-selected={current === s.id}
+            onClick={() => goTo(s.id)}
+            className={`cursor-pointer rounded-full px-4 py-1.5 ${current === s.id ? "bg-ink text-white" : "text-muted hover:text-ink"}`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {children}
     </div>
   );
 }

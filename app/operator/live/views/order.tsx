@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   autoOrder,
   competitionProgress,
@@ -19,7 +19,8 @@ import {
 import { emit } from "@/lib/offline/store";
 import { passKey, type GroupDef, type Heat } from "@/lib/scoring";
 import { useComp } from "../context";
-import { Empty, Panel, Tag } from "@/components/ui";
+import { Empty, Panel, Pill, Tag } from "@/components/ui";
+import { EntrySections } from "./check-in";
 
 /**
  * Shooting order per group (a rank, or Junior / Volwassenen on a WSA day), shown in heats (one
@@ -35,16 +36,21 @@ export function OrderView() {
   const { lanes: perHeat, rotate } = state.format;
   const lastRound = state.snapshot.competition.rounds;
   const ranks = groupsInShootingOrder(state).filter((g) => entriesOfGroup(state, g.code, { includeWithdrawn: true }).length > 0);
+  // The order is automatic; moving shooters is the exception, so the arrows only show while editing.
+  const [editing, setEditing] = useState(false);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[0.875rem] overflow-auto px-4 pb-8 pt-2 sm:px-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-5 px-1">
-        <h2 className="text-[1.375rem] font-semibold">Volgorde</h2>
-        <p className="max-w-[45rem] text-pretty text-sm text-muted">
-          Omgekeerd seizoensklassement: de zwakste eerst, de leider als laatste. Zonder seizoenspunten wordt vooraan geloot. Vastgezet bij de start;
-          laatkomers sluiten achteraan aan. Ronde 2 schiet in dezelfde volgorde. Beurten die al geschoten zijn liggen vast.
+      <EntrySections current="order">
+        <p className="min-w-0 flex-1 text-pretty text-sm text-muted">
+          Automatisch: de zwakste van het seizoen eerst, de leider als laatste. Laatkomers sluiten achteraan aan.
         </p>
-      </div>
+        {ranks.length > 0 && (
+          <Pill tone={editing ? "ink" : "outline"} size="sm" onClick={() => setEditing((e) => !e)}>
+            {editing ? "Klaar" : "Aanpassen"}
+          </Pill>
+        )}
+      </EntrySections>
       {ranks.length === 0 ? (
         <Empty>Schrijf eerst schutters in.</Empty>
       ) : (
@@ -82,7 +88,7 @@ export function OrderView() {
                   <Tag tone={stored?.source === "manual" ? "yellow" : "fill"} className="py-1">
                     {!stored ? "automatisch" : stored.source === "manual" ? "handmatig aangepast" : "vastgezet"}
                   </Tag>
-                  {stored?.source === "manual" && (
+                  {editing && stored?.source === "manual" && (
                     <button
                       type="button"
                       onClick={restore}
@@ -133,7 +139,7 @@ export function OrderView() {
                             </span>
                             {locked ? (
                               <span className="w-[6.25rem] flex-none whitespace-nowrap text-right text-xs text-muted">{now ? "wordt geschoten" : "geschoten"}</span>
-                            ) : (
+                            ) : !editing ? null : (
                               <>
                                 <Arrow label="Naar boven" disabled={index <= fixed} onClick={() => move(index, index - 1)}>
                                   ↑

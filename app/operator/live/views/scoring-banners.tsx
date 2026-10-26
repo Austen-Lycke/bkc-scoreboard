@@ -4,7 +4,7 @@ import { emit } from "@/lib/offline/store";
 import { entryName, entryShortName, groupName, heatKey, pendingShootoffs, roundName, statusForRound } from "@/lib/competition";
 import type { Heat } from "@/lib/scoring";
 import { useComp, useNav } from "../context";
-import { setPhase } from "../phase";
+import { BREAK_MINUTES, setPhase } from "../phase";
 import { Panel, Pill } from "@/components/ui";
 
 /** The next heats in line. A heat of more than two (WSA) lists its names under the count. */
@@ -74,7 +74,7 @@ export function PhaseDone({ round }: { round: number }) {
     <Panel data-keep-enter className="flex flex-col items-start gap-3 px-7 py-6">
       <span className="text-[1.375rem] font-semibold">{done} is klaar</span>
       <span className="text-[0.9375rem] text-muted">
-        Start de pauze (de TV toont de tussenstand en een aftelklok), of ga meteen door met {roundName(state, round)}.
+        Start de pauze (de TV toont de tussenstand en telt {BREAK_MINUTES} minuten af), of ga meteen door met {roundName(state, round)}.
       </span>
       <div className="flex flex-wrap gap-2">
         <Pill tone="ink" onClick={() => setPhase(id, state, "break")}>

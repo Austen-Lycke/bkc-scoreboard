@@ -5,21 +5,29 @@ import { autoStatus, statusActions, type CompetitionState, type CompetitionStatu
 import { emitMany, updateLive } from "@/lib/offline/store";
 import { useComp } from "./context";
 
+/** How long "Pauze starten" counts down on the TV; "+5 min" makes it longer. */
+export const BREAK_MINUTES = 10;
+
 /**
  * Moves the day to another phase (not the end: that goes through Afronden). A timed day (WSA) counts
- * the warmup down on the TV right away; any other phase but the break stops a countdown. The last
- * save can't be undone from the new phase any more: corrections go through Stand.
+ * the warmup down on the TV right away, and every day counts the break down; any other phase stops a
+ * countdown. The last save can't be undone from the new phase any more: corrections go through Stand.
  */
 export async function setPhase(id: string, state: CompetitionState, status: CompetitionStatus) {
   await emitMany(id, statusActions(state, status));
   const warmup = state.format.timing?.warmupSeconds;
+  const from = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
   await updateLive(id, (current) => ({
     lastSave: null,
     ...(status === "warmup" && warmup
-      ? { pauseEndsAt: new Date(Date.now() + warmup * 1000).toISOString() }
-      : status !== "break" && current.pauseEndsAt
-        ? { pauseEndsAt: null }
-        : {}),
+      ? { pauseEndsAt: from(warmup) }
+      : status === "break"
+        ? current.pauseEndsAt
+          ? {}
+          : { pauseEndsAt: from(BREAK_MINUTES * 60) }
+        : current.pauseEndsAt
+          ? { pauseEndsAt: null }
+          : {}),
   }));
 }
 

@@ -18,7 +18,7 @@ import { syncNow, useSyncLoop, useSyncStatus, type SyncStatus } from "@/lib/offl
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useQueryParam } from "@/lib/offline/url";
 import { CompetitionContext, NavContext, useComp, useNav, type Tab } from "./context";
-import { setPhase } from "./phase";
+import { BREAK_MINUTES, setPhase } from "./phase";
 import { HeatProgress } from "@/components/heat-progress";
 import { ScrollRow } from "@/components/scroll-row";
 import { Pill } from "@/components/ui";
@@ -65,10 +65,12 @@ export function OperatorApp() {
   );
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "prepare", label: "Voorbereiden" },
-  { id: "checkin", label: "Inschrijving" },
-  { id: "order", label: "Volgorde" },
+/**
+ * The tabs of the day. Volgorde lives under Inschrijving, Voorbereiden behind the ⚙ in the header, and
+ * Afkamping only shows once there's a tie (or one was shot), so the bar holds what the day needs.
+ */
+const TABS: { id: Tab; label: string; also?: Tab[] }[] = [
+  { id: "checkin", label: "Inschrijving", also: ["order"] },
   { id: "scoring", label: "Scoren" },
   { id: "standings", label: "Stand" },
   { id: "shootoff", label: "Afkamping" },
@@ -87,6 +89,9 @@ function Shell() {
   const [tab, setTab] = useState<Tab>(() =>
     state.status === "prepared" ? "checkin" : state.status === "finished" ? "close" : "scoring",
   );
+  const shootoffTab =
+    tab === "shootoff" || pending > 0 || !!live?.shootoff || state.status === "shootoff" || state.shootoffs.length > 0 || state.waivedTies.length > 0;
+  const tabs = TABS.filter((t) => t.id !== "shootoff" || shootoffTab);
   const [activeKd, setActiveKd] = useState(1);
   // Afronden's "beëindigen?" question; it closes again when the operator leaves that tab.
   const [askingFinish, setAskingFinish] = useState(false);
@@ -103,7 +108,7 @@ function Shell() {
         setAskingFinish(true);
       },
     }),
-    [],
+    [setActiveKd, setAskingFinish],
   );
 
   const badges: Partial<Record<Tab, number>> = { checkin: active, shootoff: pending };
@@ -140,12 +145,24 @@ function Shell() {
           >
             TV
           </button>
+          <button
+            type="button"
+            onClick={() => nav.goTo("prepare")}
+            aria-label="Voorbereiden"
+            aria-current={tab === "prepare" ? "page" : undefined}
+            title="Voorbereiden: dit toestel, zonder internet, halve finale en finale"
+            className={`grid cursor-pointer place-items-center rounded-full border-[0.09375rem] p-1.5 ${
+              tab === "prepare" ? "border-ink bg-ink text-white" : "border-border text-muted hover:border-ink hover:text-ink"
+            }`}
+          >
+            <GearIcon />
+          </button>
         </header>
         <nav className="flex flex-none flex-wrap items-center gap-x-1 gap-y-2 px-4 pb-2.5 sm:px-8" aria-label="Onderdelen">
-          {/* Phone: the tabs and the phase each scroll sideways on one line. From a tablet up they wrap. */}
+          {/* Phone: the tabs scroll sideways on one line. From a tablet up they wrap. */}
           <ScrollRow active={tab} className={`flex gap-1 ${BLEED} md:contents`}>
-            {TABS.map((t) => {
-              const on = t.id === tab;
+            {tabs.map((t) => {
+              const on = t.id === tab || !!t.also?.includes(tab);
               const badge = badges[t.id];
               return (
                 <button
@@ -153,7 +170,7 @@ function Shell() {
                   type="button"
                   onClick={() => nav.goTo(t.id)}
                   aria-current={on ? "page" : undefined}
-                  className={`flex flex-none cursor-pointer items-center gap-[0.4375rem] whitespace-nowrap rounded-full px-[0.875rem] py-[0.4375rem] text-sm font-semibold transition ${
+                  className={`flex flex-none cursor-pointer items-center gap-[0.4375rem] whitespace-nowrap rounded-full px-3 py-[0.4375rem] sm:px-[0.875rem] text-sm font-semibold transition ${
                     on ? "bg-ink text-white" : "text-muted hover:text-ink"
                   }`}
                 >
@@ -171,7 +188,7 @@ function Shell() {
               );
             })}
           </ScrollRow>
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 max-md:w-full md:ml-auto md:justify-end">
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
             {showTimer && <PauseTimer />}
             <StatusControl />
           </div>
@@ -245,15 +262,16 @@ function Notices({ sync }: { sync: SyncStatus }) {
   return <div className="flex flex-none flex-col gap-2 px-4 pb-2.5 sm:px-8">{items}</div>;
 }
 
-/** A scrolling line runs to the edges of the screen, past the page padding (PHONE_BLEED: below md only). */
+/** A scrolling line runs to the edges of the screen, past the page padding. */
 const BLEED = "-mx-4 w-[calc(100%+2rem)] px-4 sm:-mx-8 sm:w-[calc(100%+4rem)] sm:px-8";
-const PHONE_BLEED =
-  "max-md:-mx-4 max-md:w-[calc(100%+2rem)] max-md:px-4 max-md:sm:-mx-8 max-md:sm:w-[calc(100%+4rem)] max-md:sm:px-8";
 
 const startPause = (competitionId: string, minutes: number) =>
   updateLive(competitionId, { pauseEndsAt: new Date(Date.now() + minutes * 60_000).toISOString() });
 
-/** The break (or warmup) countdown the TV shows. Kept in the live record, so it never ends up in the results. */
+/**
+ * The break (or warmup) countdown the TV shows. Kept in the live record, so it never ends up in the
+ * results. One start button; a longer break is "+5 min" once it runs.
+ */
 function PauseTimer() {
   const { id, state, live } = useComp();
   const warmup = state.status === "warmup";
@@ -261,6 +279,7 @@ function PauseTimer() {
   const now = useNow(1000, end !== null);
   const left = end === null ? 0 : Math.max(0, Math.ceil((end - now) / 1000));
   const done = end !== null && left === 0;
+  const minutes = warmup ? (state.format.timing ? state.format.timing.warmupSeconds / 60 : 5) : BREAK_MINUTES;
 
   return (
     <div
@@ -273,21 +292,13 @@ function PauseTimer() {
         <span className="sm:hidden">Timer</span>
       </span>
       {end === null ? (
-        // Real buttons, so they never read as a label: one start for the warmup, a few lengths for the break.
-        <div className="flex gap-1">
-          {(warmup ? [5] : [5, 10, 15, 20]).map((m, i) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => startPause(id, m)}
-              className={`cursor-pointer whitespace-nowrap rounded-full border-[0.09375rem] px-2.5 py-[0.3125rem] ${
-                i === 0 ? "border-ink bg-ink text-white hover:bg-black" : "border-border bg-surface hover:border-ink"
-              }`}
-            >
-              {i === 0 ? `▶ Start ${m} min` : `${m} min`}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => startPause(id, minutes)}
+          className="cursor-pointer whitespace-nowrap rounded-full border-[0.09375rem] border-ink bg-ink px-2.5 py-[0.3125rem] text-white hover:bg-black"
+        >
+          ▶ Start {minutes} min
+        </button>
       ) : (
         <>
           <span className="px-1 text-sm tabular-nums">{done ? (warmup ? "Opwarming voorbij" : "Pauze voorbij") : formatClock(left)}</span>
@@ -330,8 +341,10 @@ function statusesOf(state: CompetitionState) {
 }
 
 /**
- * The phase of the day. Drives what the TV shows; scoring itself follows the schedule.
- * "Einde" locks scoring, so it asks first, on Afronden, where the open passages and ties are listed.
+ * The phase of the day: it drives what the TV shows. It moves by itself (scoring a round, starting a
+ * series timer, an afkamping, "Pauze starten" when a round is done), so this is a dropdown for the
+ * rare manual change, plus the one step nothing else starts: the warmup. "Einde" locks scoring, so it
+ * asks first, on Afronden, where the open passages and ties are listed.
  */
 function StatusControl() {
   const { id, state } = useComp();
@@ -344,26 +357,42 @@ function StatusControl() {
   }
 
   return (
-    <ScrollRow active={state.status} className={`flex items-center gap-2.5 ${PHONE_BLEED}`}>
-      <span className="flex-none text-xs text-faint">Fase</span>
-      <div role="radiogroup" aria-label="Fase" className="flex flex-none gap-0.5 rounded-full border-[0.09375rem] border-border bg-surface p-[0.1875rem] text-xs font-semibold">
-        {statusesOf(state).map((s) => {
-          const on = state.status === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              onClick={() => setStatus(s.id)}
-              className={`cursor-pointer whitespace-nowrap rounded-full px-2.5 py-[0.3125rem] transition ${on ? "bg-yellow text-ink" : "text-muted hover:text-ink"}`}
-            >
+    <div className="flex flex-none items-center gap-2">
+      {state.status === "prepared" && (
+        <button
+          type="button"
+          onClick={() => setStatus("warmup")}
+          className="cursor-pointer whitespace-nowrap rounded-full bg-ink px-3.5 py-[0.4375rem] text-xs font-semibold text-white hover:bg-black"
+        >
+          ▶ Opwarming starten
+        </button>
+      )}
+      <label className="flex items-center gap-2 text-xs text-faint">
+        Fase
+        <select
+          aria-label="Fase"
+          value={state.status}
+          onChange={(e) => void setStatus(e.target.value as CompetitionStatus)}
+          title="Gaat vanzelf mee met het scoren. Alleen aanpassen als het niet klopt."
+          className="cursor-pointer rounded-full border-[0.09375rem] border-border bg-yellow py-[0.3125rem] pl-3 pr-2 text-xs font-semibold text-ink outline-none hover:border-ink focus-visible:border-ink"
+        >
+          {statusesOf(state).map((s) => (
+            <option key={s.id} value={s.id}>
               {s.label}
-            </button>
-          );
-        })}
-      </div>
-    </ScrollRow>
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className="size-[1.125rem]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   );
 }
 
