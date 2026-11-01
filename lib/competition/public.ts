@@ -1,4 +1,5 @@
-import { ageOn, JUNIOR_AGE_LIMIT, maxPassScore, passKey, publicDisplayName, type Setup, type TieState } from "@/lib/scoring";
+import { z } from "zod";
+import { ageOn, JUNIOR_AGE_LIMIT, maxPassScore, passKey, publicDisplayName, scorePass, type Setup, type TieState } from "@/lib/scoring";
 import {
   competitionProgress,
   competitionSchedule,
@@ -7,11 +8,25 @@ import {
   groupsInShootingOrder,
   passColumns,
   passLabel,
+  entryTotal,
   passOf,
   roundTitle,
   standingsFor,
 } from "./derive";
 import { groupOfRank, setupFor, type CompetitionState } from "./state";
+
+/**
+ * What the operator laptop shares beyond its event log, sent along with every sync: taps and typed
+ * scores not saved yet (per pass key), and the end of the break or warmup countdown. The website
+ * only uses the drafts of the heat on the line.
+ */
+export const competitionLiveSchema = z.object({
+  drafts: z.record(z.string().max(120), z.array(z.string().max(40)).max(20)).refine((r) => Object.keys(r).length <= 60, "te veel"),
+  draftScores: z.record(z.string().max(120), z.number().int().min(0).max(1000)).refine((r) => Object.keys(r).length <= 60, "te veel"),
+  pauseEndsAt: z.iso.datetime().nullable(),
+  at: z.iso.datetime(),
+});
+export type CompetitionLive = z.infer<typeof competitionLiveSchema>;
 
 /**
  * What the public may see of a competition. Built on the server from the same state as the
@@ -51,6 +66,12 @@ export interface PublicView {
   };
   updatedAt: string | null;
   passLabels: string[];
+  /** The round of every pass in `passLabels`. */
+  passRounds: number[];
+  /** "passages" on a Spanish day (they swap knockdowns), "reeksen" on a WSA day. */
+  passUnit: string;
+  /** End of the break or warmup countdown (ISO), while one runs. */
+  pauseEndsAt: string | null;
   /** "4 passages per schutter", or how a WSA day goes on after qualification. */
   passNote: string;
   /** The heat on the line now (from saved passes; taps before saving stay on the venue TV). */
@@ -62,8 +83,23 @@ export interface PublicView {
     heatNumber: number;
     heatsInRank: number;
     swapped: boolean;
-    /** `lane`: the knockdown (frame) they stand at; `col`: their pass in `passLabels`. */
-    shooters: { shooterId: string; name: string; knockdown: number; lane: number; col: number; total: number; position: number | null }[];
+    /** The series on the line (1-based) when a heat is shot in several (WSA), else null. */
+    series: number | null;
+    setup: Setup;
+    /**
+     * `lane`: the knockdown (frame) they stand at; `col`: their pass in `passLabels`. `pass`: this
+     * pass so far, with the taps not saved yet; `total` includes it.
+     */
+    shooters: {
+      shooterId: string;
+      name: string;
+      knockdown: number;
+      lane: number;
+      col: number;
+      pass: { hits: string[]; score: number };
+      total: number;
+      position: number | null;
+    }[];
   } | null;
   next: { round: number; roundLabel: string; rankName: string; heatNumber: number; shooterIds: string[]; names: string[] }[];
   lastPasses: { name: string; rankName: string; round: number; knockdown: number; score: number; hits: string[]; setup: Setup; at: string }[];
@@ -97,7 +133,7 @@ export function tvName(state: CompetitionState, entryId: string): string {
   return publicName(shooter, { isJuniorRank, onDate: state.snapshot.competition.date });
 }
 
-export function publicView(state: CompetitionState): PublicView {
+export function publicView(state: CompetitionState, live?: CompetitionLive | null): PublicView {
   const comp = state.snapshot.competition;
   const juniorRanks = new Set(state.snapshot.ranks.filter((r) => r.isJunior).map((r) => r.code));
   const nameOf = (entryId: string) => {
@@ -138,6 +174,15 @@ export function publicView(state: CompetitionState): PublicView {
   if (heat) {
     const standings = standingsFor(state, heat.groupCode);
     const phase = heat.phases[progress.phaseIndex ?? 0];
+    const setup = setupFor(state, heat.groupCode, heat.round);
+    // Like the venue TV: what the operator has tapped (or typed) so far, else what's saved.
+    const passNow = (entryId: string, kd: number) => {
+      const key = passKey(entryId, heat.round, kd);
+      const saved = passOf(state, entryId, heat.round, kd);
+      if (setup.entry === "points") return { hits: [], score: live?.draftScores[key] ?? saved?.score ?? 0 };
+      const hits = live?.drafts[key] ?? saved?.hits ?? [];
+      return { hits, score: scorePass(setup, hits) };
+    };
     current = {
       round: heat.round,
       roundLabel: roundTitle(state, heat.round),
@@ -145,15 +190,22 @@ export function publicView(state: CompetitionState): PublicView {
       heatNumber: heat.index + 1,
       heatsInRank: schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length,
       swapped: state.format.rotate && (progress.phaseIndex ?? 0) > 0,
-      shooters: phase.map((s) => ({
-        shooterId: shooterIdOf(s.entryId),
-        name: nameOf(s.entryId),
-        knockdown: s.knockdown,
-        lane: s.lane,
-        col: passCols.findIndex((c) => c.round === heat.round && c.knockdown === s.knockdown),
-        total: standings.rows.find((r) => r.entryId === s.entryId)?.total ?? 0,
-        position: standings.rows.find((r) => r.entryId === s.entryId)?.position ?? null,
-      })),
+      series: !state.format.rotate && heat.phases.length > 1 ? (progress.phaseIndex ?? 0) + 1 : null,
+      setup,
+      shooters: phase.map((s) => {
+        const pass = passNow(s.entryId, s.knockdown);
+        const saved = passOf(state, s.entryId, heat.round, s.knockdown)?.score ?? 0;
+        return {
+          shooterId: shooterIdOf(s.entryId),
+          name: nameOf(s.entryId),
+          knockdown: s.knockdown,
+          lane: s.lane,
+          col: passCols.findIndex((c) => c.round === heat.round && c.knockdown === s.knockdown),
+          pass,
+          total: entryTotal(state, s.entryId) - saved + pass.score,
+          position: standings.rows.find((r) => r.entryId === s.entryId)?.position ?? null,
+        };
+      }),
     };
   }
 
@@ -190,8 +242,11 @@ export function publicView(state: CompetitionState): PublicView {
       status: state.status,
       seasonYear: comp.seasonYear,
     },
-    updatedAt: state.lastEventAt,
+    updatedAt: [state.lastEventAt, live?.at].filter((t): t is string => !!t).sort().at(-1) ?? null,
     passLabels: passCols.map((c) => passLabel(c)),
+    passRounds: passCols.map((c) => c.round),
+    passUnit: unit,
+    pauseEndsAt: state.status === "break" || state.status === "warmup" ? (live?.pauseEndsAt ?? null) : null,
     passNote,
     current,
     next: (progress.heatIndex === null ? [] : schedule.slice(progress.heatIndex + 1, progress.heatIndex + 4)).map((h) => ({

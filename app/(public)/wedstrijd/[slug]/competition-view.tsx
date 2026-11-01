@@ -1,14 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { HeatProgress } from "@/components/heat-progress";
-import { CLUB_TIME_ZONE, formatLongDate, LIVE, STATUS_LABEL } from "@/components/public/format";
-import type { PublicRank, PublicView } from "@/lib/competition";
+import { capitalize, CLUB_TIME_ZONE, FINISHED, formatCompactDate, formatLongDate, formatLongDay, LIVE } from "@/components/public/format";
+import type { PublicView } from "@/lib/competition";
+import { LineHero } from "./hero";
+import { Countdown, FirstUp, Next, Podium } from "./side";
+import { Standings } from "./standings";
 
 const POLL_MS = 5000;
 const clock = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
-const TIE: Record<string, string | null> = { none: null, resolved: "na afkamping", shared: "gelijk", pending: "afkamping", waived: "gedeelde plaats" };
+
+const LIVE_PHASE: Record<string, string> = {
+  warmup: "opwarming",
+  round1: "Ronde 1",
+  break: "pauze",
+  round2: "Ronde 2",
+  semifinal: "halve finale",
+  final: "finale",
+  shootoff: "afkamping",
+};
 
 /** The public competition page. While the competition runs, it refreshes itself every few seconds. */
 export function CompetitionView({ initial, live }: { initial: PublicView; live: boolean }) {
@@ -43,220 +54,92 @@ export function CompetitionView({ initial, live }: { initial: PublicView; live: 
   }, [polling, initial.competition.slug]);
 
   const { competition: comp, current } = view;
-  const isLive = LIVE.has(comp.status);
-  const [rankTab, setRankTab] = useState<string | null>(null);
-  const selectedRank = view.ranks.find((r) => r.code === rankTab) ?? view.ranks.find((r) => r.name === current?.rankName) ?? view.ranks[0];
+  const status = comp.status;
+  const isLive = LIVE.has(status);
+  const prepared = status === "prepared";
+  const pausing = status === "break" || status === "warmup";
+  const onLine = isLive && !pausing && !!current;
   const shooters = view.ranks.reduce((n, r) => n + r.rows.filter((x) => !x.withdrawn).length, 0);
-  const meta = [formatLongDate(comp.date), comp.location, shooters ? `${shooters} schutters` : null].filter(Boolean).join(" · ");
+  const firstUp = (prepared || pausing) && current;
+  const podium = FINISHED.has(status);
+  const side = pausing || firstUp || onLine || podium;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
-        <div className="flex min-w-0 flex-col gap-2">
-          {isLive ? (
-            <span className="flex items-center gap-2 self-start rounded-full bg-yellow px-3 py-1 text-sm font-bold">
-              <span className="size-2 rounded-full bg-ink" />
-              Live
-              {comp.status === "break"
-                ? " · pauze"
-                : comp.status === "warmup"
-                  ? " · opwarming"
-                  : comp.status === "shootoff"
-                    ? " · afkamping"
-                    : comp.status === "semifinal"
-                      ? " · halve finale"
-                      : comp.status === "final"
-                        ? " · finale"
-                        : ""}
+    <div className="flex flex-col gap-[clamp(1.25rem,3cqw,2rem)]">
+      {prepared ? (
+        <section className="flex flex-col gap-[clamp(0.875rem,2cqw,1.25rem)] pb-[clamp(0.5rem,2cqw,1rem)] pt-[clamp(0.5rem,3cqw,2.5rem)]">
+          <span className="self-start rounded-pill bg-yellow px-4 py-1.5 text-[clamp(1rem,1.6cqw,1.375rem)] font-bold">Welkom</span>
+          <h1 className="text-balance text-[clamp(3.5rem,12cqw,9.5rem)] font-semibold leading-[0.88] tracking-[-0.05em]">{comp.name}</h1>
+          <span className="text-pretty text-[clamp(1.125rem,2.2cqw,1.75rem)] text-muted">
+            <span className="max-md:hidden">
+              {[capitalize(formatLongDay(comp.date)), comp.location, shooters ? `${shooters} schutters ingeschreven` : null].filter(Boolean).join(" · ")}
             </span>
-          ) : (
-            <span className="self-start rounded-full bg-fill px-3 py-1 text-sm font-bold">{STATUS_LABEL[comp.status] ?? comp.status}</span>
-          )}
-          <h1 className="text-[clamp(2.25rem,6vw,3.5rem)] font-semibold leading-none tracking-[-0.03em]">{comp.name}</h1>
-          <span className="text-base text-muted first-letter:uppercase">{meta}</span>
-        </div>
-        {(isLive || view.progress.done > 0) && !!view.progress.heatRounds?.length && (
-          <div className="flex max-w-[27.5rem] flex-[1_1_17.5rem] flex-col gap-2">
-            <HeatProgress variant="web" rounds={view.progress.heatRounds} current={view.progress.heatIndex ?? null} endLabel={view.progress.endLabel} />
-            {polling && view.updatedAt && (
-              <span className="text-right text-[0.8125rem] text-subtle">
-                {stale ? "Verbinding verloren, opnieuw proberen…" : `Bijgewerkt om ${clock.format(new Date(view.updatedAt))}`}
+            <span className="md:hidden">{[capitalize(formatCompactDate(comp.date)), shooters ? `${shooters} schutters` : null].filter(Boolean).join(" · ")}</span>
+          </span>
+          <p className="mt-1 max-w-[36rem] text-pretty leading-[1.45] text-muted max-md:hidden">
+            De wedstrijd is nog niet begonnen. Deze pagina wordt automatisch live zodra de eerste schutters aan de lijn staan.
+          </p>
+        </section>
+      ) : (
+        <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
+          <div className="flex min-w-0 flex-[1_1_26rem] flex-col gap-3.5">
+            {isLive ? (
+              <span className="inline-flex items-center gap-2 self-start rounded-pill bg-yellow px-3.5 py-[0.3125rem] text-[clamp(0.9375rem,1.4cqw,1.0625rem)] font-bold">
+                <span className="size-2 rounded-full bg-ink" />
+                Live · {LIVE_PHASE[status]}
               </span>
+            ) : (
+              <span className="self-start rounded-pill bg-ink px-3.5 py-[0.3125rem] text-[clamp(0.9375rem,1.4cqw,1.0625rem)] font-bold text-white">Uitslag</span>
             )}
+            <h1 className="text-balance text-[clamp(2.875rem,8cqw,6rem)] font-semibold leading-[0.9] tracking-[-0.045em]">{comp.name}</h1>
+            <span className="text-[clamp(1rem,1.6cqw,1.25rem)] text-muted">
+              <span className="max-md:hidden">
+                {[capitalize(formatLongDate(comp.date)), comp.location, shooters ? `${shooters} schutters` : null].filter(Boolean).join(" · ")}
+              </span>
+              {shooters > 0 && <span className="md:hidden">{shooters} schutters</span>}
+            </span>
           </div>
-        )}
-      </div>
-
-      {comp.status === "prepared" && (
-        <p className="rounded-3xl border-[0.09375rem] border-dashed border-plate bg-surface p-6 text-muted">
-          De wedstrijd is nog niet begonnen. Deze pagina wordt automatisch live zodra de eerste schutters aan de lijn staan.
-        </p>
+          {(isLive || view.progress.done > 0) && !!view.progress.heatRounds?.length && (
+            <div className="flex max-w-[30rem] flex-[1_1_18rem] flex-col gap-2.5">
+              <HeatProgress
+                variant="web"
+                rounds={view.progress.heatRounds}
+                current={view.progress.heatIndex ?? null}
+                endLabel={view.progress.endLabel}
+                aside={polling && view.updatedAt ? <Updated at={view.updatedAt} stale={stale} narrow /> : null}
+              />
+              {polling && view.updatedAt && <Updated at={view.updatedAt} stale={stale} />}
+            </div>
+          )}
+        </div>
       )}
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,27.5rem),1fr))] items-start gap-6">
-        {isLive && current && (
-          <div className="flex min-w-0 flex-col gap-6">
-            <section className="flex flex-col gap-5 rounded-3xl bg-ink px-5 pb-7 pt-6 text-white sm:px-7">
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                <span className="rounded-full bg-yellow px-3.5 py-1 text-base font-bold text-ink">
-                  {comp.status === "break" ? "Na de pauze" : comp.status === "warmup" ? "Als eerste" : "Nu aan de lijn"}
-                </span>
-                <span className="text-sm text-white/60">
-                  {current.roundLabel ?? `Ronde ${current.round}`} · {current.rankName} · beurt {current.heatNumber}/{current.heatsInRank}
-                  {current.swapped ? " · gewisseld" : ""}
-                </span>
-              </div>
-              {current.shooters.length <= 2 ? (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-8">
-                  {current.shooters.map((s) => (
-                    <div key={s.shooterId} className="flex min-w-0 flex-col gap-3.5">
-                      <div className="min-w-0">
-                        <div className="text-sm text-white/50">Knockdown {s.lane}</div>
-                        <div className="truncate text-lg font-semibold leading-[1.1] tracking-[-0.02em] sm:text-[1.75rem]">{s.name}</div>
-                      </div>
-                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="text-[2.5rem] font-semibold leading-[0.9] tracking-[-0.04em] text-yellow tabular-nums sm:text-[3.5rem]">{s.total}</span>
-                        <span className="whitespace-nowrap text-[0.9375rem] text-white/60">totaal{s.position ? ` · plaats ${s.position}` : ""}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                // A WSA line: up to 15 shooters, one compact line each.
-                <div className="grid grid-cols-1 gap-x-8 gap-y-2.5 sm:grid-cols-2">
-                  {current.shooters.map((s) => (
-                    <div key={s.shooterId} className="flex min-w-0 items-baseline gap-3">
-                      <span className="w-9 flex-none text-sm text-white/50 tabular-nums">KD {s.lane}</span>
-                      <span className="min-w-0 flex-1 truncate text-[1.0625rem] font-semibold">{s.name}</span>
-                      <span className="text-xl font-semibold text-yellow tabular-nums">{s.total}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-            <section className="flex flex-col gap-3.5 rounded-3xl border border-border bg-surface px-5 py-[1.375rem] sm:px-7">
-              <span className="text-[0.9375rem] font-semibold text-muted">Hierna</span>
-              {view.next.length === 0 && <span className="text-[1.0625rem] text-muted">Laatste beurt van de wedstrijd.</span>}
-              {view.next.map((h, i) => (
-                <div
-                  key={i}
-                  className={`flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 ${i === 0 ? "" : "border-t border-[#f0f0ec] pt-3"}`}
-                >
-                  <span className={`font-semibold tracking-[-0.01em] ${i === 0 ? "text-2xl" : "text-[1.0625rem]"}`}>{h.names.join(" & ")}</span>
-                  <span className="text-sm text-muted">
-                    {h.roundLabel ?? `Ronde ${h.round}`} · {h.rankName} · beurt {h.heatNumber}
-                  </span>
-                </div>
-              ))}
-            </section>
+      {onLine && current && <LineHero current={current} />}
+
+      <div className="flex flex-wrap items-start gap-[clamp(1rem,2.5cqw,1.5rem)]">
+        {side && (
+          <div className="flex min-w-0 flex-[1_1_20rem] flex-col gap-[clamp(1rem,2.5cqw,1.5rem)]">
+            {pausing && <Countdown view={view} />}
+            {podium && <Podium ranks={view.ranks} />}
+            {onLine && <Next next={view.next} />}
+            {firstUp && <FirstUp current={firstUp} />}
           </div>
         )}
-
-        {view.ranks.length > 0 && selectedRank && (
-          <section className="flex min-w-0 flex-col gap-4 rounded-3xl border border-border bg-surface px-5 pb-6 pt-[1.375rem] sm:px-7">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="text-[1.375rem] font-semibold tracking-[-0.01em]">{isLive ? "Voorlopige stand" : "Uitslag"}</h2>
-              <span className="text-[0.8125rem] text-subtle">{view.passNote}</span>
-            </div>
-            <div
-              className="sticky top-0 z-[2] -mx-5 flex flex-nowrap gap-1.5 overflow-x-auto bg-surface px-5 py-2.5 [scrollbar-width:none] sm:static sm:mx-0 sm:flex-wrap sm:px-0 sm:py-0"
-              role="tablist"
-            >
-              {view.ranks.map((r) => {
-                const on = r.code === selectedRank.code;
-                const shooting = isLive && r.name === current?.rankName;
-                return (
-                  <button
-                    key={r.code}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    onClick={() => setRankTab(r.code)}
-                    className={`flex min-h-11 flex-none cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-[0.4375rem] text-sm font-semibold sm:min-h-0 ${
-                      on ? "border-ink bg-ink text-white" : "border-border bg-surface hover:border-ink"
-                    }`}
-                  >
-                    {r.name}
-                    {shooting && <span className={`size-[0.4375rem] rounded-full ${on ? "bg-yellow" : "bg-live"}`} />}
-                  </button>
-                );
-              })}
-            </div>
-            <RankList rank={selectedRank} view={view} isLive={isLive} />
-          </section>
-        )}
+        {view.ranks.length > 0 && <Standings view={view} isLive={isLive} onLine={onLine} />}
       </div>
     </div>
   );
 }
 
-function RankList({ rank, view, isLive }: { rank: PublicRank; view: PublicView; isLive: boolean }) {
-  const current = isLive ? view.current : null;
-  const nextIds = isLive ? (view.next[0]?.shooterIds ?? []) : [];
-  const livePass = (shooterId: string) => {
-    return current?.shooters.find((x) => x.shooterId === shooterId)?.col ?? -1;
-  };
-  const scrollable = rank.rows.length > 9;
-  const fade = scrollable ? "sm:[mask-image:linear-gradient(#000_0,#000_calc(100%-2.5rem),transparent)]" : "";
-
+/** "Bijgewerkt om 14:32" under the progress bar; on a phone "14:32" (or "Offline") in its label row. */
+function Updated({ at, stale, narrow = false }: { at: string; stale: boolean; narrow?: boolean }) {
+  const time = clock.format(new Date(at));
   return (
-    <>
-      <div className="-mb-2.5 flex justify-between text-xs text-subtle">
-        <span>{rank.rows.filter((r) => !r.withdrawn).length} schutters</span>
-        {scrollable && <span className="hidden sm:inline">scroll voor de volledige stand</span>}
-      </div>
-      <div className={`-mx-3 flex flex-col overscroll-contain px-3 ${scrollable ? "sm:max-h-[min(35rem,62vh)] sm:overflow-y-auto" : ""} ${fade}`}>
-        {rank.rows.map((row) => {
-          const now = livePass(row.shooterId);
-          const onLine = now >= 0;
-          const tag = onLine ? "Nu aan de lijn" : nextIds.includes(row.shooterId) ? "Hierna" : row.withdrawn ? "afgehaakt" : TIE[row.tie];
-          const strong = onLine || row.position === 1;
-          return (
-            <div
-              key={row.shooterId}
-              className={`-mx-3 flex items-center gap-2.5 rounded-xl sm:gap-3.5 border-b border-[#f0f0ec] px-3 py-2.5 ${onLine ? "bg-yellow-light" : ""} ${row.withdrawn ? "text-faint" : ""}`}
-            >
-              <span className={`w-6 text-base font-semibold tabular-nums ${strong ? "text-ink" : "text-subtle"}`}>{row.position ?? "–"}</span>
-              <div className="flex min-w-0 flex-1 flex-col gap-[0.0625rem]">
-                <Link href={`/schutter/${row.shooterId}`} className={`truncate text-[1.0625rem] hover:underline ${strong ? "font-bold" : "font-medium"}`}>
-                  {row.name}
-                </Link>
-                {tag && <span className="text-xs font-semibold text-muted">{tag}</span>}
-              </div>
-              <div className="flex gap-[0.3125rem]">
-                {row.passes.map((p, i) => (
-                  <span
-                    key={i}
-                    title={`${view.passLabels[i]}${p === null ? "" : `: ${p}`}`}
-                    className="box-border size-2.5 rounded-full border-2"
-                    style={{
-                      background: i === now ? "var(--yellow)" : p === null ? "transparent" : "var(--ink)",
-                      borderColor: i === now || p !== null ? "var(--ink)" : "var(--plate)",
-                    }}
-                  />
-                ))}
-              </div>
-              <span className="w-10 text-right text-lg font-semibold tabular-nums">{row.total}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap gap-x-[1.125rem] gap-y-1.5 text-xs text-subtle">
-        <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full bg-ink" />
-          geschoten
-        </span>
-        {isLive && (
-          <span className="flex items-center gap-1.5">
-            <span className="box-border size-2.5 rounded-full border-2 border-ink bg-yellow" />
-            nu bezig
-          </span>
-        )}
-        <span className="flex items-center gap-1.5">
-          <span className="box-border size-2.5 rounded-full border-2 border-plate" />
-          nog te schieten
-        </span>
-      </div>
-    </>
+    <span
+      className={`flex items-center gap-1.5 ${narrow ? "md:hidden" : "justify-end text-sm max-md:hidden"} ${stale ? "text-error" : "text-muted"}`}
+    >
+      <span className={`size-[0.4375rem] rounded-full ${stale ? "bg-error" : "bg-good"}`} />
+      {stale ? (narrow ? "Offline" : "Verbinding verloren, opnieuw proberen…") : narrow ? time : `Bijgewerkt om ${time}`}
+    </span>
   );
 }

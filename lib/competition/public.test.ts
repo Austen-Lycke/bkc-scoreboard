@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SPANISH_KNOCKDOWN } from "@/lib/scoring";
+import { passKey, SPANISH_KNOCKDOWN } from "@/lib/scoring";
 import { buildDemoSnapshot, buildState, competitionProgress, competitionSchedule, publicName, publicView, type CompetitionEvent } from ".";
 
 describe("publicName", () => {
@@ -54,5 +54,38 @@ describe("publicView", () => {
     expect(view.passLabels).toEqual(["R1 KD1", "R1 KD2", "R2 KD1", "R2 KD2"]);
     const junior = view.ranks.find((r) => r.code === "junior")!;
     expect(junior.rows[0].passes.filter((p) => p !== null)).toHaveLength(1);
+  });
+
+  it("shows the operator's unsaved taps for the heat on the line only, and the break countdown only in a break", () => {
+    const snapshot = buildDemoSnapshot(new Date("2026-11-07T09:00:00Z"));
+    const statusEvent = (status: "round1" | "break"): CompetitionEvent => ({
+      id: crypto.randomUUID(),
+      competitionId: "demo",
+      deviceId: "t",
+      at: "2026-11-07T10:00:00.000Z",
+      type: "status.set",
+      payload: { status },
+    });
+    const state = buildState(snapshot, [statusEvent("round1")]);
+    expect(state.status).toBe("round1");
+    const heat = competitionSchedule(state)[competitionProgress(state).heatIndex!];
+    const [a, b] = heat.phases[0];
+    const later = competitionSchedule(state)[5].phases[0][0];
+    const live = {
+      drafts: { [passKey(a.entryId, 1, a.knockdown)]: ["top-10", "top-6"], [passKey(later.entryId, 1, later.knockdown)]: ["top-10"] },
+      draftScores: {},
+      pauseEndsAt: "2026-11-07T10:10:00.000Z",
+      at: "2026-11-07T10:01:00.000Z",
+    };
+    const view = publicView(state, live);
+    const [sa, sb] = view.current!.shooters;
+    expect(sa.pass).toEqual({ hits: ["top-10", "top-6"], score: 16 });
+    expect(sa.total).toBe(16);
+    expect(sb.pass.score).toBe(0);
+    expect(view.current!.setup.id).toBe("spanish_knockdown");
+    expect(view.pauseEndsAt).toBeNull();
+    expect(view.updatedAt).toBe("2026-11-07T10:01:00.000Z");
+    expect(JSON.stringify(view)).not.toContain(passKey(b.entryId, 1, b.knockdown));
+    expect(publicView(buildState(snapshot, [statusEvent("break")]), live).pauseEndsAt).toBe(live.pauseEndsAt);
   });
 });

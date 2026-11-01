@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CLUB_TIME_ZONE } from "@/components/public/format";
+import { useClubClock } from "@/components/use-now";
 
 /** The canvas in rem: 1920×1080 at the default 16px root size. */
 const W = 120;
@@ -61,14 +61,7 @@ export function Stage({ children }: { children: ReactNode }) {
 }
 
 export function TopBar({ name, phase, progress }: { name: string; phase?: string | null; progress?: ReactNode }) {
-  const [time, setTime] = useState("");
-  useEffect(() => {
-    const fmt = new Intl.DateTimeFormat("nl-BE", { hour: "2-digit", minute: "2-digit", timeZone: CLUB_TIME_ZONE });
-    const tick = () => setTime(fmt.format(new Date()));
-    tick();
-    const t = setInterval(tick, 10_000);
-    return () => clearInterval(t);
-  }, []);
+  const time = useClubClock();
 
   return (
     <header className="flex flex-none items-center gap-12">

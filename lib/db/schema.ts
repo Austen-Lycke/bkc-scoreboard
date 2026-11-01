@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { CompetitionLive } from "@/lib/competition/public";
 import type { CompetitionFormat, SeasonRule, Setup } from "@/lib/scoring";
 
 const timestamps = {
@@ -130,6 +131,8 @@ export const competitions = pgTable(
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
     /** How many logged events the derived tables were last built from; a mismatch triggers a rebuild. */
     materializedEvents: integer("materialized_events").notNull().default(0),
+    /** Unsaved taps and the break countdown from the operator laptop, for the live website. */
+    live: jsonb("live").$type<CompetitionLive>(),
     ...timestamps,
   },
   (t) => [uniqueIndex("competitions_slug_idx").on(t.slug), index("competitions_season_idx").on(t.seasonYear)],

@@ -174,4 +174,25 @@ describe("applySync (database)", () => {
     expect(rows.map((p) => p.entryId).sort()).toEqual([...entryIds].sort());
     expect((await competition()).materializedEvents).toBe(events.length + 2);
   });
+
+  it("keeps the laptop's unsaved taps for the live page, refreshing it only when they change", async () => {
+    const { make } = makeEvents();
+    const { entryIds, events } = checkIns(make);
+    const live = (drafts: Record<string, string[]>, at: string) => ({ drafts, draftScores: {}, pauseEndsAt: null, at });
+    const tapped = { [`${entryIds[0]}:1:1`]: ["top-10"] };
+
+    await sync(events, { live: live(tapped, "2026-11-07T10:00:00.000Z") });
+    expect((await competition()).live?.drafts).toEqual(tapped);
+
+    // The heartbeat sends the same taps with a new time: nothing to refresh.
+    expect(await sync([], { live: live(tapped, "2026-11-07T10:00:10.000Z") })).toMatchObject({ kind: "ok", tags: [] });
+    // A new tap refreshes this competition's page, and nothing else.
+    const more = await sync([], { live: live({ [`${entryIds[0]}:1:1`]: ["top-10", "top-6"] }, "2026-11-07T10:00:12.000Z") });
+    expect(more).toMatchObject({ kind: "ok", tags: [`competition:${competitionId}`] });
+    expect((await competition()).live?.drafts[`${entryIds[0]}:1:1`]).toEqual(["top-10", "top-6"]);
+
+    // Another device can't overwrite them without taking over.
+    expect((await sync([], { deviceId: "laptop-b", live: live({}, "2026-11-07T10:00:13.000Z") })).kind).toBe("lease");
+    expect((await competition()).live?.drafts).not.toEqual({});
+  });
 });

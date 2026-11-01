@@ -39,11 +39,11 @@ export async function getCompetitionList() {
 }
 
 async function viewFor(slug: string): Promise<{ view: PublicView; competitionId: string } | null> {
-  const comp = await getDb().query.competitions.findFirst({ where: eq(competitions.slug, slug), columns: { id: true, status: true } });
+  const comp = await getDb().query.competitions.findFirst({ where: eq(competitions.slug, slug), columns: { id: true, status: true, live: true } });
   if (!comp || comp.status === "draft") return null;
   const snapshot = await buildSnapshot(comp.id);
   if (!snapshot) return null;
-  return { view: publicView(buildState(snapshot)), competitionId: comp.id };
+  return { view: publicView(buildState(snapshot), comp.live), competitionId: comp.id };
 }
 
 /** A competition's results: cached until the next sync for it. */

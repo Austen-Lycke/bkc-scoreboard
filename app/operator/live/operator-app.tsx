@@ -14,7 +14,7 @@ import {
 import { downloadSnapshot } from "@/lib/offline/api";
 import { ACTIVE_COMPETITION_KEY, setMeta } from "@/lib/offline/db";
 import { resetDemo, saveSnapshot, updateLive, useLocalCompetition } from "@/lib/offline/store";
-import { syncNow, useSyncLoop, useSyncStatus, type SyncStatus } from "@/lib/offline/sync";
+import { liveSyncKey, syncNow, useSyncLoop, useSyncStatus, type SyncStatus } from "@/lib/offline/sync";
 import { openTvWindow } from "@/lib/offline/tv-window";
 import { useQueryParam } from "@/lib/offline/url";
 import { CompetitionContext, NavContext, useComp, useNav, type Tab } from "./context";
@@ -80,7 +80,7 @@ const TABS: { id: Tab; label: string; also?: Tab[] }[] = [
 function Shell() {
   const { state, unsynced, id, live } = useComp();
   const demo = !!state.snapshot.isDemo;
-  useSyncLoop(id, !demo, unsynced);
+  useSyncLoop(id, !demo, unsynced, liveSyncKey(live));
   const sync = useSyncStatus(id);
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);

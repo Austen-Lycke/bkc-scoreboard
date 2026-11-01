@@ -36,6 +36,13 @@
       "when": 1792749232196,
       "tag": "0004_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793555075520,
+      "tag": "0005_live_drafts",
+      "breakpoints": true
     }
   ]
 }

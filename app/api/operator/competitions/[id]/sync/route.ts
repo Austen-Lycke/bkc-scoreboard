@@ -1,6 +1,7 @@
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { hasRole } from "@/lib/auth";
+import { competitionLiveSchema } from "@/lib/competition";
 import { sessionWithRole } from "@/lib/server/auth-guard";
 import { applySync } from "@/lib/server/sync";
 
@@ -8,6 +9,7 @@ const body = z.object({
   deviceId: z.string().min(1).max(100),
   takeover: z.boolean().optional(),
   events: z.array(z.unknown()).max(500),
+  live: competitionLiveSchema.nullable().optional(),
 });
 
 /** The operator laptop pushes its event log here (in batches) whenever it has a connection. */
@@ -27,6 +29,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/operator/co
       deviceId: parsed.data.deviceId,
       takeover: parsed.data.takeover ?? false,
       events: parsed.data.events,
+      live: parsed.data.live,
       mayEditClosedSeason: hasRole(auth.session.user.role, "admin"),
     });
   } catch (err) {

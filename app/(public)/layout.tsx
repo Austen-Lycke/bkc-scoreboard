@@ -1,39 +1,32 @@
 import Link from "next/link";
+import { SiteHeader } from "@/components/public/site-header";
 
+/**
+ * The public website, in the TV screen's language (designer's "BKC Website" handoff). Sizes scale
+ * with the page width (cqw), the same on a phone and on a desktop; below md a phone shows less text
+ * on purpose (docs: MOBILE.md in the handoff).
+ */
 export default function PublicLayout({ children }: LayoutProps<"/">) {
   return (
-    <>
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex max-w-[75rem] flex-wrap items-center gap-x-8 gap-y-3 px-4 py-4 sm:px-6">
-          <Link href="/" className="text-xl font-bold tracking-[0.2em] hover:no-underline">
-            BKC
-          </Link>
-          <nav className="flex flex-wrap gap-x-6 gap-y-1 text-base text-muted">
-            <Link href="/" className="flex items-center gap-2 font-semibold text-ink hover:underline">
-              <span className="size-2 rounded-full bg-live" />
-              Live
-            </Link>
-            <Link href="/kalender" className="hover:text-ink hover:underline">
-              Kalender
-            </Link>
-            <Link href="/klassement" className="hover:text-ink hover:underline">
-              Klassement
-            </Link>
-          </nav>
-        </div>
-      </header>
-      <main className="mx-auto w-full max-w-[75rem] flex-1 px-4 pb-12 pt-8 sm:px-6">{children}</main>
-      <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-[75rem] flex-wrap justify-between gap-x-6 gap-y-2 px-4 py-5 text-[0.8125rem] text-subtle sm:px-6">
-          <span>De scores worden live doorgegeven door de wedstrijdleiding.</span>
-          <span>
-            Brugse Katapultclub ·{" "}
-            <Link href="/operator" className="hover:text-ink hover:underline">
+    <div className="@container flex min-h-full flex-1 flex-col tabular-nums">
+      <SiteHeader />
+      <main className="mx-auto box-border w-full max-w-[75rem] flex-1 px-[clamp(1rem,4cqw,2.5rem)] pb-[clamp(3rem,6cqw,5rem)] pt-[clamp(1.5rem,4cqw,3.5rem)]">
+        {children}
+      </main>
+      <footer className="border-t-2 border-border">
+        <div className="mx-auto box-border flex max-w-[75rem] flex-wrap items-center justify-between gap-x-6 gap-y-1 px-[clamp(1rem,4cqw,2.5rem)] py-4 text-[0.9375rem] text-muted">
+          <span className="py-2 max-md:hidden">De scores worden live doorgegeven door de wedstrijdleiding.</span>
+          <span className="flex items-center gap-1.5">
+            Brugse Katapultclub ·
+            <Link
+              href="/operator"
+              className="inline-flex min-h-11 items-center font-semibold text-ink underline decoration-yellow decoration-2 underline-offset-4 hover:decoration-ink"
+            >
               Wedstrijdleiding
             </Link>
           </span>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

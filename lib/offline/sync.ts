@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { CLUB_TIME_ZONE } from "@/components/public/format";
 import { downloadSnapshot } from "./api";
-import { deviceId, offlineDb, type StoredEvent } from "./db";
+import { deviceId, offlineDb, type LiveRecord, type StoredEvent } from "./db";
 import { saveSnapshot, updateLive } from "./store";
 
 /**
@@ -23,9 +23,13 @@ const BATCH = 200;
 const HEARTBEAT_MS = 10_000;
 /** Venue wifi can hang a request for minutes; give up and retry on the next heartbeat. */
 const SYNC_TIMEOUT_MS = 15_000;
+/** Taps come in quick runs: share them with the website once the run pauses. */
+const LIVE_DEBOUNCE_MS = 800;
 const statuses = new Map<string, SyncStatus>();
 const listeners = new Set<() => void>();
 const inFlight = new Set<string>();
+/** Asked to sync while a sync was running: once more when it's done, so the latest taps go out. */
+const again = new Set<string>();
 const IDLE: SyncStatus = { state: "idle", lastSyncAt: null };
 
 function setStatus(id: string, patch: Partial<SyncStatus>) {
@@ -46,12 +50,21 @@ export function useSyncStatus(competitionId: string): SyncStatus {
 /** The event as the server expects it, without the local bookkeeping fields. */
 const toWire = (e: StoredEvent) => ({ id: e.id, competitionId: e.competitionId, deviceId: e.deviceId, at: e.at, type: e.type, payload: e.payload });
 
+/** What the live website gets from the live record: unsaved taps and typed scores, and the break countdown. */
+const liveToWire = (live: LiveRecord | undefined) => ({
+  drafts: live?.drafts ?? {},
+  draftScores: live?.draftScores ?? {},
+  pauseEndsAt: live?.pauseEndsAt ?? null,
+  at: new Date().toISOString(),
+});
+
 /** One sync per competition across every tab and window of this browser, not only this one. */
 export async function syncNow(competitionId: string, opts: { takeover?: boolean } = {}): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.locks) {
     // A heartbeat skips when another tab is already syncing; a takeover waits its turn.
     await navigator.locks.request(`bkc-sync:${competitionId}`, { ifAvailable: !opts.takeover }, async (lock) => {
       if (lock) await runSync(competitionId, opts);
+      else again.add(competitionId);
     });
     return;
   }
@@ -59,8 +72,12 @@ export async function syncNow(competitionId: string, opts: { takeover?: boolean 
 }
 
 async function runSync(competitionId: string, { takeover = false }: { takeover?: boolean } = {}): Promise<void> {
-  if (inFlight.has(competitionId)) return;
+  if (inFlight.has(competitionId)) {
+    again.add(competitionId);
+    return;
+  }
   inFlight.add(competitionId);
+  again.delete(competitionId);
   try {
     const db = offlineDb();
     const device = await deviceId();
@@ -69,12 +86,13 @@ async function runSync(competitionId: string, { takeover = false }: { takeover?:
     // An empty push still runs: it's the heartbeat that confirms the connection and the lease.
     do {
       const batch = pending.slice(0, BATCH);
+      const live = liveToWire(await db.live.get(competitionId));
       let res: Response;
       try {
         res = await fetch(`/api/operator/competitions/${competitionId}/sync`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceId: device, takeover, events: batch.map(toWire) }),
+          body: JSON.stringify({ deviceId: device, takeover, events: batch.map(toWire), live }),
           signal: AbortSignal.timeout(SYNC_TIMEOUT_MS),
         });
       } catch {
@@ -121,11 +139,15 @@ async function runSync(competitionId: string, { takeover = false }: { takeover?:
     setStatus(competitionId, { state: "error", message: (err as Error).message });
   } finally {
     inFlight.delete(competitionId);
+    if (again.has(competitionId)) setTimeout(() => void syncNow(competitionId), LIVE_DEBOUNCE_MS);
   }
 }
 
-/** Keeps syncing while the operator screen is open: right after each action, and as a heartbeat. */
-export function useSyncLoop(competitionId: string, enabled: boolean, unsynced: number) {
+/**
+ * Keeps syncing while the operator screen is open: right after each action, shortly after taps and
+ * countdowns change (`liveKey`), and as a heartbeat.
+ */
+export function useSyncLoop(competitionId: string, enabled: boolean, unsynced: number, liveKey = "") {
   useEffect(() => {
     if (!enabled) return;
     void syncNow(competitionId);
@@ -145,4 +167,13 @@ export function useSyncLoop(competitionId: string, enabled: boolean, unsynced: n
   useEffect(() => {
     if (enabled && unsynced > 0) void syncNow(competitionId);
   }, [competitionId, enabled, unsynced]);
+
+  useEffect(() => {
+    if (!enabled || !liveKey) return;
+    const timer = setTimeout(() => void syncNow(competitionId), LIVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [competitionId, enabled, liveKey]);
 }
+
+/** Changes whenever something the live website shows from the live record changes. */
+export const liveSyncKey = (live: LiveRecord | undefined) => JSON.stringify([live?.drafts ?? {}, live?.draftScores ?? {}, live?.pauseEndsAt ?? null]);
