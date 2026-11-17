@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ageOn, JUNIOR_AGE_LIMIT, maxPassScore, passKey, publicDisplayName, scorePass, type Setup, type TieState } from "@/lib/scoring";
+import { ageOn, JUNIOR_AGE_LIMIT, maxPassScore, passKey, publicDisplayName, publicNameParts, scorePass, type Setup, type TieState } from "@/lib/scoring";
 import {
   competitionProgress,
   competitionSchedule,
@@ -124,17 +124,25 @@ export function publicName(
   shooter: { firstName: string; lastName: string; birthdate: string | null },
   opts: { isJuniorRank: boolean; onDate: string },
 ): string {
-  const minor = opts.isJuniorRank || (!!shooter.birthdate && ageOn(shooter.birthdate, opts.onDate) < JUNIOR_AGE_LIMIT);
-  return publicDisplayName(shooter, minor);
+  return publicDisplayName(shooter, isMinor(shooter, opts));
 }
+
+const isMinor = (shooter: { birthdate: string | null }, opts: { isJuniorRank: boolean; onDate: string }) =>
+  opts.isJuniorRank || (!!shooter.birthdate && ageOn(shooter.birthdate, opts.onDate) < JUNIOR_AGE_LIMIT);
 
 /** The name the venue TV shows: like the website, juniors never with their full name. */
 export function tvName(state: CompetitionState, entryId: string): string {
+  const { first, last } = tvNameParts(state, entryId);
+  return `${first} ${last}`.trim();
+}
+
+/** {@link tvName} in its two parts, for the WSA board that sets the first name apart. */
+export function tvNameParts(state: CompetitionState, entryId: string): { first: string; last: string } {
   const entry = state.entries.get(entryId);
   const shooter = entry && state.shooters.get(entry.shooterId);
-  if (!entry || !shooter) return "Onbekend";
+  if (!entry || !shooter) return { first: "Onbekend", last: "" };
   const isJuniorRank = !!state.snapshot.ranks.find((r) => r.code === entry.rankCode)?.isJunior;
-  return publicName(shooter, { isJuniorRank, onDate: state.snapshot.competition.date });
+  return publicNameParts(shooter, isMinor(shooter, { isJuniorRank, onDate: state.snapshot.competition.date }));
 }
 
 export function publicView(state: CompetitionState, live?: CompetitionLive | null): PublicView {

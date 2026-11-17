@@ -3,10 +3,15 @@ export function publicDisplayName(
   person: { firstName: string; lastName: string },
   isJunior: boolean,
 ): string {
+  const { first, last } = publicNameParts(person, isJunior);
+  return `${first} ${last}`.trim();
+}
+
+/** The public name in its two parts, for a board that sets them apart: a junior's last name is "L.". */
+export function publicNameParts(person: { firstName: string; lastName: string }, isJunior: boolean): { first: string; last: string } {
   const first = person.firstName.trim();
   const last = person.lastName.trim();
-  if (!isJunior) return `${first} ${last}`.trim();
-  return last ? `${first} ${last[0].toUpperCase()}.` : first;
+  return { first, last: isJunior && last ? `${last[0].toUpperCase()}.` : last };
 }
 
 export function fullName(person: { firstName: string; lastName: string }): string {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useClubClock } from "@/components/use-now";
 import { useSoundUnlocked } from "@/components/sound";
 
@@ -199,4 +199,70 @@ export function Centered({
       )}
     </>
   );
+}
+
+/** Bricolage at its narrowest width: the condensed type of the WSA board. Needs `condensed` from ../fonts. */
+export const COND = "font-[family-name:var(--font-tv-cond)] [font-variation-settings:'wdth'_75]";
+
+/** Slanted edges, like the bars of a broadcast graphic: the right or the left edge cut by `cut`. */
+export const slantRight = (cut = "2rem"): CSSProperties => ({ clipPath: `polygon(0 0, 100% 0, calc(100% - ${cut}) 100%, 0 100%)` });
+export const slantLeft = (cut = "2rem"): CSSProperties => ({ clipPath: `polygon(${cut} 0, 100% 0, 100% 100%, 0 100%)` });
+
+/**
+ * One line that scrolls sideways, on and on, once it no longer fits: a second copy follows the
+ * first after a |, so the loop never jumps and it's clear where the list starts over. Fits it, it
+ * stands still.
+ */
+export function Ticker({ children, className = "" }: { children: ReactNode; className?: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const track = useRef<HTMLDivElement>(null);
+  const first = useRef<HTMLSpanElement>(null);
+  const [over, setOver] = useState(false);
+
+  useEffect(() => {
+    const b = box.current;
+    const f = first.current;
+    if (!b || !f) return;
+    // Once it moves, the | in the first copy adds to its width, so it doesn't flip back and forth.
+    const ro = new ResizeObserver(() => setOver(f.scrollWidth > b.clientWidth + 1));
+    ro.observe(b);
+    ro.observe(f);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const tr = track.current;
+    if (!over || !tr) return;
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    // Half the track is one copy; about 6rem a second reads comfortably from the line.
+    const seconds = tr.scrollWidth / 2 / (6 * rem);
+    const run = tr.animate([{ transform: "translateX(0)" }, { transform: "translateX(-50%)" }], { duration: seconds * 1000, iterations: Infinity });
+    return () => run.cancel();
+  }, [over]);
+
+  return (
+    <div
+      ref={box}
+      className={`min-w-0 overflow-hidden ${className}`}
+      style={over ? { maskImage: "linear-gradient(90deg, transparent, black 2.5rem, black calc(100% - 2.5rem), transparent)" } : undefined}
+    >
+      <div ref={track} className="flex w-max">
+        <span ref={first} className="whitespace-nowrap">
+          {children}
+          {over && <LoopMark />}
+        </span>
+        {over && (
+          <span aria-hidden className="whitespace-nowrap">
+            {children}
+            <LoopMark />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Where a scrolling list starts over. */
+function LoopMark() {
+  return <span className="px-10 font-bold text-yellow">|</span>;
 }

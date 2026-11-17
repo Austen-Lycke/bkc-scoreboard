@@ -84,6 +84,8 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
   const lastRound = schedule.at(-1)?.round ?? comp.rounds;
 
   let body: ReactNode;
+  // The WSA board brings its own header (BKC, the beurt and the series clock): no top bar above it.
+  let board = false;
   switch (state.status) {
     case "prepared": {
       const n = [...state.entries.values()].filter((e) => !e.withdrawn).length;
@@ -108,10 +110,11 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       const cut = pendingShootoffs(state).find((p) => p.stage);
       // Round 1 is shot and the operator hasn't chosen between a break and going on yet.
       const between = heat && focusIndex < 0 && phaseDone(state, heat.round);
+      board = !between && !!heat && setupFor(state, heat.groupCode, heat.round).entry === "points";
       body = between ? (
         <Centered kicker={comp.name} title={`${PHASE_LABEL[state.status]} is klaar`} sub="Zo meteen gaan we verder." bar={firstUp} />
       ) : heat ? (
-        setupFor(state, heat.groupCode, heat.round).entry === "points" ? (
+        board ? (
           <LiveLine state={state} live={live} schedule={schedule} heatIndex={heatIndex!} />
         ) : (
           <LiveHeat state={state} live={live} schedule={schedule} heatIndex={heatIndex!} phaseIndex={Math.min(phaseIndex, heat.phases.length - 1)} />
@@ -132,21 +135,23 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
 
   return (
     <>
-      <TopBar
-        name={comp.name}
-        phase={shooting ? null : PHASE_LABEL[state.status]}
-        progress={
-          shooting ? (
-            <HeatProgress
-              variant="tv"
-              rounds={schedule.map((h) => h.round)}
-              current={heatIndex}
-              endLabel={roundTitle(state, lastRound)}
-              className="w-[47.5rem]"
-            />
-          ) : null
-        }
-      />
+      {!board && (
+        <TopBar
+          name={comp.name}
+          phase={shooting ? null : PHASE_LABEL[state.status]}
+          progress={
+            shooting ? (
+              <HeatProgress
+                variant="tv"
+                rounds={schedule.map((h) => h.round)}
+                current={heatIndex}
+                endLabel={roundTitle(state, lastRound)}
+                className="w-[47.5rem]"
+              />
+            ) : null
+          }
+        />
+      )}
       {body}
       <StartCountdown live={live} heat={heat} />
     </>

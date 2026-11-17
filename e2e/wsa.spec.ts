@@ -88,9 +88,10 @@ test("the line runs ahead of the cards; the TV shows saved scores only; a typo i
   watchErrors(tv, errors);
   await tv.setViewportSize({ width: 1920, height: 1080 });
   await tv.goto("/tv?c=demo-wsa");
-  const line = tv.locator("section", { hasText: "Nu aan de lijn" });
+  const line = tv.getByRole("region", { name: "Nu aan de lijn" });
   await expect(line).toContainText("Ronde 1 · Junior");
-  await expect(line).toContainText("KD 3");
+  // The board: a header row and the three juniors.
+  await expect(line.getByRole("row")).toHaveCount(4);
 
   // The juniors are done shooting: the adults go to their frames before any card is typed.
   await page.getByRole("button", { name: "Volgende beurt →" }).click();
@@ -128,16 +129,17 @@ test("the line runs ahead of the cards; the TV shows saved scores only; a typo i
   await expect(line).toContainText("Ronde 1 · Volwassenen");
   await expect(tab(page, "Kaarten")).toHaveText("Kaarten");
 
-  // Typed but not saved: not on the TV.
+  // Typed but not saved: not on the TV. Saved: the series and the total.
+  const shown28 = line.getByRole("cell", { name: "28", exact: true });
   await cells(page).first().fill("28");
-  await expect(line).not.toContainText("28 · –");
+  await expect(shown28).toHaveCount(0);
   await page.getByRole("button", { name: /^Opslaan/ }).click();
-  await expect(line).toContainText("28 · –");
+  await expect(shown28).toHaveCount(2);
 
   // Undo: the adult card goes back to a draft.
   await page.getByRole("button", { name: /Ongedaan maken/ }).click();
   await expect(cells(page).first()).toHaveValue("28");
-  await expect(line).not.toContainText("28 · –");
+  await expect(shown28).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });
@@ -152,11 +154,11 @@ test("the series countdown and the warmup run on the TV", async ({ context, page
   await page.getByRole("button", { name: "Start reeks 1" }).click();
   await expect(page.locator("main")).toContainText("Aftellen op TV");
   await expect(tv.getByRole("timer", { name: "Aftellen" })).toHaveText(/^[321]$/);
-  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText("2 × 2:30");
+  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:30$/);
   await expect(page.locator("main")).toContainText(/Reeks 1\s*2:(30|29|28)/, { timeout: 6000 });
-  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/);
+  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:(30|29|28)$/);
   await page.getByRole("button", { name: "Stop" }).click();
-  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText("2 × 2:30");
+  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:30$/);
 
   await page.getByLabel("Fase").selectOption({ label: "Opwarming" });
   await expect(page.getByText("Opwarmtimer op TV")).toBeVisible();
@@ -177,7 +179,7 @@ test("starting series 1 during the warmup moves on to round 1, so the TV shows t
   await expect(page.getByLabel("Fase")).toHaveValue("round1");
   // One countdown: the warmup's is gone, the series' is on the TV.
   await expect(page.getByText("Opwarmtimer op TV")).toHaveCount(0);
-  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/, { timeout: 6000 });
+  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:(30|29|28)$/, { timeout: 6000 });
 });
 
 test("semi-final and final can be switched off in Voorbereiden", async ({ page }) => {

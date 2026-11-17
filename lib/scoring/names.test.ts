@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { similarNames, tidyName } from "./names";
+import { publicDisplayName, publicNameParts, similarNames, tidyName } from "./names";
+
+describe("publicNameParts", () => {
+  it("splits the public name, a junior's last name shortened", () => {
+    const p = { firstName: " Lotte ", lastName: "Dewulf" };
+    expect(publicNameParts(p, false)).toEqual({ first: "Lotte", last: "Dewulf" });
+    expect(publicNameParts(p, true)).toEqual({ first: "Lotte", last: "D." });
+    expect(publicDisplayName(p, true)).toBe("Lotte D.");
+    expect(publicDisplayName({ firstName: "Mo", lastName: "" }, true)).toBe("Mo");
+  });
+});
 
 describe("tidyName", () => {
   it("capitalises a name typed in lower or upper case", () => {
