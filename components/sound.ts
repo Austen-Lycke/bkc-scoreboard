@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 /**
  * The TV's sounds, made with Web Audio (no files, works offline). Every tone has a soft attack and a
  * smooth fade, so nothing clicks; a gentle lowpass and compressor keep cheap speakers from fizzing.
- * Picked by ear on a listening page (2026-11-17): countdown and start = "C Helder", series start =
- * "C1" (one high pip), series end = "C3" (one long low tone).
+ * Picked by ear on a listening page (2026-11-17), in C major: E5 pips 1 s apart for 3-2-1, one high
+ * E6 pip of 1.3 s for "Start!" and as a WSA series starts, three short low C5 tones as it ends.
  */
 
 // Browsers only play sound after a click on the page; the TV window gets one when it's set up.
@@ -70,19 +70,6 @@ function tone(c: AudioContext, f: number, t: number, { gain, attack = 0.005, hol
   osc.stop(t + attack + hold + release + 0.05);
 }
 
-/** A small bell: a few partials, the higher ones fading first, with a slow shimmer. */
-function bell(c: AudioContext, f: number, t: number, gain: number, length: number) {
-  const partials = [
-    [1, 1, 1],
-    [2, 0.42, 0.6],
-    [3, 0.2, 0.4],
-    [4.2, 0.09, 0.25],
-    [5.4, 0.04, 0.15],
-  ];
-  for (const [ratio, amp, decay] of partials) tone(c, f * ratio, t, { gain: gain * amp, attack: 0.004, release: length * decay });
-  tone(c, f, t, { gain: gain * 0.35, attack: 0.004, release: length, detune: 5 });
-}
-
 /** A soft pip: a short held sine with a round onset, plus a whisper of the octave. */
 function pip(c: AudioContext, f: number, t: number, gain: number, hold: number, release: number) {
   tone(c, f, t, { gain, attack: 0.012, hold, release });
@@ -91,9 +78,7 @@ function pip(c: AudioContext, f: number, t: number, gain: number, hold: number, 
 
 const C5 = 523.25;
 const E5 = 659.25;
-const C6 = 1046.5;
 const E6 = 1318.51;
-const G6 = 1567.98;
 
 /** Plays `sound` now, if sound is unlocked; silent otherwise. */
 function play(sound: (c: AudioContext, t: number) => void) {
@@ -104,17 +89,14 @@ function play(sound: (c: AudioContext, t: number) => void) {
 /** 3, 2, 1: a soft mid pip. */
 export const playTick = () => play((c, t) => pip(c, E5, t, 0.24, 0.12, 0.2));
 
-/** Start of a beurt: a bright C-major chord of bells over a held pip. */
-export const playGo = () =>
+/** A beurt or a WSA series starts: one high pip, an octave above the ticks, 1.3 seconds in all. */
+export const playSeriesStart = () => play((c, t) => pip(c, E6, t, 0.2, 0.79, 0.5));
+
+/** "Start!" after the 3-2-1: the same pip as a series start. */
+export const playGo = playSeriesStart;
+
+/** A WSA series ends: three short low tones, like archery's three blasts for "stop". */
+export const playSeriesEnd = () =>
   play((c, t) => {
-    bell(c, C6, t, 0.15, 1.1);
-    bell(c, E6, t + 0.04, 0.13, 1.1);
-    bell(c, G6, t + 0.08, 0.12, 1.3);
-    pip(c, C6, t, 0.12, 0.3, 0.6);
+    for (let i = 0; i < 3; i++) pip(c, C5, t + i * 0.38, 0.3, 0.18, 0.14);
   });
-
-/** A WSA series starts: one high pip. */
-export const playSeriesStart = () => play((c, t) => pip(c, E6, t, 0.2, 0.45, 0.5));
-
-/** A WSA series ends: one long, low tone. */
-export const playSeriesEnd = () => play((c, t) => pip(c, C5, t, 0.3, 0.6, 0.7));

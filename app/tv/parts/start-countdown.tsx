@@ -6,7 +6,7 @@ import { playGo, playTick } from "@/components/sound";
 import { useNowUntil } from "@/components/use-now";
 
 /** How long "Start!" stays up after the countdown. */
-const GO_MS = 1200;
+const GO_MS = 1300;
 
 /**
  * The 3-2-1 over the whole TV when the operator starts a beurt, a pip on every number and the start
