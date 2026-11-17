@@ -16,6 +16,10 @@ import {
   type EventType,
 } from ".";
 
+// The demo checks shooters in just before this, and every event below follows it. Pinned so the
+// check-ins never sort after the passes (the demo defaults to the real clock).
+const DEMO_CHECK_IN = new Date("2026-11-07T09:00:00Z");
+
 const ALL_HITS = SPANISH_KNOCKDOWN.targets.map((t) => t.id);
 
 /** Event factory with a strictly increasing clock. */
@@ -32,7 +36,7 @@ function makeEvents() {
 }
 
 /** Shoots every scheduled pass; `hitsFor` decides the result. */
-function shootEverything(snapshot = buildDemoSnapshot(), hitsFor: (entryId: string, round: number, kd: number) => string[] = () => ALL_HITS) {
+function shootEverything(snapshot = buildDemoSnapshot(DEMO_CHECK_IN), hitsFor: (entryId: string, round: number, kd: number) => string[] = () => ALL_HITS) {
   const { events, emit } = makeEvents();
   let state = buildState(snapshot, events);
   for (let guard = 0; guard < 200; guard++) {
@@ -49,7 +53,7 @@ function shootEverything(snapshot = buildDemoSnapshot(), hitsFor: (entryId: stri
 
 describe("competition state", () => {
   it("builds the demo: 17 checked in, Junior shoots first, in pairs", () => {
-    const state = buildState(buildDemoSnapshot());
+    const state = buildState(buildDemoSnapshot(DEMO_CHECK_IN));
     expect(state.entries.size).toBe(17);
     expect(state.rejected).toEqual([]);
     const schedule = competitionSchedule(state);
@@ -72,7 +76,7 @@ describe("competition state", () => {
   });
 
   it("settles a tie with afkamping and repeats when still tied", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const juniorIds = new Set(
       [...buildState(snapshot).entries.values()].filter((e) => e.rankCode === "junior").map((e) => e.entryId),
     );
@@ -100,7 +104,7 @@ describe("competition state", () => {
   });
 
   it("keeps a corrected afkamping in its place among the iterations", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const run = shootEverything(snapshot);
     const group = pendingShootoffs(run.state).find((p) => p.groupCode === "junior")!.groups[0];
     const [a, b] = group;
@@ -192,7 +196,7 @@ describe("competition state", () => {
   });
 
   it("puts shooters without season points first (reverse ranking)", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const state = buildState(snapshot);
     const order = effectiveOrder(state, "klasse3");
     const points = order.map((id) => snapshot.seasonPoints[state.entries.get(id)!.shooterId]);
@@ -214,7 +218,7 @@ describe("competition state", () => {
 
 describe("event validation and export", () => {
   it("validates events with the zod schema", () => {
-    const [event] = buildDemoSnapshot().events;
+    const [event] = buildDemoSnapshot(DEMO_CHECK_IN).events;
     expect(competitionEventSchema.safeParse(event).success).toBe(true);
     expect(competitionEventSchema.safeParse({ ...event, type: "pass.recorded" }).success).toBe(false);
     expect(competitionEventSchema.safeParse({ ...event, payload: { ...event.payload, feeCents: -1 } }).success).toBe(false);
@@ -241,5 +245,5 @@ describe("event validation and export", () => {
 });
 
 function makeEventsWithDemo() {
-  return { ...makeEvents(), snapshot: buildDemoSnapshot() };
+  return { ...makeEvents(), snapshot: buildDemoSnapshot(DEMO_CHECK_IN) };
 }
