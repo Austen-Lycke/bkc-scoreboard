@@ -15,7 +15,11 @@ import {
   type LastSave,
 } from ".";
 
-const snapshot = buildDemoSnapshot();
+// The demo checks shooters in just before this, and every event below follows it. Pinned so the
+// check-ins never sort after the passes (the demo defaults to the real clock).
+const DEMO_CHECK_IN = new Date("2026-11-07T09:00:00Z");
+
+const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
 
 function log() {
   let t = Date.parse("2026-11-07T10:00:00Z");

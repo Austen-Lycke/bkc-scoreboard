@@ -15,6 +15,10 @@ import {
   type EventType,
 } from ".";
 
+// The demo checks shooters in just before this, and every event below follows it. Pinned so the
+// check-ins never sort after the passes (the demo defaults to the real clock).
+const DEMO_CHECK_IN = new Date("2026-11-07T09:00:00Z");
+
 function makeEvents() {
   let t = Date.parse("2026-11-07T10:00:00Z");
   const events: CompetitionEvent[] = [];
@@ -27,7 +31,7 @@ function makeEvents() {
 
 describe("phases follow the scoring", () => {
   it("moves Klaar or Opwarming to Ronde 1, and Pauze to Ronde 2, but never back (only out of an afkamping)", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const { events, emit } = makeEvents();
     expect(autoStatus(buildState(snapshot, events), 1)).toBe("round1");
     emit("status.set", { status: "warmup" });
@@ -42,7 +46,7 @@ describe("phases follow the scoring", () => {
   });
 
   it("freezes the shooting order when the day starts", () => {
-    const state = buildState(buildDemoSnapshot());
+    const state = buildState(buildDemoSnapshot(DEMO_CHECK_IN));
     const actions = statusActions(state, "round1");
     expect(actions.at(-1)).toEqual({ type: "status.set", payload: { status: "round1" } });
     expect(actions.filter((a) => a.type === "order.set").length).toBeGreaterThan(0);
@@ -50,7 +54,7 @@ describe("phases follow the scoring", () => {
   });
 
   it("asks for the break once round 1 is shot and round 2 is next", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const { events, emit } = makeEvents();
     emit("status.set", { status: "round1" });
     let state = buildState(snapshot, events);
@@ -72,7 +76,7 @@ describe("phases follow the scoring", () => {
 
 describe("a tie the jury doesn't afkamp", () => {
   it("keeps a shared place, no longer asks for afkamping, and can be taken back", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const { events, emit } = makeEvents();
     let state = buildState(snapshot, events);
     // Everyone hits everything: the whole of every rank ends tied.
@@ -100,7 +104,7 @@ describe("a tie the jury doesn't afkamp", () => {
 
 describe("a correction with a reason", () => {
   it("keeps the reason with the pass", () => {
-    const snapshot = buildDemoSnapshot();
+    const snapshot = buildDemoSnapshot(DEMO_CHECK_IN);
     const { events, emit } = makeEvents();
     const heat = competitionSchedule(buildState(snapshot))[0];
     const { entryId, knockdown } = heat.phases[0][0];
