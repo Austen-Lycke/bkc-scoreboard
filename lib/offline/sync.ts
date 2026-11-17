@@ -50,10 +50,14 @@ export function useSyncStatus(competitionId: string): SyncStatus {
 /** The event as the server expects it, without the local bookkeeping fields. */
 const toWire = (e: StoredEvent) => ({ id: e.id, competitionId: e.competitionId, deviceId: e.deviceId, at: e.at, type: e.type, payload: e.payload });
 
-/** What the live website gets from the live record: unsaved taps and typed scores, and the break countdown. */
+/**
+ * What the live website gets from the live record: unsaved taps, the beurt on the line (a cards day)
+ * and the break countdown. Scores typed from the cards stay on this device until they're saved.
+ */
 const liveToWire = (live: LiveRecord | undefined) => ({
   drafts: live?.drafts ?? {},
-  draftScores: live?.draftScores ?? {},
+  draftScores: {},
+  lineHeat: live?.line?.heatKey ?? null,
   pauseEndsAt: live?.pauseEndsAt ?? null,
   at: new Date().toISOString(),
 });
@@ -176,4 +180,4 @@ export function useSyncLoop(competitionId: string, enabled: boolean, unsynced: n
 }
 
 /** Changes whenever something the live website shows from the live record changes. */
-export const liveSyncKey = (live: LiveRecord | undefined) => JSON.stringify([live?.drafts ?? {}, live?.draftScores ?? {}, live?.pauseEndsAt ?? null]);
+export const liveSyncKey = (live: LiveRecord | undefined) => JSON.stringify([live?.drafts ?? {}, live?.line?.heatKey ?? null, live?.pauseEndsAt ?? null]);

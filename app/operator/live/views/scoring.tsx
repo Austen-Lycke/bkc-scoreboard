@@ -11,6 +11,7 @@ import {
   groupName,
   groupsInShootingOrder,
   heatKey,
+  onTheLine,
   passOf,
   START_COUNTDOWN_SECONDS,
   roundName,
@@ -22,23 +23,24 @@ import { updateLive } from "@/lib/offline/store";
 import { scorePass, type Heat } from "@/lib/scoring";
 import { useComp } from "../context";
 import { useStartBeurt } from "../phase";
-import { LineScoring } from "./line-scoring";
+import { LineView } from "./line-scoring";
 import { KnockdownPanel, SwapSchedule } from "./knockdown-panel";
 import { AllShot, FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
 import { usePlateScoring } from "./use-plate-scoring";
 import { Empty, Kbd, Pill } from "@/components/ui";
 
-/** The heat on the line: the next one in the schedule, or the one the operator jumped to. */
+/**
+ * The heat on the line: the next one in the schedule, or the one the operator jumped to. A cards day
+ * (WSA): the beurt the operator put on the line, which may be ahead of the typed cards.
+ */
 export function useLineup() {
   const { state, live } = useComp();
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);
-  const focusIndex = live?.focus ? schedule.findIndex((h) => heatKey(h) === live.focus!.heatKey) : -1;
-  const heatIndex = focusIndex >= 0 ? focusIndex : progress.heatIndex;
-  const rawPhase = focusIndex >= 0 ? live!.focus!.phaseIndex : progress.phaseIndex;
+  const { focusIndex, heatIndex, phaseIndex: rawPhase } = onTheLine(state, schedule, progress, live);
   const heat = heatIndex === null ? null : schedule[heatIndex];
   const phaseIndex = heat && rawPhase !== null ? Math.min(rawPhase, heat.phases.length - 1) : null;
-  return { schedule, focusIndex, heatIndex, heat, phaseIndex };
+  return { schedule, progress, focusIndex, heatIndex, heat, phaseIndex };
 }
 
 /** "Volwassenen · ronde 1 · beurt 2". */
@@ -54,7 +56,7 @@ export function ScoringView(props: { activeKd: number; setActiveKd: (kd: number)
   // Nobody on the line (all shot, or a tie on a cut line holds up the knockout): a points day still gets its own screen.
   const group = heat?.groupCode ?? groupsInShootingOrder(state)[0]?.code;
   const points = !!group && setupFor(state, group, heat?.round ?? 1).entry === "points";
-  if (points && state.entries.size > 0) return <LineScoring />;
+  if (points && state.entries.size > 0) return <LineView />;
   return <PlateScoring {...props} />;
 }
 

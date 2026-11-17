@@ -19,7 +19,7 @@ export function useComp(): CompetitionContextValue {
   return value;
 }
 
-export type Tab = "prepare" | "checkin" | "order" | "scoring" | "standings" | "shootoff" | "close";
+export type Tab = "prepare" | "checkin" | "order" | "scoring" | "cards" | "standings" | "shootoff" | "close";
 
 /**
  * Lets a view switch tabs, e.g. a live score in the standings opens Scoren on that knockdown.

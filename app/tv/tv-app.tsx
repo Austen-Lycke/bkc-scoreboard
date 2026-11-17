@@ -9,12 +9,12 @@ import {
   groupsInShootingOrder,
   isShootingStatus,
   knockoutPlan,
+  onTheLine,
   pendingShootoffs,
   phaseDone,
   roundTitle,
   setupFor,
   tvName,
-  heatKey,
   type CompetitionState,
 } from "@/lib/competition";
 import { ACTIVE_COMPETITION_KEY, getMeta, type LiveRecord } from "@/lib/offline/db";
@@ -73,9 +73,10 @@ const welcomeDate = (date: string) => {
 function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | undefined }) {
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);
-  const focusIndex = live?.focus ? schedule.findIndex((h) => heatKey(h) === live.focus!.heatKey) : -1;
-  const heatIndex = focusIndex >= 0 ? focusIndex : progress.heatIndex;
-  const phaseIndex = focusIndex >= 0 ? live!.focus!.phaseIndex : (progress.phaseIndex ?? 0);
+  // The heat on the line: a cards day (WSA) follows the operator's line, ahead of the typed cards.
+  const line = onTheLine(state, schedule, progress, live);
+  const { focusIndex, heatIndex } = line;
+  const phaseIndex = line.phaseIndex ?? 0;
   const heat = heatIndex === null ? null : schedule[heatIndex];
   const comp = state.snapshot.competition;
   const firstUp = heat ? { label: "Als eerste", names: heatNames(state, heat), meta: heatMeta(state, heat) } : null;
@@ -139,7 +140,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
             <HeatProgress
               variant="tv"
               rounds={schedule.map((h) => h.round)}
-              current={progress.heatIndex}
+              current={heatIndex}
               endLabel={roundTitle(state, lastRound)}
               className="w-[47.5rem]"
             />
