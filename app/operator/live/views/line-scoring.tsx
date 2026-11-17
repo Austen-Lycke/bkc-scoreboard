@@ -22,7 +22,7 @@ import { achievableScores, passKey, type Heat } from "@/lib/scoring";
 import { formatClock, useNow } from "@/components/use-now";
 import { Kbd, Panel, Pill } from "@/components/ui";
 import { useComp } from "../context";
-import { useAutoPhase } from "../phase";
+import { useAutoPhase, useStartBeurt } from "../phase";
 import { heatTitle, useLineup } from "./scoring";
 import { AllShot, FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
 
@@ -355,11 +355,14 @@ function SeriesTimerBar({ heat }: { heat: Heat }) {
   const step = timer ? timerStep(timing, heat.phases.length, timer, now) : null;
   const series = heat.phases.length;
   const from = Math.max(1, heat.phases.findIndex((phase) => phase.some((s) => !passOf(state, s.entryId, heat.round, s.knockdown))) + 1);
+  const startBeurt = useStartBeurt();
+  // The first series of a beurt starts with a 3-2-1 on the TV; a restart after an interruption right away.
   const start = async (fromSeries: number) => {
+    if (fromSeries === 1) return startBeurt(heat, { timed: true });
     await advance(heat.round);
     await updateLive(id, { seriesTimer: { heatKey: heatKey(heat), startedAt: new Date().toISOString(), fromSeries } });
   };
-  const stop = () => updateLive(id, { seriesTimer: null });
+  const stop = () => updateLive(id, { seriesTimer: null, lineStart: null });
 
   return (
     <div
@@ -375,6 +378,11 @@ function SeriesTimerBar({ heat }: { heat: Heat }) {
           </span>
         ) : step.kind === "done" ? (
           "Reeksen gedaan · typ de kaarten in"
+        ) : step.kind === "ready" ? (
+          <span className="flex items-baseline gap-3">
+            <span className="text-yellow">Aftellen op TV</span>
+            <span className="text-[1.75rem] leading-none tabular-nums">{step.left}</span>
+          </span>
         ) : (
           <span className="flex items-baseline gap-3">
             <span className={step.kind === "recover" ? "text-yellow" : ""}>{step.kind === "series" ? (series === 1 ? "Reeks" : `Reeks ${step.series}`) : "Herstel"}</span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, type CSSProperties } from "react";
+import { useNowUntil } from "@/components/use-now";
 import {
   competitionProgress,
   competitionSchedule,
@@ -11,6 +12,7 @@ import {
   groupsInShootingOrder,
   heatKey,
   passOf,
+  START_COUNTDOWN_SECONDS,
   roundName,
   setupFor,
   standingsFor,
@@ -19,6 +21,7 @@ import {
 import { updateLive } from "@/lib/offline/store";
 import { scorePass, type Heat } from "@/lib/scoring";
 import { useComp } from "../context";
+import { useStartBeurt } from "../phase";
 import { LineScoring } from "./line-scoring";
 import { KnockdownPanel, SwapSchedule } from "./knockdown-panel";
 import { AllShot, FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
@@ -102,8 +105,11 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
           <PhaseDone round={heat.round} />
         ) : heat && phase && phaseIndex !== null && setup ? (
           <>
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 px-1">
-              <span className="text-[1.375rem] font-semibold">{heatTitle(state, heat)}</span>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <span className="text-[1.375rem] font-semibold">{heatTitle(state, heat)}</span>
+                {phaseIndex === 0 && !finished && <StartBeurt heat={heat} />}
+              </span>
               <span className="flex items-baseline gap-3 text-sm text-muted">
                 {focusIndex >= 0 && (
                   <button
@@ -228,5 +234,24 @@ function PlateScoring({ activeKd, setActiveKd }: { activeKd: number; setActiveKd
         </div>
       </aside>
     </div>
+  );
+}
+
+/**
+ * "Start beurt": a 3-2-1 on the TV and the start signal, once at the start of a beurt (not at a swap).
+ * Gone once the countdown is over or a phase of this beurt is saved.
+ */
+function StartBeurt({ heat }: { heat: Heat }) {
+  const { state, live } = useComp();
+  const startBeurt = useStartBeurt();
+  const started = live?.lineStart?.heatKey === heatKey(heat) ? Date.parse(live.lineStart.at) : null;
+  const now = useNowUntil(started, 200);
+  const shot = heat.phases.some((phase) => phase.some((s) => passOf(state, s.entryId, heat.round, s.knockdown)));
+  if (shot || (started !== null && now >= started)) return null;
+  const left = started === null ? null : Math.min(START_COUNTDOWN_SECONDS, Math.ceil((started - now) / 1000));
+  return (
+    <Pill tone="ink" size="sm" disabled={left !== null} onClick={() => void startBeurt(heat)}>
+      {left === null ? "Start beurt" : `Aftellen op TV · ${left}`}
+    </Pill>
   );
 }

@@ -75,6 +75,36 @@ test("taps, saves and undo reach the TV", async ({ context, page }) => {
   expect(errors).toEqual([]);
 });
 
+test("Start beurt counts down 3-2-1 on the TV, once per beurt", async ({ context, page }) => {
+  const errors: string[] = [];
+  watchErrors(page, errors);
+  await openDemoInRound1(page);
+  const tv = await context.newPage();
+  watchErrors(tv, errors);
+  await tv.setViewportSize({ width: 1920, height: 1080 });
+  await tv.goto("/tv?c=demo");
+  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText("Lotte D.");
+  await expect(tv.getByText("Klik op het scherm voor geluid")).toBeVisible();
+  await tv.mouse.click(960, 540);
+  await expect(tv.getByText("Klik op het scherm voor geluid")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Start beurt" }).click();
+  await expect(page.getByRole("button", { name: /Aftellen op TV/ })).toBeDisabled();
+  await expect(tv.getByRole("timer", { name: "Aftellen" })).toHaveText(/^[321]$/);
+  await expect(tv.getByText("Start!")).toBeVisible({ timeout: 5000 });
+  await expect(tv.getByText("Start!")).toHaveCount(0, { timeout: 3000 });
+  await expect(page.getByRole("button", { name: /Start beurt|Aftellen/ })).toHaveCount(0);
+
+  // Not again after the swap.
+  await knockdown(page, 1).getByRole("button", { name: "Midden 10 (10 ptn)" }).click();
+  await knockdown(page, 2).getByRole("button", { name: "Midden 6 (6 ptn)" }).click();
+  await page.getByRole("button", { name: /Opslaan & wisselen/ }).click();
+  await expect(page.getByText("Fase 2 van 2")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start beurt" })).toHaveCount(0);
+
+  expect(errors).toEqual([]);
+});
+
 test("undo survives a reload and works with the keyboard", async ({ page, isMobile }) => {
   test.skip(isMobile, "keyboard shortcut");
   await openDemoInRound1(page);

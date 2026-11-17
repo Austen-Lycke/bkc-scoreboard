@@ -27,6 +27,7 @@ import { heatMeta, heatNames, LiveHeat, LiveLine } from "./parts/heat";
 import { Pause, Warmup } from "./parts/pause";
 import { Podium } from "./parts/podium";
 import { ShootoffLive, ShootoffWaiting } from "./parts/shootoff";
+import { StartCountdown } from "./parts/start-countdown";
 
 export function TvApp() {
   const fromUrl = useQueryParam("c");
@@ -146,6 +147,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
         }
       />
       {body}
+      <StartCountdown live={live} heat={heat} />
     </>
   );
 }

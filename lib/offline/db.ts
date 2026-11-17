@@ -21,6 +21,8 @@ export interface LiveRecord {
   drafts: Record<string, string[]>;
   /** Scores typed but not saved yet, per pass key (setups scored in points: WSA). */
   draftScores?: Record<string, number>;
+  /** The 3-2-1 before a beurt: the TV counts down and plays the start signal at `at` (ISO). */
+  lineStart?: { heatKey: string; at: string } | null;
   /** The running series countdown of a timed heat, shown on the TV. */
   seriesTimer?: SeriesTimer | null;
   shootoff: ShootoffDraft | null;

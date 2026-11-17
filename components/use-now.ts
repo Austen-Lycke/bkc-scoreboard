@@ -20,6 +20,23 @@ export function useNow(intervalMs = 1000, enabled = true): number {
   return now;
 }
 
+/** The current time in ms, refreshed every `intervalMs` until `end` (ms) has passed; still when `end` is null. */
+export function useNowUntil(end: number | null, intervalMs = 100): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (end === null) return;
+    const tick = () => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= end) clearInterval(timer);
+    };
+    const timer = setInterval(tick, intervalMs);
+    tick();
+    return () => clearInterval(timer);
+  }, [end, intervalMs]);
+  return now;
+}
+
 /** 754 seconds → "12:34". */
 export const formatClock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 

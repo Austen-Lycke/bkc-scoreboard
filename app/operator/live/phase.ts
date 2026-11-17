@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useRef } from "react";
-import { autoStatus, statusActions, type CompetitionState, type CompetitionStatus } from "@/lib/competition";
+import { autoStatus, heatKey, START_COUNTDOWN_SECONDS, statusActions, type CompetitionState, type CompetitionStatus } from "@/lib/competition";
+import type { Heat } from "@/lib/scoring";
 import { emitMany, updateLive } from "@/lib/offline/store";
 import { useComp } from "./context";
 
@@ -48,5 +49,23 @@ export function useAutoPhase() {
       await updateLive(id, (current) => (current.pauseEndsAt ? { pauseEndsAt: null } : {}));
     },
     [id, state],
+  );
+}
+
+/**
+ * Starts a beurt with a 3-2-1 on the TV and the start signal at the end of it. Moves the phase along
+ * like scoring does. A timed heat (WSA) starts its series countdown at that same moment.
+ */
+export function useStartBeurt() {
+  const { id } = useComp();
+  const advance = useAutoPhase();
+  return useCallback(
+    async (heat: Heat, { timed = false }: { timed?: boolean } = {}) => {
+      await advance(heat.round);
+      const key = heatKey(heat);
+      const at = new Date(Date.now() + START_COUNTDOWN_SECONDS * 1000).toISOString();
+      await updateLive(id, { lineStart: { heatKey: key, at }, ...(timed ? { seriesTimer: { heatKey: key, startedAt: at, fromSeries: 1 } } : {}) });
+    },
+    [id, advance],
   );
 }

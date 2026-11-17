@@ -23,4 +23,11 @@ describe("timerStep", () => {
     const timer = { startedAt: start, fromSeries: 1 };
     expect(timerStep(timing, 1, timer, at(150))).toEqual({ kind: "done" });
   });
+
+  it("waits for a start in the future (the 3-2-1)", () => {
+    const timer = { startedAt: start, fromSeries: 1 };
+    expect(timerStep(timing, 2, timer, at(-3))).toEqual({ kind: "ready", left: 3 });
+    expect(timerStep(timing, 2, timer, at(-0.4))).toEqual({ kind: "ready", left: 1 });
+    expect(timerStep(timing, 2, timer, at(0))).toEqual({ kind: "series", series: 1, left: 150, total: 150 });
+  });
 });

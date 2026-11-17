@@ -109,8 +109,12 @@ test("the series countdown and the warmup run on the TV", async ({ context, page
   await tv.setViewportSize({ width: 1920, height: 1080 });
   await tv.goto("/tv?c=demo-wsa");
 
+  // Series 1 starts after a 3-2-1 on the TV; the series clock starts at "Start!".
   await page.getByRole("button", { name: "Start reeks 1" }).click();
-  await expect(page.locator("main")).toContainText(/Reeks 1\s*2:(30|29|28)/);
+  await expect(page.locator("main")).toContainText("Aftellen op TV");
+  await expect(tv.getByRole("timer", { name: "Aftellen" })).toHaveText(/^[321]$/);
+  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText("2 × 2:30");
+  await expect(page.locator("main")).toContainText(/Reeks 1\s*2:(30|29|28)/, { timeout: 6000 });
   await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/);
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText("2 × 2:30");
@@ -134,7 +138,7 @@ test("starting series 1 during the warmup moves on to round 1, so the TV shows t
   await expect(page.getByLabel("Fase")).toHaveValue("round1");
   // One countdown: the warmup's is gone, the series' is on the TV.
   await expect(page.getByText("Opwarmtimer op TV")).toHaveCount(0);
-  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/);
+  await expect(tv.locator("section", { hasText: "Nu aan de lijn" })).toContainText(/Reeks 1\s*2:(30|29|28)/, { timeout: 6000 });
 });
 
 test("semi-final and final can be switched off in Voorbereiden", async ({ page }) => {

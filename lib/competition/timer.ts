@@ -12,13 +12,19 @@ export interface SeriesTimer {
 }
 
 export type TimerStep =
+  /** Started with a 3-2-1: the first series begins at `startedAt`, `left` seconds from now. */
+  | { kind: "ready"; left: number }
   | { kind: "series"; series: number; left: number; total: number }
   | { kind: "recover"; next: number; left: number; total: number }
   | { kind: "done" };
 
-/** Where the countdown is: series 1, the short recovery, series 2, …, done. `left` in whole seconds. */
+/** How long the 3-2-1 before a beurt takes, in seconds. */
+export const START_COUNTDOWN_SECONDS = 3;
+
+/** Where the countdown is: the 3-2-1 before it, series 1, the short recovery, series 2, …, done. `left` in whole seconds. */
 export function timerStep(timing: FormatTiming, seriesInHeat: number, timer: Pick<SeriesTimer, "startedAt" | "fromSeries">, now: number): TimerStep {
-  let t = Math.max(0, (now - Date.parse(timer.startedAt)) / 1000);
+  let t = (now - Date.parse(timer.startedAt)) / 1000;
+  if (t < 0) return { kind: "ready", left: Math.ceil(-t) };
   for (let s = timer.fromSeries; s <= seriesInHeat; s++) {
     if (t < timing.seriesSeconds) return { kind: "series", series: s, left: Math.ceil(timing.seriesSeconds - t), total: timing.seriesSeconds };
     t -= timing.seriesSeconds;

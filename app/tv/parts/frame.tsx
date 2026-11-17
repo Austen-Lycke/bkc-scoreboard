@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useClubClock } from "@/components/use-now";
+import { useSoundUnlocked } from "@/components/sound";
 
 /** The canvas in rem: 1920×1080 at the default 16px root size. */
 const W = 120;
@@ -10,6 +11,7 @@ export function Stage({ children }: { children: ReactNode }) {
   const [scale, setScale] = useState(0.5);
   const [idle, setIdle] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const sound = useSoundUnlocked();
 
   useEffect(() => {
     const fit = () => {
@@ -47,6 +49,10 @@ export function Stage({ children }: { children: ReactNode }) {
       >
         {children}
       </div>
+      {/* Browsers only play sound after a click on the page: the start signal needs one. */}
+      {!sound && (
+        <span className="absolute left-4 top-4 rounded-full bg-yellow px-4 py-2 text-sm font-semibold text-ink">Klik op het scherm voor geluid</span>
+      )}
       {!fullscreen && !idle && (
         <button
           type="button"
