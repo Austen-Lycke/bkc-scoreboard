@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  cardsDay,
   competitionProgress,
   competitionSchedule,
   isDemoId,
+  onTheLine,
+  openHeats,
   pendingShootoffs,
   roundTitle,
   type CompetitionState,
@@ -24,6 +27,7 @@ import { ScrollRow } from "@/components/scroll-row";
 import { Pill } from "@/components/ui";
 import { formatClock, useNow } from "@/components/use-now";
 import { CheckInView } from "./views/check-in";
+import { CardsView } from "./views/cards";
 import { CloseView } from "./views/close";
 import { OrderView } from "./views/order";
 import { PrepareView } from "./views/prepare";
@@ -72,6 +76,8 @@ export function OperatorApp() {
 const TABS: { id: Tab; label: string; also?: Tab[] }[] = [
   { id: "checkin", label: "Inschrijving", also: ["order"] },
   { id: "scoring", label: "Scoren" },
+  // A cards day (WSA): the scores are typed here, while the line may already be on the next beurt.
+  { id: "cards", label: "Kaarten" },
   { id: "standings", label: "Stand" },
   { id: "shootoff", label: "Afkamping" },
   { id: "close", label: "Afronden" },
@@ -91,7 +97,11 @@ function Shell() {
   );
   const shootoffTab =
     tab === "shootoff" || pending > 0 || !!live?.shootoff || state.status === "shootoff" || state.shootoffs.length > 0 || state.waivedTies.length > 0;
-  const tabs = TABS.filter((t) => t.id !== "shootoff" || shootoffTab);
+  const cards = cardsDay(state);
+  const tabs = TABS.filter((t) => (t.id !== "shootoff" || shootoffTab) && (t.id !== "cards" || cards));
+  const lineIndex = onTheLine(state, schedule, progress, live).heatIndex;
+  // Beurten that left the line with cards still to type (the one on the line doesn't count yet).
+  const cardsOpen = cards ? openHeats(state, schedule, progress, lineIndex).filter((h) => h.heat !== schedule[lineIndex ?? -1]).length : 0;
   const [activeKd, setActiveKd] = useState(1);
   // Afronden's "beëindigen?" question; it closes again when the operator leaves that tab.
   const [askingFinish, setAskingFinish] = useState(false);
@@ -111,7 +121,7 @@ function Shell() {
     [setActiveKd, setAskingFinish],
   );
 
-  const badges: Partial<Record<Tab, number>> = { checkin: active, shootoff: pending };
+  const badges: Partial<Record<Tab, number>> = { checkin: active, cards: cardsOpen, shootoff: pending };
 
   return (
     <NavContext.Provider value={nav}>
@@ -132,7 +142,7 @@ function Shell() {
           <HeatProgress
             variant="operator"
             rounds={schedule.map((h) => h.round)}
-            current={progress.heatIndex}
+            current={lineIndex}
             endLabel={schedule.length ? roundTitle(state, schedule.at(-1)!.round) : undefined}
             className="order-last basis-full md:order-none md:mx-auto md:max-w-[35rem] md:flex-1 md:basis-auto"
           />
@@ -199,6 +209,7 @@ function Shell() {
           {tab === "checkin" && <CheckInView />}
           {tab === "order" && <OrderView />}
           {tab === "scoring" && <ScoringView activeKd={activeKd} setActiveKd={setActiveKd} />}
+          {tab === "cards" && <CardsView />}
           {tab === "standings" && <StandingsView />}
           {tab === "shootoff" && <ShootoffView />}
           {tab === "close" && <CloseView asking={askingFinish} setAsking={setAskingFinish} />}

@@ -14,7 +14,7 @@ import {
   type CompetitionState,
 } from "@/lib/competition";
 import type { LiveRecord } from "@/lib/offline/db";
-import { achievableScores, passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
+import { passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
 import { Gap } from "./frame";
 import { TV_HIT, TV_OPEN, TvPlates } from "./plates";
 import { TvSeriesTimer } from "./timer";
@@ -192,24 +192,17 @@ function LiveStandings({
 }
 
 /**
- * A WSA line: up to 15 shooters, each on their own frame, with this heat's series scores as they're
- * typed from the cards (only scores the plates can make) and the series countdown.
+ * A WSA line: up to 15 shooters, each on their own frame, with the series countdown. The cards are
+ * typed after the beurt (the line may already have moved on), so the scores show once they're saved.
  */
 export function LiveLine({ state, live, schedule, heatIndex }: { state: CompetitionState; live: LiveRecord | undefined; schedule: Heat[]; heatIndex: number }) {
   const heat = schedule[heatIndex];
-  const setup = setupFor(state, heat.groupCode, heat.round);
-  const allowed = achievableScores(setup);
   const heatsInGroup = schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length;
   const next = schedule[heatIndex + 1];
   const spots = heat.phases[0];
-  const scoreOf = (entryId: string, kd: number) => {
-    const v = live?.draftScores?.[passKey(entryId, heat.round, kd)] ?? passOf(state, entryId, heat.round, kd)?.score;
-    return v !== undefined && allowed.has(v) ? v : undefined;
-  };
-  const lineOf = (entryId: string) => heat.phases.map((ph) => scoreOf(entryId, ph.find((x) => x.entryId === entryId)!.knockdown));
-  const savedLine = (entryId: string) => heat.phases.reduce((n, ph) => n + (passOf(state, entryId, heat.round, ph.find((x) => x.entryId === entryId)!.knockdown)?.score ?? 0), 0);
-  const total = (entryId: string) => entryTotal(state, entryId) - savedLine(entryId) + lineOf(entryId).reduce<number>((n, v) => n + (v ?? 0), 0);
-  const groupTotals = entriesOfGroup(state, heat.groupCode).map((e) => (heat.shooters.includes(e.entryId) ? total(e.entryId) : entryTotal(state, e.entryId)));
+  const lineOf = (entryId: string) => heat.phases.map((ph) => passOf(state, entryId, heat.round, ph.find((x) => x.entryId === entryId)!.knockdown)?.score);
+  const total = (entryId: string) => entryTotal(state, entryId);
+  const groupTotals = entriesOfGroup(state, heat.groupCode).map((e) => entryTotal(state, e.entryId));
   const placeOf = (entryId: string) => 1 + groupTotals.filter((t) => t > total(entryId)).length;
   // In the final: who dropped out after the previous series.
   const { finalStart } = knockoutRounds(state);

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { CompetitionEvent, CompetitionSnapshot, CompetitionStatus, LastSave, SeriesTimer } from "@/lib/competition";
+import type { CompetitionEvent, CompetitionSnapshot, CompetitionStatus, LastSave, LinePointer, SeriesTimer } from "@/lib/competition";
 
 /**
  * Local storage on the operator laptop (IndexedDB). It is the source of truth during a competition;
@@ -19,8 +19,10 @@ export interface LiveRecord {
   focus: { heatKey: string; phaseIndex: number } | null;
   /** Targets tapped but not saved yet, per pass key. */
   drafts: Record<string, string[]>;
-  /** Scores typed but not saved yet, per pass key (setups scored in points: WSA). */
+  /** Scores typed from the cards but not saved yet, per pass key (setups scored in points: WSA). Only on this device. */
   draftScores?: Record<string, number>;
+  /** A cards day (WSA): the beurt the operator put on the line, which may be ahead of the typed cards. */
+  line?: LinePointer | null;
   /** The 3-2-1 before a beurt: the TV counts down and plays the start signal at `at` (ISO). */
   lineStart?: { heatKey: string; at: string } | null;
   /** The running series countdown of a timed heat, shown on the TV. */

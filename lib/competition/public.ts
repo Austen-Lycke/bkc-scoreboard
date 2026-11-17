@@ -6,6 +6,7 @@ import {
   expectedPasses,
   groupName,
   groupsInShootingOrder,
+  onTheLine,
   passColumns,
   passLabel,
   entryTotal,
@@ -22,7 +23,10 @@ import { groupOfRank, setupFor, type CompetitionState } from "./state";
  */
 export const competitionLiveSchema = z.object({
   drafts: z.record(z.string().max(120), z.array(z.string().max(40)).max(20)).refine((r) => Object.keys(r).length <= 60, "te veel"),
+  /** No longer sent (typed cards stay on the laptop); still accepted from laptops that run older code. */
   draftScores: z.record(z.string().max(120), z.number().int().min(0).max(1000)).refine((r) => Object.keys(r).length <= 60, "te veel"),
+  /** A cards day (WSA): the beurt on the line, which may be ahead of the typed cards. */
+  lineHeat: z.string().max(2000).nullable().optional(),
   pauseEndsAt: z.iso.datetime().nullable(),
   at: z.iso.datetime(),
 });
@@ -169,17 +173,20 @@ export function publicView(state: CompetitionState, live?: CompetitionLive | nul
 
   const schedule = competitionSchedule(state);
   const progress = competitionProgress(state, schedule);
-  const heat = progress.heatIndex === null ? null : schedule[progress.heatIndex];
+  // A cards day: the beurt the operator put on the line, which may be ahead of the typed cards.
+  const line = onTheLine(state, schedule, progress, { line: live?.lineHeat ? { heatKey: live.lineHeat } : null });
+  const heat = line.heatIndex === null ? null : schedule[line.heatIndex];
   let current: PublicView["current"] = null;
   if (heat) {
     const standings = standingsFor(state, heat.groupCode);
-    const phase = heat.phases[progress.phaseIndex ?? 0];
+    const phaseIndex = Math.min(line.phaseIndex ?? 0, heat.phases.length - 1);
+    const phase = heat.phases[phaseIndex];
     const setup = setupFor(state, heat.groupCode, heat.round);
-    // Like the venue TV: what the operator has tapped (or typed) so far, else what's saved.
+    // Like the venue TV: what the operator has tapped so far, else what's saved. Cards (points) only once saved.
     const passNow = (entryId: string, kd: number) => {
       const key = passKey(entryId, heat.round, kd);
       const saved = passOf(state, entryId, heat.round, kd);
-      if (setup.entry === "points") return { hits: [], score: live?.draftScores[key] ?? saved?.score ?? 0 };
+      if (setup.entry === "points") return { hits: [], score: saved?.score ?? 0 };
       const hits = live?.drafts[key] ?? saved?.hits ?? [];
       return { hits, score: scorePass(setup, hits) };
     };
@@ -189,8 +196,8 @@ export function publicView(state: CompetitionState, live?: CompetitionLive | nul
       rankName: groupName(state, heat.groupCode),
       heatNumber: heat.index + 1,
       heatsInRank: schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length,
-      swapped: state.format.rotate && (progress.phaseIndex ?? 0) > 0,
-      series: !state.format.rotate && heat.phases.length > 1 ? (progress.phaseIndex ?? 0) + 1 : null,
+      swapped: state.format.rotate && phaseIndex > 0,
+      series: !state.format.rotate && heat.phases.length > 1 ? phaseIndex + 1 : null,
       setup,
       shooters: phase.map((s) => {
         const pass = passNow(s.entryId, s.knockdown);
@@ -249,7 +256,7 @@ export function publicView(state: CompetitionState, live?: CompetitionLive | nul
     pauseEndsAt: state.status === "break" || state.status === "warmup" ? (live?.pauseEndsAt ?? null) : null,
     passNote,
     current,
-    next: (progress.heatIndex === null ? [] : schedule.slice(progress.heatIndex + 1, progress.heatIndex + 4)).map((h) => ({
+    next: (line.heatIndex === null ? [] : schedule.slice(line.heatIndex + 1, line.heatIndex + 4)).map((h) => ({
       round: h.round,
       roundLabel: roundTitle(state, h.round),
       rankName: groupName(state, h.groupCode),
@@ -263,7 +270,7 @@ export function publicView(state: CompetitionState, live?: CompetitionLive | nul
       done: spots.filter((key) => state.passes.has(key)).length,
       total: spots.length,
       heatRounds: schedule.map((h) => h.round),
-      heatIndex: progress.heatIndex,
+      heatIndex: line.heatIndex,
       endLabel: schedule.length ? roundTitle(state, schedule.at(-1)!.round) : undefined,
     },
   };

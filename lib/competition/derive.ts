@@ -18,7 +18,7 @@ import {
   type RankStandings,
   type ScheduleProgress,
 } from "@/lib/scoring";
-import { groupOfRank, groupsOf, knockoutRounds, type CompetitionState, type Entry } from "./state";
+import { groupOfRank, groupsOf, knockoutRounds, setupFor, type CompetitionState, type Entry } from "./state";
 
 /** Read-only views on the competition state, shared by the operator screen and the TV. */
 
@@ -202,6 +202,66 @@ export const donePassKeys = (state: CompetitionState) => new Set(state.passes.ke
 
 export function competitionProgress(state: CompetitionState, schedule = competitionSchedule(state)): ScheduleProgress {
   return scheduleProgress(schedule, donePassKeys(state));
+}
+
+/**
+ * A day scored from cards (WSA): the operator types the scores after the beurt, so the line can run
+ * ahead of the typing. A day scored on the plates (Spanish) follows the scores.
+ */
+export function cardsDay(state: Pick<CompetitionState, "snapshot" | "format">): boolean {
+  const group = groupsOf(state)[0]?.code;
+  return !!group && setupFor(state, group, 1).entry === "points";
+}
+
+/** The beurt the operator put on the line (a cards day). `index` finds it back when a withdrawal changed its key. */
+export interface LinePointer {
+  heatKey: string;
+  index?: number;
+}
+
+/**
+ * Where the line is on a cards day: the beurt the operator put there, but never behind the first
+ * beurt with open cards (once those are all in, the line follows the scores again). Null once
+ * everything is in.
+ */
+export function lineHeatIndex(schedule: readonly Heat[], progress: ScheduleProgress, line: LinePointer | null | undefined): number | null {
+  if (progress.heatIndex === null) return null;
+  if (!line || schedule.length === 0) return progress.heatIndex;
+  let at = schedule.findIndex((h) => heatKey(h) === line.heatKey);
+  if (at < 0) at = line.index ?? -1;
+  return Math.max(progress.heatIndex, Math.min(at, schedule.length - 1));
+}
+
+/**
+ * The heat on the line, as the operator screen, the TV and the website show it. A cards day: the line
+ * pointer. Otherwise the next heat to score, or the one the operator jumped to (`focus`).
+ */
+export function onTheLine(
+  state: CompetitionState,
+  schedule: readonly Heat[],
+  progress: ScheduleProgress,
+  live: { focus?: { heatKey: string; phaseIndex: number } | null; line?: LinePointer | null } | undefined,
+): { focusIndex: number; heatIndex: number | null; phaseIndex: number | null } {
+  if (cardsDay(state)) {
+    const heatIndex = lineHeatIndex(schedule, progress, live?.line);
+    return { focusIndex: -1, heatIndex, phaseIndex: heatIndex === null ? null : heatIndex === progress.heatIndex ? progress.phaseIndex : 0 };
+  }
+  const focus = live?.focus;
+  const focusIndex = focus ? schedule.findIndex((h) => heatKey(h) === focus.heatKey) : -1;
+  return focusIndex >= 0 ? { focusIndex, heatIndex: focusIndex, phaseIndex: focus!.phaseIndex } : { focusIndex, heatIndex: progress.heatIndex, phaseIndex: progress.phaseIndex };
+}
+
+/** The shooters of a heat with a score still missing. */
+export const openShooters = (state: CompetitionState, heat: Heat): string[] =>
+  heat.shooters.filter((e) => heat.phases.some((phase) => phase.some((s) => s.entryId === e && !passOf(state, e, heat.round, s.knockdown))));
+
+/** The beurten that were on the line with cards still to type, oldest first (a cards day). */
+export function openHeats(state: CompetitionState, schedule: readonly Heat[], progress: ScheduleProgress, lineIndex: number | null): { heat: Heat; open: number }[] {
+  if (progress.heatIndex === null || lineIndex === null) return [];
+  return schedule
+    .slice(progress.heatIndex, lineIndex + 1)
+    .map((heat) => ({ heat, open: openShooters(state, heat).length }))
+    .filter((h) => h.open > 0);
 }
 
 /** Passes per shooter in the qualification rounds. */

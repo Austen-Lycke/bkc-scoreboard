@@ -7,7 +7,8 @@ import {
   entryName,
   groupOfRank,
   groupsInShootingOrder,
-  heatKey,
+  cardsDay,
+  onTheLine,
   passColumns,
   passLabel,
   passOf,
@@ -37,12 +38,12 @@ export function StandingsView() {
   const schedule = useMemo(() => competitionSchedule(state), [state]);
   const progress = useMemo(() => competitionProgress(state, schedule), [state, schedule]);
 
-  // The phase on the line now (or the heat the operator jumped to): those cells are live.
-  const focusIndex = live?.focus ? schedule.findIndex((h) => heatKey(h) === live.focus!.heatKey) : -1;
-  const heatIndex = focusIndex >= 0 ? focusIndex : progress.heatIndex;
+  // The phase on the line now (or the heat the operator jumped to): those cells are live. A cards day:
+  // every series of the beurt on the line, scored once its cards are typed in Kaarten.
+  const cards = cardsDay(state);
+  const { heatIndex, phaseIndex } = onTheLine(state, schedule, progress, live);
   const heat = heatIndex === null ? null : schedule[heatIndex];
-  const phaseIndex = focusIndex >= 0 ? live!.focus!.phaseIndex : progress.phaseIndex;
-  const onLine = heat && phaseIndex !== null ? (heat.phases[Math.min(phaseIndex, heat.phases.length - 1)] ?? []) : [];
+  const onLine = !heat || phaseIndex === null ? [] : cards ? heat.phases.flat() : (heat.phases[Math.min(phaseIndex, heat.phases.length - 1)] ?? []);
 
   const [rankCode, setRankCode] = useState(() => (heat && ranks.some((r) => r.code === heat.groupCode) ? heat.groupCode : ranks[0]?.code));
   const [editing, setEditing] = useState<{ entryId: string; round: number; knockdown: number } | null>(null);
@@ -121,16 +122,16 @@ export function StandingsView() {
                   const setup = setupFor(state, rankCode, r);
                   const isLive = !!heat && heat.round === r && onLine.some((s) => s.entryId === row.entryId && s.knockdown === k);
                   const liveScore =
-                    setup.entry === "points"
-                      ? (live?.draftScores?.[passKey(row.entryId, r, k)] ?? pass?.score ?? "·")
-                      : scorePass(setup, live?.drafts[passKey(row.entryId, r, k)] ?? pass?.hits ?? []);
+                    setup.entry === "points" ? (pass?.score ?? "·") : scorePass(setup, live?.drafts[passKey(row.entryId, r, k)] ?? pass?.hits ?? []);
                   const tone = isLive ? "bg-yellow text-ink" : pass?.edited ? "bg-ink text-white" : pass ? "text-ink" : "text-plate";
                   const name = passLabel({ round: r, knockdown: k, ...c });
                   return (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => (isLive ? goTo("scoring", k) : setEditing({ entryId: row.entryId, round: r, knockdown: k }))}
+                      onClick={() =>
+                        isLive && !(cards && pass) ? goTo(cards ? "cards" : "scoring", k) : setEditing({ entryId: row.entryId, round: r, knockdown: k })
+                      }
                       aria-label={isLive ? `${name}: wordt nu geschoten` : `${name} aanpassen`}
                       title={pass?.note ? `Aangepast: ${pass.note}` : undefined}
                       className={`mx-1 my-1.5 flex h-11 cursor-pointer items-center justify-center gap-[0.3125rem] rounded-xl text-[1.0625rem] font-semibold tabular-nums hover:outline-[0.09375rem] hover:outline-ink ${tone}`}
