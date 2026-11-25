@@ -24,8 +24,9 @@ export function ShootoffWaiting({ state }: { state: CompetitionState }) {
     <Centered
       kicker="Afkamping"
       title={groupName(state, next.groupCode)}
-      bar={{
-        label: next.stage ? "Gelijk op de grens" : "Gelijke stand",
+      label={next.stage ? "Gelijk op de grens" : "Gelijke stand"}
+      first={{
+        list: null,
         names: group.map((e) => tvName(state, e)).join(" & "),
         meta: `${entryTotal(state, group[0])} punten${next.stage ? " · wie mag verder?" : position ? ` · plaats ${position}` : ""}`,
       }}

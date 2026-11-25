@@ -23,11 +23,12 @@ import { useQueryParam } from "@/lib/offline/url";
 import { HeatProgress } from "@/components/heat-progress";
 import { CLUB_TIME_ZONE } from "@/components/public/format";
 import { Centered, Stage, TopBar } from "./parts/frame";
-import { heatMeta, heatNames, LiveHeat, LiveLine } from "./parts/heat";
+import { firstUpOf, LiveHeat, LiveLine } from "./parts/heat";
 import { Pause, Warmup } from "./parts/pause";
 import { Podium } from "./parts/podium";
 import { ShootoffLive, ShootoffWaiting } from "./parts/shootoff";
 import { StartCountdown } from "./parts/start-countdown";
+import { SeriesPaused, SeriesSounds } from "./parts/timer";
 
 export function TvApp() {
   const fromUrl = useQueryParam("c");
@@ -79,7 +80,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
   const phaseIndex = line.phaseIndex ?? 0;
   const heat = heatIndex === null ? null : schedule[heatIndex];
   const comp = state.snapshot.competition;
-  const firstUp = heat ? { label: "Als eerste", names: heatNames(state, heat), meta: heatMeta(state, heat) } : null;
+  const firstUp = heat ? firstUpOf(state, heat) : null;
   const shooting = isShootingStatus(state.status) && heat;
   const lastRound = schedule.at(-1)?.round ?? comp.rounds;
 
@@ -90,11 +91,11 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
     case "prepared": {
       const n = [...state.entries.values()].filter((e) => !e.withdrawn).length;
       const sub = [welcomeDate(comp.date), comp.location, n > 0 ? `${n} schutters ingeschreven` : null].filter(Boolean).join(" · ");
-      body = <Centered kicker="Welkom" title={comp.name} sub={sub} bar={n > 0 ? firstUp : null} />;
+      body = <Centered kicker="Welkom" title={comp.name} sub={sub} first={n > 0 ? firstUp : null} />;
       break;
     }
     case "warmup":
-      body = live?.pauseEndsAt ? <Warmup end={live.pauseEndsAt} bar={firstUp} /> : <Centered title="Opwarming" bar={firstUp} />;
+      body = live?.pauseEndsAt ? <Warmup end={live.pauseEndsAt} first={firstUp} /> : <Centered title="Opwarming" first={firstUp} />;
       break;
     case "break":
       body = <Pause state={state} live={live} schedule={schedule} heat={heat} />;
@@ -112,7 +113,7 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
       const between = heat && focusIndex < 0 && phaseDone(state, heat.round);
       board = !between && !!heat && setupFor(state, heat.groupCode, heat.round).entry === "points";
       body = between ? (
-        <Centered kicker={comp.name} title={`${PHASE_LABEL[state.status]} is klaar`} sub="Zo meteen gaan we verder." bar={firstUp} />
+        <Centered kicker={comp.name} title={`${PHASE_LABEL[state.status]} is klaar`} sub="Zo meteen gaan we verder." first={firstUp} />
       ) : heat ? (
         board ? (
           <LiveLine state={state} live={live} schedule={schedule} heatIndex={heatIndex!} />
@@ -123,7 +124,8 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
         <Centered
           kicker="Afkamping"
           title="Gelijke stand op de grens"
-          bar={{ label: groupName(state, cut.groupCode), names: cut.groups[0].map((e) => tvName(state, e)).join(" & "), meta: "De afkamping beslist wie verder mag" }}
+          label={groupName(state, cut.groupCode)}
+          first={{ names: cut.groups[0].map((e) => tvName(state, e)).join(" & "), list: null, meta: "De afkamping beslist wie verder mag" }}
         />
       ) : state.format.knockout?.final && groupsInShootingOrder(state).every((g) => knockoutPlan(state, g.code).done) ? (
         <Podium state={state} kicker={comp.name} />
@@ -153,7 +155,9 @@ function Screen({ state, live }: { state: CompetitionState; live: LiveRecord | u
         />
       )}
       {body}
-      <StartCountdown live={live} heat={heat} />
+      <StartCountdown state={state} live={live} heat={heat} />
+      {board && <SeriesPaused state={state} live={live} heat={heat} />}
+      <SeriesSounds state={state} live={live} heat={heat} />
     </>
   );
 }

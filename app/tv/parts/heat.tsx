@@ -18,14 +18,18 @@ import {
 } from "@/lib/competition";
 import type { LiveRecord } from "@/lib/offline/db";
 import { passKey, scorePass, type Heat, type Setup } from "@/lib/scoring";
-import { COND, Gap, slantLeft, slantRight, Ticker } from "./frame";
+import { COND, Gap, Leader, slantLeft, slantRight, Ticker, type FirstUp } from "./frame";
 import { TV_HIT, TV_OPEN, TvPlates } from "./plates";
 import { TvSeriesBox } from "./timer";
 
-/** "Lotte D. & Mathis C.", or "14 schutters" for a WSA line. */
-export const heatNames = (state: CompetitionState, heat: Heat) =>
-  heat.shooters.length > 2 ? `${heat.shooters.length} schutters` : heat.shooters.map((e) => tvName(state, e)).join(" & ");
 export const heatMeta = (state: CompetitionState, heat: Heat) => `${roundTitle(state, heat.round)} · ${groupName(state, heat.groupCode)}`;
+
+/** Who shoots a heat: "Lotte D. & Mathis C.", or the whole WSA line by frame. */
+export const firstUpOf = (state: CompetitionState, heat: Heat): FirstUp => ({
+  names: heat.shooters.map((e) => tvName(state, e)).join(" & "),
+  list: heat.shooters.length > 2 || !state.format.rotate ? heat.phases[0].map((s) => ({ lane: s.lane, name: tvName(state, s.entryId), short: entryShortName(state, s.entryId) })).sort((x, y) => x.lane - y.lane) : null,
+  meta: heatMeta(state, heat),
+});
 
 export function LiveHeat({
   state,
@@ -164,7 +168,8 @@ function LiveStandings({
     items.push(
       <div key={r.entryId} className={`-mx-[1.125rem] flex items-center gap-6 rounded-[0.875rem] px-[1.125rem] py-0.5 leading-[1.2] ${r.live ? "bg-yellow-light" : ""}`}>
         <span className={`w-[3.25rem] text-[2.125rem] font-semibold tabular-nums ${r.live ? "text-ink" : "text-muted"}`}>{r.pos}</span>
-        <span className={`min-w-0 flex-1 truncate text-[2.125rem] ${r.live ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
+        <span className={`min-w-0 truncate text-[2.125rem] ${r.live ? "font-bold" : "font-medium"}`}>{tvName(state, r.entryId)}</span>
+        <Leader />
         <div className="flex gap-2">
           {r.passes.map((p, k) => (
             <span
@@ -194,23 +199,39 @@ function LiveStandings({
   );
 }
 
-type Tier = { place: string; lane: string; score: string; total: string; num: string; name: string; sc: string; tot: string; mv: string; slot: string; gap: string; max: string; cut: string };
+const rem = (n: number) => `${Math.round(n * 1000) / 1000}rem`;
 
-/** The rows of the WSA board grow as fewer shooters stand on the line. */
-const TIERS: Record<"s" | "m" | "l", Tier> = {
-  // 11–15 on the line.
-  s: { place: "8.5rem", lane: "5rem", score: "6.5rem", total: "9.5rem", num: "text-[2rem]", name: "text-[2.25rem]", sc: "text-[1.875rem]", tot: "text-[2.625rem]", mv: "text-[1.125rem]", slot: "2.25rem", gap: "0.375rem", max: "100%", cut: "0.875rem" },
-  // 6–10.
-  m: { place: "10.5rem", lane: "6rem", score: "7rem", total: "11rem", num: "text-[2.875rem]", name: "text-[3.125rem]", sc: "text-[2.5rem]", tot: "text-[3.75rem]", mv: "text-[1.375rem]", slot: "2.75rem", gap: "0.625rem", max: "6.5rem", cut: "1.25rem" },
-  // 5 or fewer: a final.
-  l: { place: "12rem", lane: "7rem", score: "7.5rem", total: "13rem", num: "text-[4rem]", name: "text-[4rem]", sc: "text-[3.25rem]", tot: "text-[5.25rem]", mv: "text-[1.625rem]", slot: "3.25rem", gap: "1rem", max: "9.5rem", cut: "1.75rem" },
-};
+/**
+ * The sizes of the WSA board, in rem, from how many stand on the line: the rows share the height there
+ * is, and the type fills its row, so it reads from as far as the screen allows.
+ */
+function boardSizes(rows: number) {
+  const gap = rows > 10 ? 0.3125 : rows > 5 ? 0.5 : 1;
+  const row = Math.min(11, 49 / Math.max(rows, 3) - gap);
+  // A row of 3rem holds type of 3rem (digits and capitals are lower than that); a tall one gets air.
+  const name = Math.min(5.5, row * 0.55 + 1.4);
+  const score = Math.min(4.75, name * 0.92);
+  return {
+    gap: rem(gap),
+    max: rem(row),
+    name: rem(name),
+    score: rem(score),
+    total: rem(Math.min(7, name * 1.22)),
+    move: rem(name * 0.5),
+    slot: rem(name * 1.15),
+    placeCol: rem(name * 3.4),
+    laneCol: rem(Math.max(4.5, name * 1.5)),
+    scoreCol: rem(Math.max(6.25, score * 1.85)),
+    totalCol: rem(Math.max(10, name * 2.9)),
+    cut: rem(Math.max(0.75, row * 0.18)),
+  };
+}
 
 /** Places gained (▲) or lost (▼); nothing when the place stayed the same. */
-function Move({ m, className }: { m: number; className: string }) {
+function Move({ m, size }: { m: number; size: string }) {
   if (m === 0) return <span />;
   return (
-    <span className={`font-semibold ${className}`} style={{ color: m > 0 ? "#6fd08f" : "#ff8a73" }}>
+    <span className="font-semibold" style={{ fontSize: size, color: m > 0 ? "#6fd08f" : "#ff8a73" }}>
       {m > 0 ? "▲" : "▼"}
       {Math.abs(m)}
     </span>
@@ -228,7 +249,7 @@ export function LiveLine({ state, live, schedule, heatIndex }: { state: Competit
   const heatsInGroup = schedule.filter((h) => h.round === heat.round && h.groupCode === heat.groupCode).length;
   const next = schedule[heatIndex + 1];
   const spots = heat.phases[0];
-  const z = TIERS[spots.length > 10 ? "s" : spots.length > 5 ? "m" : "l"];
+  const z = boardSizes(spots.length);
 
   // The series of this stage: all of the qualification, or the knockout stage so far with what came
   // before it in one column.
@@ -267,18 +288,18 @@ export function LiveLine({ state, live, schedule, heatIndex }: { state: Competit
   const nextMeta = next && (next.round !== heat.round || next.groupCode !== heat.groupCode) ? `${heatMeta(state, next)}: ` : "";
 
   const grid: CSSProperties = {
-    gridTemplateColumns: [z.place, "minmax(0,1fr)", z.lane, ...(showEarlier ? [z.score] : []), ...cols.map(() => z.score), z.total].join(" "),
+    gridTemplateColumns: [z.placeCol, "minmax(0,1fr)", z.laneCol, ...(showEarlier ? [z.scoreCol] : []), ...cols.map(() => z.scoreCol), z.totalCol].join(" "),
   };
 
   return (
-    <section aria-label="Nu aan de lijn" className="flex min-h-0 flex-1 flex-col gap-5">
-      <header className="flex h-[8.5rem] flex-none items-stretch gap-3">
+    <section aria-label="Nu aan de lijn" className="-mx-12 -mb-9 -mt-7 flex min-h-0 flex-1 flex-col gap-3">
+      <header className="flex h-[8rem] flex-none items-stretch gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-10 bg-ink pl-12 pr-24 text-white" style={slantRight("3rem")}>
           <span className={`${COND} text-[3.5rem] font-extrabold tracking-[0.04em] text-yellow`}>BKC</span>
           <div className="flex min-w-0 flex-col gap-1">
             <span className={`${COND} truncate text-[4.5rem] font-bold uppercase leading-[0.9]`}>{heatMeta(state, heat)}</span>
             {heatsInGroup > 1 && (
-              <span className="truncate text-[1.75rem] text-white/60">
+              <span className="truncate text-[2rem] text-white/75">
                 Beurt {heat.index + 1} van {heatsInGroup}
               </span>
             )}
@@ -288,9 +309,9 @@ export function LiveLine({ state, live, schedule, heatIndex }: { state: Competit
       </header>
 
       <div role="table" aria-label="Stand op de lijn" className="flex min-h-0 flex-1 flex-col justify-center" style={{ gap: z.gap }}>
-        <div role="row" className="grid flex-none items-end pb-1 text-[1.25rem] font-semibold uppercase tracking-[0.2em] text-muted" style={grid}>
-          <span role="columnheader" style={{ paddingLeft: `calc(1rem + ${z.slot})` }}>
-            Plaats
+        <div role="row" className="grid flex-none items-end text-[1.625rem] font-semibold uppercase leading-[1.2] tracking-[0.06em] text-muted" style={grid}>
+          <span role="columnheader" style={{ paddingLeft: z.slot }}>
+            Pl.
           </span>
           <span role="columnheader" className="pl-6">
             Schutter
@@ -316,31 +337,41 @@ export function LiveLine({ state, live, schedule, heatIndex }: { state: Competit
         {rows.map((r) => {
           const { first, last } = tvNameParts(state, r.entryId);
           return (
-            <div key={r.entryId} role="row" className="grid min-h-0 flex-1 items-stretch bg-surface leading-none shadow-[0_0.125rem_0_var(--border)]" style={{ ...grid, maxHeight: z.max }}>
+            <div key={r.entryId} role="row" className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] items-stretch bg-surface leading-none shadow-[0_0.125rem_0_var(--border)]" style={{ ...grid, maxHeight: z.max }}>
               {/* The arrow in a slot of its own, so every place number starts on the same line. */}
-              <span role="cell" className={`${COND} grid items-center bg-ink pl-4 font-bold text-yellow tabular-nums ${z.num}`} style={{ ...slantRight(z.cut), gridTemplateColumns: `${z.slot} 1fr` }}>
-                <Move m={r.move} className={z.mv} />
+              <span
+                role="cell"
+                className={`${COND} grid items-center bg-ink pl-4 font-bold text-yellow tabular-nums`}
+                style={{ ...slantRight(z.cut), fontSize: z.name, gridTemplateColumns: `${z.slot} 1fr` }}
+              >
+                <Move m={r.move} size={z.move} />
                 <span>{r.place}</span>
               </span>
-              <span role="cell" className={`${COND} flex min-w-0 items-center pl-6 pr-4 ${z.name}`}>
-                <span className="truncate">
-                  <span className="font-bold uppercase">{first}</span> <span className="text-muted">{last}</span>
+              <span role="cell" className={`${COND} flex min-w-0 items-center gap-6 pl-6 pr-2`} style={{ fontSize: z.name }}>
+                <span className="truncate leading-[1.15]">
+                  <span className="font-extrabold uppercase">{first}</span> <span className="font-medium">{last}</span>
                 </span>
+                <Leader />
               </span>
-              <span role="cell" className={`${COND} flex items-center justify-center text-muted tabular-nums ${z.sc}`}>
+              <span role="cell" className={`${COND} flex items-center justify-center font-medium text-muted tabular-nums`} style={{ fontSize: z.score }}>
                 {r.lane}
               </span>
               {showEarlier && (
-                <span role="cell" className={`${COND} flex items-center justify-center text-subtle tabular-nums ${z.sc}`}>
+                <span role="cell" className={`${COND} flex items-center justify-center font-medium text-muted tabular-nums`} style={{ fontSize: z.score }}>
                   {earlier(r.entryId)}
                 </span>
               )}
               {cols.map((c) => (
-                <span key={`${c.round}-${c.knockdown}`} role="cell" className={`${COND} flex items-center justify-center tabular-nums ${z.sc} ${c.round === heat.round ? "font-semibold" : "text-subtle"}`}>
+                <span
+                  key={`${c.round}-${c.knockdown}`}
+                  role="cell"
+                  className={`${COND} flex items-center justify-center tabular-nums ${c.round === heat.round ? "font-bold" : "font-medium text-muted"}`}
+                  style={{ fontSize: z.score }}
+                >
                   {scoreAt(r.entryId, c.round, c.knockdown) ?? "–"}
                 </span>
               ))}
-              <span role="cell" className={`${COND} flex items-center justify-center bg-yellow pl-3 font-bold tabular-nums ${z.tot}`} style={slantLeft(z.cut)}>
+              <span role="cell" className={`${COND} flex items-center justify-center bg-yellow pl-3 font-extrabold tabular-nums`} style={{ ...slantLeft(z.cut), fontSize: z.total }}>
                 {r.total}
               </span>
             </div>
@@ -348,14 +379,14 @@ export function LiveLine({ state, live, schedule, heatIndex }: { state: Competit
         })}
       </div>
 
-      <footer className="flex h-[4.75rem] flex-none items-center gap-8 bg-ink pl-10 pr-16 text-white" style={slantRight("2rem")}>
-        <span className={`${COND} whitespace-nowrap text-[2.25rem] font-bold uppercase text-yellow`}>{dropped.length > 0 ? "Viel af" : next ? "Hierna klaarmaken" : "Hierna"}</span>
+      <footer className="flex h-[5rem] flex-none items-center gap-8 bg-ink pl-10 pr-16 text-white" style={slantRight("2rem")}>
+        <span className={`${COND} whitespace-nowrap text-[2.5rem] font-bold uppercase text-yellow`}>{dropped.length > 0 ? "Viel af" : next ? "Hierna klaarmaken" : "Hierna"}</span>
         {dropped.length > 0 || next ? (
-          <Ticker key={heatKey(heat)} className="flex-1 text-[1.875rem] text-white/80">
+          <Ticker key={heatKey(heat)} className="flex-1 text-[2.5rem] font-medium text-white">
             {dropped.length > 0 ? dropped.map((e) => tvName(state, e)).join(" · ") : nextMeta + next!.shooters.map((e) => tvName(state, e)).join(" · ")}
           </Ticker>
         ) : (
-          <span className="min-w-0 flex-1 truncate text-[1.875rem] text-white/80">Dit is de laatste beurt</span>
+          <span className="min-w-0 flex-1 truncate text-[2.5rem] text-white">Dit is de laatste beurt</span>
         )}
       </footer>
     </section>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { entriesOfRank, rankName, rankShortName, ranksInShootingOrder } from "@/lib/competition";
 import { emit } from "@/lib/offline/store";
 import { entryAdultRank, fullName, similarNames, tidyName } from "@/lib/scoring";
@@ -9,15 +9,20 @@ import { Panel, Pill, Tag } from "@/components/ui";
 
 const input = "w-full min-w-0 rounded-xl border-[0.09375rem] border-border bg-background px-3 py-2.5 text-[0.9375rem] outline-none focus:border-ink";
 
+/** Right after an entry the list moves up: a double tap must not enter the next one too. */
+const DOUBLE_TAP_MS = 500;
+
 /**
- * Walk-in registration at the table: find or add the shooter and confirm their rank. Whoever shoots
- * has paid, so the fee isn't tracked here, and the operator picks the rank (no birthdate asked).
+ * Walk-in registration at the table: one tap on a name enters the shooter, in the rank they have this
+ * season (changed under Beheer, not here). Whoever shoots has paid, so the fee isn't tracked here.
  */
 export function CheckInView() {
-  const { state } = useComp();
+  const { id, state } = useComp();
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [entered, setEntered] = useState<{ entryId: string; name: string } | null>(null);
+  const lastAt = useRef(-Infinity);
+  const search = useRef<HTMLInputElement>(null);
 
   const checkedIn = useMemo(() => new Set([...state.entries.values()].map((e) => e.shooterId)), [state.entries]);
   const candidates = useMemo(() => {
@@ -29,11 +34,32 @@ export function CheckInView() {
       .slice(0, 50);
   }, [state.shooters, checkedIn, query]);
 
-  const done = () => {
-    setSelected(null);
+  useEffect(() => {
+    if (!entered) return;
+    const timer = setTimeout(() => setEntered(null), 6000);
+    return () => clearTimeout(timer);
+  }, [entered]);
+
+  async function enter(shooterId: string) {
+    const shooter = state.shooters.get(shooterId);
+    const now = performance.now();
+    if (!shooter || checkedIn.has(shooterId) || now - lastAt.current < DOUBLE_TAP_MS) return;
+    lastAt.current = now;
+    const entryId = crypto.randomUUID();
     setCreating(false);
     setQuery("");
-  };
+    setEntered({ entryId, name: fullName(shooter) });
+    // With a keyboard: straight on to the next name. On a touchscreen that would pop up the keyboard.
+    if (!window.matchMedia("(pointer: coarse)").matches) search.current?.focus();
+    await emit(id, "entry.checked_in", {
+      entryId,
+      shooter: { id: shooter.id, firstName: shooter.firstName, lastName: shooter.lastName, birthdate: shooter.birthdate },
+      isNewShooter: false,
+      rankCode: shooter.rankCode,
+      feePaid: true,
+      feeCents: state.snapshot.competition.feeCents,
+    });
+  }
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 items-start gap-5 overflow-auto px-4 pb-8 pt-2 sm:px-8 md:grid-cols-[minmax(0,23.75rem)_minmax(0,1fr)]">
@@ -43,22 +69,22 @@ export function CheckInView() {
         {creating ? (
           <NewShooterForm
             initialName={query}
-            onDone={done}
+            onDone={() => (setCreating(false), setQuery(""))}
             onCancel={() => setCreating(false)}
-            // Searched by name, so the picked shooter is in the list even with a long member list.
-            onPick={(shooterId) => (setCreating(false), setQuery(fullName(state.shooters.get(shooterId)!)), setSelected(shooterId))}
+            onPick={(shooterId) => void enter(shooterId)}
           />
         ) : (
           <>
             <input
+              ref={search}
               autoFocus
               value={query}
-              onChange={(e) => (setQuery(e.target.value), setSelected(null))}
-              // Enter takes the first match (then Enter again checks them in), or adds a new shooter.
+              onChange={(e) => setQuery(e.target.value)}
+              // Enter enters the first match, or adds a new shooter.
               onKeyDown={(e) => {
-                if (e.key !== "Enter" || !query.trim()) return;
+                if (e.key !== "Enter" || e.repeat || !query.trim()) return;
                 e.preventDefault();
-                if (candidates.length) setSelected(candidates[0].id);
+                if (candidates.length) void enter(candidates[0].id);
                 else setCreating(true);
               }}
               placeholder="Zoek op naam…"
@@ -66,21 +92,21 @@ export function CheckInView() {
               aria-label="Zoek schutter"
             />
             <div className="-mx-1 flex max-h-[55vh] flex-col gap-0.5 overflow-y-auto px-1">
-              {candidates.map((s) =>
-                selected === s.id ? (
-                  <ConfirmEntry key={s.id} shooterId={s.id} onDone={done} onCancel={() => setSelected(null)} />
-                ) : (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSelected(s.id)}
-                    className="flex cursor-pointer items-center gap-2.5 rounded-xl p-2.5 text-left hover:bg-hover"
-                  >
-                    <span className="text-[0.9375rem] font-semibold">{fullName(s)}</span>
-                    <Tag className="ml-auto">{rankShortName(rankName(state, s.rankCode))}</Tag>
-                  </button>
-                ),
-              )}
+              {candidates.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => void enter(s.id)}
+                  title={`${fullName(s)} inschrijven`}
+                  className="group flex cursor-pointer items-center gap-2.5 rounded-xl p-2.5 text-left hover:bg-hover active:bg-yellow-light"
+                >
+                  <span className="min-w-0 truncate text-[0.9375rem] font-semibold">{fullName(s)}</span>
+                  <Tag className="ml-auto">{rankShortName(rankName(state, s.rankCode))}</Tag>
+                  <span aria-hidden className="grid size-6 flex-none place-items-center rounded-full border-[0.09375rem] border-border text-base leading-none text-muted group-hover:border-ink group-hover:bg-yellow group-hover:text-ink">
+                    +
+                  </span>
+                </button>
+              ))}
               {candidates.length === 0 && <span className="p-2.5 text-sm text-faint">Niemand gevonden.</span>}
             </div>
             <button
@@ -90,6 +116,21 @@ export function CheckInView() {
             >
               + Nieuwe schutter
             </button>
+            {/* Under the list: above it, it would move the names under the finger. */}
+            <div role="status" className="empty:hidden">
+              {entered && state.entries.has(entered.entryId) && (
+                <span className="flex items-center gap-2 rounded-xl bg-good-light py-1.5 pl-3 pr-1.5 text-sm font-semibold text-good">
+                  <span className="min-w-0 flex-1 text-balance">✓ {entered.name} ingeschreven</span>
+                  <Pill size="xs" onClick={() => {
+                      if (performance.now() - lastAt.current < DOUBLE_TAP_MS) return;
+                      setEntered(null);
+                      void emit(id, "entry.removed", { entryId: entered.entryId });
+                    }}>
+                    Ongedaan maken
+                  </Pill>
+                </span>
+              )}
+            </div>
           </>
         )}
       </Panel>
@@ -148,39 +189,6 @@ function RankChips({ value, onChange }: { value: string; onChange: (code: string
           </button>
         );
       })}
-    </div>
-  );
-}
-
-function ConfirmEntry({ shooterId, onDone, onCancel }: { shooterId: string; onDone: () => void; onCancel: () => void }) {
-  const { id, state } = useComp();
-  const shooter = state.shooters.get(shooterId)!;
-  const [rankCode, setRankCode] = useState(shooter.rankCode);
-
-  async function confirm() {
-    await emit(id, "entry.checked_in", {
-      entryId: crypto.randomUUID(),
-      shooter: { id: shooter.id, firstName: shooter.firstName, lastName: shooter.lastName, birthdate: shooter.birthdate },
-      isNewShooter: false,
-      rankCode,
-      feePaid: true,
-      feeCents: state.snapshot.competition.feeCents,
-    });
-    onDone();
-  }
-
-  return (
-    <div className="my-1 flex flex-col gap-3 rounded-2xl bg-hover p-[0.875rem]">
-      <span className="text-base font-semibold">{fullName(shooter)}</span>
-      <RankChips value={rankCode} onChange={setRankCode} />
-      <div className="flex flex-wrap gap-1.5">
-        <Pill tone="yellow" size="lg" onClick={confirm} autoFocus>
-          Inschrijven
-        </Pill>
-        <Pill tone="ghost" size="lg" onClick={onCancel}>
-          Annuleren
-        </Pill>
-      </div>
     </div>
   );
 }

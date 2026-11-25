@@ -145,6 +145,7 @@ test("the line runs ahead of the cards; the TV shows saved scores only; a typo i
 });
 
 test("the series countdown and the warmup run on the TV", async ({ context, page }) => {
+  test.setTimeout(60_000);
   await openWsaInRound1(page);
   const tv = await context.newPage();
   await tv.setViewportSize({ width: 1920, height: 1080 });
@@ -157,8 +158,34 @@ test("the series countdown and the warmup run on the TV", async ({ context, page
   await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:30$/);
   await expect(page.locator("main")).toContainText(/Reeks 1\s*2:(30|29|28)/, { timeout: 6000 });
   await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:(30|29|28)$/);
-  await page.getByRole("button", { name: "Stop" }).click();
-  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:30$/);
+
+  // Pauzeren: the clock stands still on both screens; Hervatten goes on from there after a 3-2-1.
+  await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: "Pauzeren" }).click();
+  await expect(tv.getByRole("status", { name: "Gepauzeerd" })).toContainText(/Reeks 1 · nog 2:2\d/);
+  await expect(page.locator("main")).toContainText(/Gepauzeerd · reeks 1\s*2:2\d/);
+  const frozen = await tv.getByRole("status", { name: "Gepauzeerd" }).innerText();
+  await page.waitForTimeout(1500);
+  expect(await tv.getByRole("status", { name: "Gepauzeerd" }).innerText()).toBe(frozen);
+  await page.getByRole("button", { name: "Hervatten" }).click();
+  await expect(tv.getByRole("status", { name: "Gepauzeerd" })).toHaveCount(0);
+  await expect(tv.getByRole("timer", { name: "Aftellen" })).toHaveText(/^[321]$/);
+  await expect(page.locator("main")).toContainText(/Reeks 1\s*2:2\d/, { timeout: 6000 });
+
+  // Leaving a beurt with series to go asks first.
+  await page.getByRole("button", { name: "Volgende beurt →" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "nog niet gedaan" })).toBeVisible();
+  await page.getByRole("button", { name: "Annuleren" }).click();
+
+  // Everyone is ready early: 10 seconds of recovery on the TV, then series 2 for its full time.
+  await page.getByRole("button", { name: "Naar reeks 2" }).click();
+  await expect(tv.getByRole("timer", { name: "Aftellen" })).toContainText("Herstel · reeks 2 start over");
+  await expect(tv.getByRole("timer", { name: "Aftellen" })).toContainText(/(10|9|8)$/);
+  await expect(tv.getByRole("timer", { name: "Aftellen" })).toHaveText("Start!", { timeout: 12_000 });
+  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 2\s*van 2\s*2:(30|29|28)$/);
+  await page.getByRole("button", { name: "Reeks beëindigen" }).click();
+  await expect(page.locator("main")).toContainText("Reeksen gedaan");
+  await expect(tv.getByRole("timer", { name: "Reekstimer" })).toContainText("Klaar");
 
   await page.getByLabel("Fase").selectOption({ label: "Opwarming" });
   await expect(page.getByText("Opwarmtimer op TV")).toBeVisible();
@@ -180,6 +207,22 @@ test("starting series 1 during the warmup moves on to round 1, so the TV shows t
   // One countdown: the warmup's is gone, the series' is on the TV.
   await expect(page.getByText("Opwarmtimer op TV")).toHaveCount(0);
   await expect(tv.getByRole("timer", { name: "Reekstimer" })).toHaveText(/^Reeks 1\s*van 2\s*2:(30|29|28)$/, { timeout: 6000 });
+});
+
+test("one tap on a name enters the shooter, a double tap too, and it can be undone", async ({ page }) => {
+  await page.goto("/operator/live?c=demo-wsa");
+  await tab(page, "Inschrijving").click();
+  await expect(page.getByRole("heading", { name: "17 ingeschreven" })).toBeVisible();
+  await page.getByRole("button", { name: /Stijn Debruyne/ }).dblclick();
+  await expect(page.getByRole("heading", { name: "18 ingeschreven" })).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Stijn Debruyne ingeschreven");
+  await page.waitForTimeout(600);
+  await page.getByRole("button", { name: "Ongedaan maken" }).click();
+  await expect(page.getByRole("heading", { name: "17 ingeschreven" })).toBeVisible();
+  // With the keyboard: type a part of the name, Enter.
+  await page.getByLabel("Zoek schutter").fill("debruy");
+  await page.getByLabel("Zoek schutter").press("Enter");
+  await expect(page.getByRole("heading", { name: "18 ingeschreven" })).toBeVisible();
 });
 
 test("semi-final and final can be switched off in Voorbereiden", async ({ page }) => {

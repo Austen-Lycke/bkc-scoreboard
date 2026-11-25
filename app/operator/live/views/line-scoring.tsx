@@ -1,7 +1,8 @@
 "use client";
 
-import { type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import {
+  endSeries,
   entriesOfGroup,
   entryName,
   entryShortName,
@@ -9,17 +10,20 @@ import {
   heatKey,
   openHeats,
   passOf,
+  pauseTimer,
   phaseDone,
+  resumeTimer,
   setupFor,
   timerStep,
   type CompetitionState,
+  type SeriesTimer,
 } from "@/lib/competition";
 import { updateLive } from "@/lib/offline/store";
 import type { Heat } from "@/lib/scoring";
 import { formatClock, useNow } from "@/components/use-now";
 import { Panel, Pill } from "@/components/ui";
 import { useComp, useNav } from "../context";
-import { useAutoPhase, useStartBeurt } from "../phase";
+import { useStartBeurt } from "../phase";
 import { heatTitle, useLineup } from "./scoring";
 import { AllShot, FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
 
@@ -29,7 +33,7 @@ import { AllShot, FinishedBanner, NextUp, PhaseDone } from "./scoring-banners";
  * for them (except where the next stage depends on the standings: the semi-final, a final series).
  */
 export function LineView() {
-  const { id, state } = useComp();
+  const { id, state, live } = useComp();
   const { goTo } = useNav();
   const { schedule, progress, focusIndex, heatIndex, heat } = useLineup();
   const finished = state.status === "finished";
@@ -54,7 +58,9 @@ export function LineView() {
   const prev = heatIndex > (progress.heatIndex ?? heatIndex) ? schedule[heatIndex - 1] : null;
   const putOnLine = (h: Heat, index: number) => updateLive(id, { line: { heatKey: heatKey(h), index }, seriesTimer: null, lineStart: null });
   const goNext = next && !finished ? () => putOnLine(next, heatIndex + 1) : null;
-  const goBack = prev && !finished ? () => putOnLine(prev, heatIndex - 1) : null;
+  // Not while a series runs: going back would stop it.
+  const timer = live?.seriesTimer?.heatKey === heatKey(heat) ? live.seriesTimer : null;
+  const goBack = prev && !finished && !timer ? () => putOnLine(prev, heatIndex - 1) : null;
   // No next beurt yet while cards are open: the next stage of a knockout follows from the standings.
   const knockoutWaits = !next && open.length > 0 && !!state.format.knockout;
 
@@ -89,7 +95,7 @@ export function LineView() {
           </>
         ) : (
           <>
-            <LineControls heat={heat} onNext={goNext} />
+            <LineControls key={heatKey(heat)} heat={heat} onNext={goNext} nextTitle={next ? heatTitle(state, next) : ""} />
             {!next && (
               <div className="rounded-[1.125rem] border-[0.09375rem] border-border bg-surface px-[1.125rem] py-3 text-[0.9375rem]">
                 {knockoutWaits ? (
@@ -179,36 +185,97 @@ function LineRoster({ state, heat }: { state: CompetitionState; heat: Heat }) {
  * The series countdown of the beurt on the line, on the TV (series, a short recovery, the next
  * series), and "Volgende beurt". Starting the timer moves the phase to the round (out of the warmup or
  * the break, which stops that countdown), as the TV only shows the line and its countdown while a
- * round is on. Once the series are done, "Volgende beurt" is the main button.
+ * round is on. A series can end early, be paused and go on, or be shot again. "Volgende beurt" is the
+ * next group of shooters: it asks first while series of this beurt are still to come.
  */
-function LineControls({ heat, onNext }: { heat: Heat; onNext: (() => void) | null }) {
+function LineControls({ heat, onNext, nextTitle }: { heat: Heat; onNext: (() => void) | null; nextTitle: string }) {
   const { id, state, live } = useComp();
-  const advance = useAutoPhase();
   const timing = state.format.timing;
   const timer = live?.seriesTimer?.heatKey === heatKey(heat) ? live.seriesTimer : null;
-  const now = useNow(250, !!timer);
-  const step = timer && timing ? timerStep(timing, heat.phases.length, timer, now) : null;
+  const now = useNow(250, !!timer && !timer.pausedAt);
   const series = heat.phases.length;
+  const step = timer && timing ? timerStep(timing, series, timer, now) : null;
   const from = Math.max(1, heat.phases.findIndex((phase) => phase.some((s) => !passOf(state, s.entryId, heat.round, s.knockdown))) + 1);
   const startBeurt = useStartBeurt();
-  // The first series of a beurt starts with a 3-2-1 on the TV; a restart after an interruption right away.
-  const start = async (fromSeries: number) => {
-    if (fromSeries === 1) return startBeurt(heat, { timed: true });
-    await advance(heat.round);
-    await updateLive(id, { seriesTimer: { heatKey: heatKey(heat), startedAt: new Date().toISOString(), fromSeries } });
-  };
-  const stop = () => updateLive(id, { seriesTimer: null, lineStart: null });
-  const running = !!step && step.kind !== "done";
+  const [asking, setAsking] = useState(false);
+  const finished = state.status === "finished";
+
+  const start = (s: number) => void startBeurt(heat, { series: s });
+  /** Changes the timer as it is now in the database, so a double tap can't work on an old one. */
+  const change = (next: (t: SeriesTimer, at: number) => SeriesTimer) =>
+    updateLive(id, (current) => (current.seriesTimer?.heatKey === heatKey(heat) ? { seriesTimer: next(current.seriesTimer, Date.now()) } : {}));
+
   const done = step?.kind === "done";
-  const nextButton = onNext && (
-    <Pill tone={done || !timing ? "yellow" : running ? "surface" : "outline"} size="sm" onClick={onNext}>
-      Volgende beurt →
+  const paused = step?.kind === "paused";
+  const running = !!step && !done && !paused;
+  // The series can end by themselves while it asks: then there's nothing left to confirm.
+  const confirming = asking && (running || paused);
+  const nameOf = (s: number) => (series === 1 ? "Reeks" : `Reeks ${s}`);
+  const again = (s: number) => (
+    <Pill key={s} tone={step && !done ? "surface" : "ghost"} size="sm" onClick={() => start(s)} disabled={finished}>
+      {nameOf(s)} opnieuw
     </Pill>
   );
 
+  let buttons = null;
+  if (timing) {
+    if (step?.kind === "paused") {
+      buttons = (
+        <>
+          <Pill tone="yellow" size="sm" onClick={() => change((t, at) => resumeTimer(timing, series, t, at))}>
+            ▶ Hervatten
+          </Pill>
+          {heat.phases.map((_, p) => again(p + 1))}
+        </>
+      );
+    } else if (running) {
+      buttons = (
+        <>
+          <Pill tone="surface" size="sm" onClick={() => change((t, at) => (t.pausedAt ? t : pauseTimer(t, at)))}>
+            Pauzeren
+          </Pill>
+          {step.kind === "series" && (
+            <Pill
+              tone="yellow"
+              size="sm"
+              // The series shown on the button: a second tap must not end the next one too.
+              onClick={() => {
+                const shown = step.series;
+                return change((t, at) => {
+                  const current = timerStep(timing, series, t, at);
+                  return current.kind === "series" && current.series === shown ? endSeries(timing, series, t, at) : t;
+                });
+              }}
+            >
+              {step.series < series ? `Naar reeks ${step.series + 1}` : "Reeks beëindigen"}
+            </Pill>
+          )}
+        </>
+      );
+    } else if (done) {
+      buttons = heat.phases.map((_, p) => again(p + 1));
+    } else {
+      // It starts at the first series whose cards aren't all in yet; the others stay within reach.
+      buttons = (
+        <>
+          <Pill tone="yellow" size="sm" onClick={() => start(from)} disabled={finished}>
+            {series === 1 ? "Start reeks" : `Start reeks ${from}`}
+          </Pill>
+          {heat.phases.map((_, p) =>
+            p + 1 === from ? null : (
+              <Pill key={p} tone="ghost" size="sm" onClick={() => start(p + 1)} disabled={finished}>
+                Reeks {p + 1}
+              </Pill>
+            ),
+          )}
+        </>
+      );
+    }
+  }
+
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-[1.25rem] border-[0.09375rem] px-4 py-3 ${running ? "border-ink bg-ink text-white" : "border-border bg-surface"}`}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-[1.25rem] border-[0.09375rem] px-4 py-3 ${running || paused ? "border-ink bg-ink text-white" : "border-border bg-surface"}`}
     >
       {/* The buttons wrap under the text on a phone, instead of squeezing it into a column. */}
       <span className="min-w-0 flex-1 basis-[14rem] text-sm font-semibold">
@@ -221,32 +288,52 @@ function LineControls({ heat, onNext }: { heat: Heat; onNext: (() => void) | nul
           </span>
         ) : step.kind === "done" ? (
           "Reeksen gedaan · de kaarten typ je in Kaarten"
-        ) : step.kind === "ready" ? (
-          <span className="flex items-baseline gap-3">
-            <span className="text-yellow">Aftellen op TV</span>
-            <span className="text-[1.75rem] leading-none tabular-nums">{step.left}</span>
-          </span>
         ) : (
           <span className="flex items-baseline gap-3">
-            <span className={step.kind === "recover" ? "text-yellow" : ""}>{step.kind === "series" ? (series === 1 ? "Reeks" : `Reeks ${step.series}`) : "Herstel"}</span>
-            <span className="text-[1.75rem] leading-none tabular-nums">{formatClock(step.left)}</span>
+            <span className={step.kind === "series" ? "" : "text-yellow"}>
+              {step.kind === "ready"
+                ? step.recover
+                  ? `Herstel · ${nameOf(step.series).toLowerCase()} start zo`
+                  : "Aftellen op TV"
+                : step.kind === "recover"
+                  ? "Herstel"
+                  : step.kind === "paused"
+                    ? `Gepauzeerd · ${nameOf(step.series).toLowerCase()}`
+                    : nameOf(step.series)}
+            </span>
+            <span className="text-[1.75rem] leading-none tabular-nums">{step.kind === "ready" ? step.left : formatClock(step.left)}</span>
           </span>
         )}
       </span>
       <div className="flex flex-wrap gap-1.5">
-        {timing &&
-          (running ? (
-            <Pill tone="surface" size="sm" onClick={stop}>
-              Stop
-            </Pill>
-          ) : (
-            // One button: it starts at the first series whose cards aren't all in yet.
-            <Pill tone={done ? "ghost" : "yellow"} size="sm" onClick={() => start(done ? 1 : from)} disabled={state.status === "finished"}>
-              {done ? "Opnieuw" : series === 1 ? "Start reeks" : `Start reeks ${from}`}
-            </Pill>
-          ))}
-        {nextButton}
+        {buttons}
+        {onNext && !confirming && (
+          <Pill
+            tone={done || !timing ? "yellow" : running || paused ? "surface" : "outline"}
+            size="sm"
+            title={nextTitle}
+            onClick={() => (running || paused ? setAsking(true) : onNext())}
+          >
+            Volgende beurt →
+          </Pill>
+        )}
       </div>
+      {confirming && onNext && (
+        <div role="alert" className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-yellow-light px-4 py-2.5 text-sm text-ink">
+          <span className="min-w-0 flex-1 basis-[16rem]">
+            <span className="font-semibold">Deze beurt is nog niet gedaan.</span>{" "}
+            <span className="text-muted">
+              Volgende beurt stopt de timer en gaat naar <span className="lowercase">{nextTitle}</span>.
+            </span>
+          </span>
+          <Pill tone="ink" size="sm" onClick={onNext}>
+            Toch naar volgende beurt
+          </Pill>
+          <Pill tone="ghost" size="sm" onClick={() => setAsking(false)}>
+            Annuleren
+          </Pill>
+        </div>
+      )}
     </div>
   );
 }

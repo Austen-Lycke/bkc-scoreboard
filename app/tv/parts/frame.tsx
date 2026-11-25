@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useClubClock } from "@/components/use-now";
-import { useSoundUnlocked } from "@/components/sound";
+import { useSoundUnlocked, useTvSoundBeacon } from "@/components/sound";
 
 /** The canvas in rem: 1920×1080 at the default 16px root size. */
 const W = 120;
@@ -12,6 +12,7 @@ export function Stage({ children }: { children: ReactNode }) {
   const [idle, setIdle] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const sound = useSoundUnlocked();
+  useTvSoundBeacon(sound);
 
   useEffect(() => {
     const fit = () => {
@@ -170,39 +171,96 @@ export function Marquee({ children, className = "flex-1", gap = "gap-1" }: { chi
   );
 }
 
+/** Who shoots first: the shooters by frame (a WSA line), or the names of a pair on one line. */
+export interface FirstUp {
+  names: string;
+  /** A line of more than two: everyone, in the order of the frames. */
+  list: { lane: number; name: string; short: string }[] | null;
+  meta: string;
+}
+
+/** The names of a whole line, column by column, with their frame in front; smaller as there are more. */
+export function FirstUpNames({ list, columns, short = false }: { list: NonNullable<FirstUp["list"]>; columns: number; short?: boolean }) {
+  const rows = Math.ceil(list.length / columns);
+  const size = rows === 1 ? "text-[3.75rem]" : rows <= 3 ? "text-[3.125rem]" : "text-[2.5rem]";
+  return (
+    <div
+      className={`${COND} grid grid-flow-col gap-x-10 gap-y-2 font-bold leading-[1.1] ${size}`}
+      style={{ gridTemplateRows: `repeat(${rows}, auto)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {list.map((s) => (
+        <span key={s.lane} className="flex min-w-0 items-baseline gap-4">
+          <span className="w-[1.35em] flex-none text-right text-yellow tabular-nums">{s.lane}</span>
+          <span className="truncate">{short ? s.short : s.name}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** "Als eerste" along the bottom of a screen: who has to be ready. */
+export function FirstUpBar({ first, label = "Als eerste" }: { first: FirstUp; label?: string }) {
+  const { list } = first;
+  if (list) {
+    return (
+      <div className="flex flex-none flex-col gap-6 rounded-[2.75rem] bg-ink px-14 py-9 text-white">
+        <div className="flex items-center gap-8">
+          <span className="whitespace-nowrap rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">{label}</span>
+          <span className="text-[2.25rem] text-white/75">
+            {first.meta} · {list.length} schutters
+          </span>
+        </div>
+        <FirstUpNames list={list} columns={list.length > 4 ? 3 : list.length} />
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-none items-center gap-14 rounded-[2.75rem] bg-ink px-16 py-11 text-white">
+      <span className="whitespace-nowrap rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">{label}</span>
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <span className="text-balance text-[4.25rem] font-semibold leading-[1.05] tracking-[-0.03em]">{first.names}</span>
+        <span className="text-[2.25rem] text-white/75">{first.meta}</span>
+      </div>
+    </div>
+  );
+}
+
 export function Centered({
   kicker,
   title,
   sub,
-  bar,
+  first,
+  label,
 }: {
   kicker?: string;
   title: string;
   sub?: string;
-  bar?: { label: string; names: string; meta: string } | null;
+  first?: FirstUp | null;
+  /** What the bar with `first` says: "Als eerste", unless given. */
+  label?: string;
 }) {
   return (
     <>
-      <div className="flex flex-1 flex-col justify-center gap-7 px-5">
+      <div className="flex min-h-0 flex-1 flex-col justify-center gap-7 px-5">
         {kicker && <span className="self-start rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold">{kicker}</span>}
         <span className="text-balance text-[10.625rem] font-semibold leading-[0.95] tracking-[-0.04em] tabular-nums">{title}</span>
-        {sub && <span className="max-w-[87.5rem] text-pretty text-[2.5rem] text-muted">{sub}</span>}
+        {sub && <span className="max-w-[87.5rem] text-pretty text-[2.75rem] text-muted">{sub}</span>}
       </div>
-      {bar && (
-        <div className="flex flex-none items-center gap-14 rounded-[2.75rem] bg-ink px-16 py-11 text-white">
-          <span className="whitespace-nowrap rounded-full bg-yellow px-[1.625rem] py-2 text-[2.125rem] font-bold text-ink">{bar.label}</span>
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
-            <span className="text-balance text-[4.25rem] font-semibold leading-[1.05] tracking-[-0.03em]">{bar.names}</span>
-            <span className="text-[2rem] text-white/60">{bar.meta}</span>
-          </div>
-        </div>
-      )}
+      {first && <FirstUpBar first={first} label={label} />}
     </>
   );
 }
 
+/** A thin dotted line from a name to its points, so the eye keeps to the row across an empty stretch. */
+export function Leader({ className = "" }: { className?: string }) {
+  return <span aria-hidden className={`min-w-4 flex-1 self-center border-b-[0.1875rem] border-dotted border-current opacity-30 ${className}`} />;
+}
+
 /** Bricolage at its narrowest width: the condensed type of the WSA board. Needs `condensed` from ../fonts. */
 export const COND = "font-[family-name:var(--font-tv-cond)] [font-variation-settings:'wdth'_75]";
+
+/** The same letters, really narrow: for a long name next to a big number. */
+export const NARROW = "font-[family-name:var(--font-tv-cond)] [font-stretch:75%]";
 
 /** Slanted edges, like the bars of a broadcast graphic: the right or the left edge cut by `cut`. */
 export const slantRight = (cut = "2rem"): CSSProperties => ({ clipPath: `polygon(0 0, 100% 0, calc(100% - ${cut}) 100%, 0 100%)` });

@@ -23,6 +23,7 @@ import { useQueryParam } from "@/lib/offline/url";
 import { CompetitionContext, NavContext, useComp, useNav, type Tab } from "./context";
 import { BREAK_MINUTES, setPhase } from "./phase";
 import { HeatProgress } from "@/components/heat-progress";
+import { useTvSoundOff } from "@/components/sound";
 import { ScrollRow } from "@/components/scroll-row";
 import { Pill } from "@/components/ui";
 import { formatClock, useNow } from "@/components/use-now";
@@ -131,8 +132,12 @@ function Shell() {
       */}
       <div className="touch-targets flex min-h-dvh flex-col bg-background md:h-dvh md:min-h-[40rem]">
         <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2.5 px-4 pb-3 pt-4 sm:gap-x-6 sm:px-8 sm:pt-[1.125rem]">
-          <Link href="/operator" title="Naar de wedstrijdleiding" className="text-[0.8125rem] font-bold tracking-[0.2em]">
-            BKC
+          <Link
+            href="/operator"
+            title="Terug naar de lijst met wedstrijden. De wedstrijd loopt gewoon door."
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border-[0.09375rem] border-border px-[0.875rem] py-1.5 text-[0.8125rem] font-semibold hover:border-ink"
+          >
+            <span aria-hidden>←</span> Wedstrijdleiding
           </Link>
           <span className="min-w-0 flex-1 truncate text-[0.9375rem] text-muted md:max-w-[16rem] md:flex-none">
             {state.snapshot.competition.name}
@@ -222,7 +227,15 @@ function Shell() {
 /** Lease, login and rejected-action messages: rare, but they must be impossible to miss. */
 function Notices({ sync }: { sync: SyncStatus }) {
   const { id, state, live } = useComp();
+  const tvSoundOff = useTvSoundOff();
   const items = [];
+  if (tvSoundOff) {
+    items.push(
+      <p key="sound" className="rounded-2xl bg-yellow-light px-4 py-2.5 text-sm font-semibold">
+        Het TV-scherm speelt geen geluid. Klik één keer op het TV-scherm om het aan te zetten.
+      </p>,
+    );
+  }
   if (sync.state === "lease") {
     items.push(
       <div key="lease" className="flex flex-wrap items-center gap-3 rounded-2xl bg-yellow-light px-4 py-2.5 text-sm font-semibold">

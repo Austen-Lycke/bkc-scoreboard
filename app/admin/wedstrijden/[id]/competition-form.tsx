@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { fieldClass } from "@/components/styles";
 import { Chip, Panel, Pill, Switch } from "@/components/ui";
 import { useSubmit } from "../../use-submit";
@@ -185,13 +185,7 @@ export function CompetitionForm({
           {started && (
             <label className="flex flex-col gap-[0.3125rem] text-xs font-semibold text-muted">
               Typ de naam van de wedstrijd om te bevestigen
-              <input
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                placeholder={c.name}
-                autoComplete="off"
-                className={`${fieldClass} py-2 text-sm text-ink`}
-              />
+              <TypeOver text={c.name} value={typed} onChange={setTyped} />
             </label>
           )}
           <button
@@ -208,5 +202,42 @@ export function CompetitionForm({
         </Panel>
       </aside>
     </div>
+  );
+}
+
+/**
+ * A field to type `text` over, as a check: the text stays in the field in grey and what's typed lies
+ * on top of it in black, letter for letter. Red from the first letter that differs.
+ */
+function TypeOver({ text, value, onChange }: { text: string; value: string; onChange: (value: string) => void }) {
+  const ghost = useRef<HTMLSpanElement>(null);
+  const wrong = !text.startsWith(value) && value.trim() !== text;
+  return (
+    <span className="relative block">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        // The same type as the text underneath (fieldClass). A long name scrolls along with the caret.
+        onScroll={(e) => {
+          if (ghost.current) ghost.current.scrollLeft = e.currentTarget.scrollLeft;
+        }}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        maxLength={text.length + 10}
+        aria-label={`Typ de naam van de wedstrijd om te bevestigen: ${text}`}
+        aria-invalid={wrong}
+        className={`${fieldClass} font-normal ${wrong ? "border-error text-error" : "text-ink"}`}
+      />
+      <span
+        ref={ghost}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre border-[0.09375rem] border-transparent px-3 text-[0.9375rem] font-normal text-subtle"
+      >
+        {/* What's typed takes its own width, unseen, so the rest of the text starts right after it. */}
+        <span className="invisible">{value}</span>
+        {text.slice(value.length)}
+      </span>
+    </span>
   );
 }

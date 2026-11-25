@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef } from "react";
-import { autoStatus, heatKey, START_COUNTDOWN_SECONDS, statusActions, type CompetitionState, type CompetitionStatus } from "@/lib/competition";
+import { useCallback, useEffect, useRef } from "react";
+import { autoStatus, heatKey, START_COUNTDOWN_SECONDS, startSeries, statusActions, type CompetitionState, type CompetitionStatus } from "@/lib/competition";
 import type { Heat } from "@/lib/scoring";
 import { emitMany, updateLive } from "@/lib/offline/store";
 import { useComp } from "./context";
@@ -12,7 +12,7 @@ export const BREAK_MINUTES = 10;
 /**
  * Moves the day to another phase (not the end: that goes through Afronden). A timed day (WSA) counts
  * the warmup down on the TV right away, and every day counts the break down; any other phase stops a
- * countdown. The last save can't be undone from the new phase any more: corrections go through Stand.
+ * countdown, a series timer too. The last save can't be undone from the new phase any more: corrections go through Stand.
  */
 export async function setPhase(id: string, state: CompetitionState, status: CompetitionStatus) {
   await emitMany(id, statusActions(state, status));
@@ -20,6 +20,8 @@ export async function setPhase(id: string, state: CompetitionState, status: Comp
   const from = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
   await updateLive(id, (current) => ({
     lastSave: null,
+    seriesTimer: null,
+    lineStart: null,
     ...(status === "warmup" && warmup
       ? { pauseEndsAt: from(warmup) }
       : status === "break"
@@ -39,6 +41,10 @@ export async function setPhase(id: string, state: CompetitionState, status: Comp
 export function useAutoPhase() {
   const { id, state } = useComp();
   const sent = useRef<string | null>(null);
+  // Switched back by hand (to the warmup, say): the next start has to move the phase again.
+  useEffect(() => {
+    sent.current = null;
+  }, [state.status]);
   return useCallback(
     async (round: number) => {
       const target = autoStatus(state, round);
@@ -54,17 +60,22 @@ export function useAutoPhase() {
 
 /**
  * Starts a beurt with a 3-2-1 on the TV and the start signal at the end of it. Moves the phase along
- * like scoring does. A timed heat (WSA) starts its series countdown at that same moment.
+ * like scoring does. A timed heat (WSA) starts the countdown of `series` at that same moment.
  */
 export function useStartBeurt() {
   const { id } = useComp();
   const advance = useAutoPhase();
   return useCallback(
-    async (heat: Heat, { timed = false }: { timed?: boolean } = {}) => {
+    async (heat: Heat, { series }: { series?: number } = {}) => {
       await advance(heat.round);
       const key = heatKey(heat);
-      const at = new Date(Date.now() + START_COUNTDOWN_SECONDS * 1000).toISOString();
-      await updateLive(id, { lineStart: { heatKey: key, at }, ...(timed ? { seriesTimer: { heatKey: key, startedAt: at, fromSeries: 1 } } : {}) });
+      const now = Date.now();
+      await updateLive(
+        id,
+        series
+          ? { lineStart: null, seriesTimer: startSeries(key, series, now) }
+          : { lineStart: { heatKey: key, at: new Date(now + START_COUNTDOWN_SECONDS * 1000).toISOString() } },
+      );
     },
     [id, advance],
   );
