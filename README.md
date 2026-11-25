@@ -201,3 +201,7 @@ database or login. Run `npx playwright install chromium` once before the first r
 | `scripts/` | Seed, backup and user management |
 | `e2e/` | Playwright tests |
 | `docs/` | Research notes |
+
+---
+
+© Brugse Katapultclub. All rights reserved.
